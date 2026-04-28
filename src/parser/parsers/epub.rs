@@ -1,3 +1,9 @@
+/*!
+EPUB 解析器模块
+
+实现 EPUB 格式书籍的解析逻辑，包括解析 container.xml、OPF 文件和 HTML 内容。
+*/
+
 use crate::parser::parsers::base::{BookParser, ParseResult};
 use quick_xml::events::Event;
 use quick_xml::Reader;
@@ -6,14 +12,25 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use zip::ZipArchive;
 
-// EPUB 解析器
+/// EPUB 解析器
+/// 
+/// 负责解析 EPUB 格式的书籍文件
 pub struct EpubParser;
 
 impl EpubParser {
+    /// 创建 EPUB 解析器实例
     pub fn new() -> Self {
         Self
     }
     
+    /// 解析 container.xml 文件，获取 OPF 文件路径
+    /// 
+    /// # 参数
+    /// * `content` - container.xml 文件内容
+    /// 
+    /// # 返回值
+    /// * `Some(String)` - 成功解析到 OPF 文件路径
+    /// * `None` - 解析失败
     fn parse_container_xml(&self, content: &str) -> Option<String> {
         let mut reader = Reader::from_str(content);
         reader.config_mut().trim_text(true);
@@ -47,6 +64,14 @@ impl EpubParser {
         None
     }
     
+    /// 解析 OPF 文件，获取 manifest 和 spine 信息
+    /// 
+    /// # 参数
+    /// * `content` - OPF 文件内容
+    /// * `_base_path` - 基础路径
+    /// 
+    /// # 返回值
+    /// * `(HashMap<String, String>, Vec<String>)` - (manifest 映射, spine ID 列表)
     fn parse_opf_file(&self, content: &str, _base_path: &str) -> (HashMap<String, String>, Vec<String>) {
         let mut reader = Reader::from_str(content);
         reader.config_mut().trim_text(true);
@@ -120,6 +145,14 @@ impl EpubParser {
         (manifest, spine_ids)
     }
     
+    /// 获取完整路径
+    /// 
+    /// # 参数
+    /// * `base` - 基础路径
+    /// * `href` - 相对路径
+    /// 
+    /// # 返回值
+    /// * `String` - 完整路径
     fn get_full_path(&self, base: &str, href: &str) -> String {
         if href.starts_with('/') {
             href.to_string()
@@ -130,6 +163,13 @@ impl EpubParser {
         }
     }
     
+    /// 剥离 HTML 标签，提取纯文本内容
+    /// 
+    /// # 参数
+    /// * `html` - HTML 内容
+    /// 
+    /// # 返回值
+    /// * `String` - 纯文本内容
     fn strip_html_tags(&self, html: &str) -> String {
         let mut result = Vec::new();
         let mut current_paragraph = String::new();
@@ -204,6 +244,13 @@ impl EpubParser {
         result.join("\n\n")
     }
     
+    /// 从 HTML 内容中提取标题
+    /// 
+    /// # 参数
+    /// * `html` - HTML 内容
+    /// 
+    /// # 返回值
+    /// * `String` - 提取的标题
     fn extract_title(&self, html: &str) -> String {
         let mut reader = Reader::from_str(html);
         reader.config_mut().trim_text(true);
@@ -252,6 +299,14 @@ impl EpubParser {
 }
 
 impl BookParser for EpubParser {
+    /// 解析 EPUB 文件
+    /// 
+    /// # 参数
+    /// * `path` - EPUB 文件路径
+    /// 
+    /// # 返回值
+    /// * `Ok(ParseResult)` - 解析成功，返回解析结果
+    /// * `Err(String)` - 解析失败，返回错误信息
     fn parse(&self, path: &str) -> Result<ParseResult, String> {
         let file = File::open(path).map_err(|e| format!("文件打开失败: {}", e))?;
         let mut archive = ZipArchive::new(BufReader::new(file)).map_err(|e| format!("ZIP 解析失败: {}", e))?;
