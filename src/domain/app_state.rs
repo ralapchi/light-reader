@@ -32,7 +32,7 @@ impl Default for AppState {
             bookmarks: Vec::new(),
             search_state: SearchState::default(),
             ui_state: UiState::default(),
-            status_message: String::new(),
+            status_message: "就绪".to_string(),
             last_error: None,
         }
     }

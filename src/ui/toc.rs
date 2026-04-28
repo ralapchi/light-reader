@@ -1,5 +1,6 @@
 use eframe::egui;
 
+use crate::domain::toc_item::TocItem;
 use crate::ui::ThemeConfig;
 
 pub struct TableOfContents;
@@ -7,7 +8,7 @@ pub struct TableOfContents;
 impl TableOfContents {
     pub fn show(
         ctx: &egui::Context,
-        chapter_titles: &[String],
+        toc: &[TocItem],
         current_page: &mut usize,
         theme: &ThemeConfig,
     ) {
@@ -29,7 +30,7 @@ impl TableOfContents {
                 ui.separator();
                 ui.add_space(theme.spacing.sm);
 
-                if chapter_titles.is_empty() {
+                if toc.is_empty() {
                     ui.horizontal(|ui| {
                         ui.add_space(theme.spacing.lg);
                         ui.label("请打开书籍文件");
@@ -44,17 +45,24 @@ impl TableOfContents {
                                 ui.vertical(|ui| {
                                     ui.set_width(ui.available_width() - theme.spacing.sm);
 
-                                    for (idx, title) in chapter_titles.iter().enumerate() {
-                                        let is_selected = idx == *current_page;
+                                    for item in toc {
+                                        let chapter_index =
+                                            item.chapter_index.unwrap_or(*current_page);
+                                        let is_selected = chapter_index == *current_page;
+                                        let label = if let Some(index) = item.chapter_index {
+                                            format!("{}. {}", index + 1, item.title)
+                                        } else {
+                                            item.title.clone()
+                                        };
 
                                         let response = ui.add(
-                                            egui::Button::new(format!("{}.{}", idx + 1, title))
+                                            egui::Button::new(label)
                                                 .selected(is_selected)
                                                 .frame(true),
                                         );
 
                                         if response.clicked() {
-                                            *current_page = idx;
+                                            *current_page = chapter_index;
                                         }
 
                                         if is_selected {

@@ -91,3 +91,22 @@ impl PartialEq for AppError {
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io;
+
+    #[test]
+    fn recoverable_flag_is_reported() {
+        let mut err = AppError::new("TEST", "message");
+        err.recoverable = true;
+        assert!(err.is_recoverable());
+    }
+
+    #[test]
+    fn source_error_is_attached() {
+        let err = AppError::new("TEST", "message").with_source(io::Error::other("boom"));
+        assert!(err.source().is_some());
+    }
+}

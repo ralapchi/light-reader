@@ -361,3 +361,16 @@ impl From<ThemeKind> for ThemeConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn theme_kind_maps_to_named_presets() {
+        assert_eq!(ThemeConfig::from(ThemeKind::Light).name, "light");
+        assert_eq!(ThemeConfig::from(ThemeKind::Dark).name, "dark");
+        assert_eq!(ThemeConfig::from(ThemeKind::Sepia).name, "sepia");
+        assert_eq!(ThemeConfig::from(ThemeKind::Paper).name, "paper");
+    }
+}

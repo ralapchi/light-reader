@@ -23,7 +23,7 @@ fn main() {
     eframe::run_native(
         "EPUB 阅读器",
         options,
-        Box::new(|_cc| Ok(Box::new(app::ReaderApp::default()))),
+        Box::new(|cc| Ok(Box::new(app::ReaderApp::new(cc)))),
     )
     .unwrap();
 }

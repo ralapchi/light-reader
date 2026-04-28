@@ -53,12 +53,6 @@ impl ThemeService {
         });
     }
 
-    /// Alias of `init_fonts` for API consistency.
-    /// Idempotent — fonts are only initialized on the first call.
-    pub fn setup_fonts(ctx: &egui::Context) {
-        Self::init_fonts(ctx);
-    }
-
     /// Apply a ThemeConfig to the egui context (egui 0.33 API).
     ///
     /// This sets:
@@ -164,20 +158,18 @@ impl ThemeService {
 
         // ── Text styles (maps ThemeTypography -> egui::FontId) ──
         let t = &theme.typography;
-        // Body text size as reference for proportional font size
-        let body_px = t.body_size;
         style.text_styles = [
             (
                 egui::TextStyle::Heading,
-                egui::FontId::proportional(body_px * 1.4),
+                egui::FontId::proportional(t.title_size),
             ),
             (
                 egui::TextStyle::Body,
-                egui::FontId::proportional(body_px),
+                egui::FontId::proportional(t.body_size),
             ),
             (
                 egui::TextStyle::Monospace,
-                egui::FontId::monospace(body_px * 0.9),
+                egui::FontId::monospace(t.body_size * 0.9),
             ),
             (
                 egui::TextStyle::Button,

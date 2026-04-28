@@ -15,8 +15,4 @@ pub mod epub;
 pub mod txt;
 pub mod factory;
 
-// 导出所有解析器相关的类型和函数
-pub use base::{BookParser, ParseResult};
-pub use epub::EpubParser;
-pub use txt::TxtParser;
 pub use factory::ParserFactory;
