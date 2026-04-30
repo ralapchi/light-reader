@@ -2,7 +2,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use chrono::Utc;
-use log::info;
+use log::{info, warn};
 
 use crate::app::Action;
 use crate::domain::app_error::{AppError, AppResult};
@@ -18,6 +18,7 @@ use crate::domain::paragraph::Paragraph;
 use crate::domain::paragraph_kind::ParagraphKind;
 use crate::domain::toc_item::TocItem;
 use crate::parser::ParserFactory;
+use crate::storage;
 
 pub struct CompatAdapter {
     state: AppState,
@@ -25,9 +26,16 @@ pub struct CompatAdapter {
 
 impl CompatAdapter {
     pub fn new() -> Self {
-        Self {
-            state: AppState::default(),
-        }
+        let _ = storage::paths::ensure_dirs();
+
+        let settings_file = storage::settings_store::load();
+        let recent_books = storage::recent_store::load();
+
+        let mut state = AppState::default();
+        state.reader_settings = settings_file.reader_settings;
+        state.recent_books = recent_books;
+
+        Self { state }
     }
 
     pub(crate) fn try_load_book(&self, path: &str) -> AppResult<Book> {
@@ -159,6 +167,34 @@ impl CompatAdapter {
 
     pub fn dispatch(&mut self, action: Action) {
         crate::app::controller::dispatch(self, action);
+    }
+
+    pub fn save_persisted_state(&self) {
+        let state = &self.state;
+
+        let settings_file = storage::settings_store::SettingsFile::from_reader_settings(
+            &state.reader_settings,
+            state.current_book.as_ref().map(|b| b.id.clone()),
+        );
+        if let Err(e) = storage::settings_store::save(&settings_file) {
+            warn!("保存设置失败: {}", e);
+        }
+
+        if let Err(e) = storage::recent_store::save(&state.recent_books) {
+            warn!("保存最近阅读失败: {}", e);
+        }
+
+        if let (Some(book), Some(progress)) = (&state.current_book, &state.reading_progress) {
+            if let Err(e) = storage::progress_store::save(&book.id, progress) {
+                warn!("保存阅读进度失败: {}", e);
+            }
+        }
+
+        if let Some(book) = &state.current_book {
+            if let Err(e) = storage::bookmark_store::save(&book.id, &state.bookmarks) {
+                warn!("保存书签失败: {}", e);
+            }
+        }
     }
 }
 

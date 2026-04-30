@@ -29,4 +29,8 @@ impl eframe::App for ReaderApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         AppShell::update(&mut self.adapter, ctx, frame);
     }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.adapter.save_persisted_state();
+    }
 }

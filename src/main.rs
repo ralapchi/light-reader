@@ -10,6 +10,7 @@ use log::info;
 mod app;
 mod domain;
 mod parser;
+mod storage;
 mod ui;
 
 /// 应用程序主入口函数
