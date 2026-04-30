@@ -51,17 +51,7 @@ pub fn left_sidebar(
                         .id_salt("toc_scroll")
                         .show(ui, |ui| {
                             for item in toc {
-                                let label = format!(
-                                    "{}. {}",
-                                    item.chapter_index.unwrap_or(0) + 1,
-                                    item.title
-                                );
-                                if ui.selectable_label(false, label).clicked() {
-                                    if let Some(idx) = item.chapter_index {
-                                        action = Some(Action::GoToChapter(idx));
-                                    }
-                                }
-                                ui.add_space(s.xxs);
+                                render_toc_item(ui, item, theme, &mut action, 0);
                             }
                         });
                 }
@@ -155,4 +145,38 @@ pub fn left_sidebar(
         });
 
     action
+}
+
+/// 递归渲染目录项及其子项
+fn render_toc_item(
+    ui: &mut egui::Ui,
+    item: &TocItem,
+    theme: &ThemeConfig,
+    action: &mut Option<Action>,
+    indent_level: u8,
+) {
+    let s = &theme.spacing;
+    let indent = indent_level as f32 * s.lg;
+
+    ui.horizontal(|ui| {
+        ui.add_space(indent);
+
+        let label = if let Some(idx) = item.chapter_index {
+            format!("{}. {}", idx + 1, item.title)
+        } else {
+            item.title.clone()
+        };
+
+        if ui.selectable_label(false, label).clicked() {
+            if let Some(idx) = item.chapter_index {
+                *action = Some(Action::GoToChapter(idx));
+            }
+        }
+    });
+    ui.add_space(s.xxs);
+
+    // 递归渲染子项
+    for child in &item.children {
+        render_toc_item(ui, child, theme, action, indent_level + 1);
+    }
 }

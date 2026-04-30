@@ -16,3 +16,6 @@ pub mod txt;
 pub mod factory;
 
 pub use factory::ParserFactory;
+
+#[cfg(test)]
+mod tests;

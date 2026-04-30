@@ -180,6 +180,7 @@ pub fn reduce(state: &mut AppState, action: Action) {
 fn open_book_succeeded(state: &mut AppState, book: Book) {
     let chapter_count = book.chapters.len();
     let book_id = book.id.clone();
+    let warning_count = book.load_info.parse_warnings.len();
     let recent_item = RecentBookItem {
         book_id: book_id.clone(),
         title: book.metadata.title.clone(),
@@ -208,7 +209,11 @@ fn open_book_succeeded(state: &mut AppState, book: Book) {
     state.ui_state.is_loading = false;
     state.ui_state.pending_open_path = None;
     state.ui_state.screen = ScreenKind::Reader;
-    set_status_message(state, format!("内容已加载，共 {} 章", chapter_count));
+    if warning_count > 0 {
+        set_status_message(state, format!("内容已加载，共 {} 章（{} 条告警）", chapter_count, warning_count));
+    } else {
+        set_status_message(state, format!("内容已加载，共 {} 章", chapter_count));
+    }
 }
 
 fn go_to_chapter(state: &mut AppState, index: usize) {

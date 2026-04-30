@@ -75,7 +75,11 @@ impl CompatAdapter {
             })
             .collect::<Vec<_>>();
 
-        let toc = if result.chapter_titles.is_empty() {
+        let toc = if let Some(structured_toc) = result.toc {
+            // 将 TOC href 映射到 chapter_index
+            let href_to_index = build_href_index(&result.spine_hrefs);
+            map_toc_chapter_indices(structured_toc, &href_to_index)
+        } else if result.chapter_titles.is_empty() {
             chapters
                 .iter()
                 .enumerate()
@@ -122,22 +126,24 @@ impl CompatAdapter {
             BookFormat::ReservedMobi => "ReservedMobi",
         };
 
+        let metadata = result.metadata.unwrap_or(BookMetadata {
+            title: file_stem,
+            author: None,
+            language: None,
+            publisher: None,
+            description: None,
+            identifier: None,
+            series: None,
+            cover_title: None,
+            created_at: None,
+            modified_at: None,
+        });
+
         Ok(Book {
             id: stable_book_id(path),
             source_path,
             format: format.clone(),
-            metadata: BookMetadata {
-                title: file_stem,
-                author: None,
-                language: None,
-                publisher: None,
-                description: None,
-                identifier: None,
-                series: None,
-                cover_title: None,
-                created_at: None,
-                modified_at: None,
-            },
+            metadata,
             toc,
             chapters: chapters.clone(),
             assets: BookAssets {
@@ -148,7 +154,7 @@ impl CompatAdapter {
             },
             load_info: BookLoadInfo {
                 parser_name: parser_name.to_string(),
-                parse_warnings: Vec::new(),
+                parse_warnings: result.warnings,
                 chapter_count: chapters.len(),
                 loaded_at: Utc::now().to_rfc3339(),
                 source_file_size: file_size,
@@ -263,6 +269,51 @@ fn stable_book_id(path: &str) -> String {
     format!("book-{:016x}", hasher.finish())
 }
 
+/// Strip fragment (#...) from href, returning just the file path part.
+fn strip_href_fragment(href: &str) -> &str {
+    href.split('#').next().unwrap_or(href)
+}
+
+/// Extract the filename component from a path (e.g. "OEBPS/ch1.xhtml" → "ch1.xhtml").
+fn href_filename(href: &str) -> &str {
+    strip_href_fragment(href)
+        .rsplit('/')
+        .next()
+        .unwrap_or(strip_href_fragment(href))
+}
+
+/// Build a mapping from href filename to spine chapter index.
+fn build_href_index(spine_hrefs: &[String]) -> std::collections::HashMap<String, usize> {
+    let mut map = std::collections::HashMap::new();
+    for (index, href) in spine_hrefs.iter().enumerate() {
+        let key = href_filename(href).to_string();
+        map.entry(key).or_insert(index);
+    }
+    map
+}
+
+/// Recursively set chapter_index on TocItems using the href→spine_index mapping.
+fn map_toc_chapter_indices(
+    items: Vec<TocItem>,
+    href_to_index: &std::collections::HashMap<String, usize>,
+) -> Vec<TocItem> {
+    items
+        .into_iter()
+        .map(|mut item| {
+            if item.chapter_index.is_none() {
+                if let Some(ref href) = item.href {
+                    let key = href_filename(href).to_string();
+                    if let Some(&idx) = href_to_index.get(&key) {
+                        item.chapter_index = Some(idx);
+                    }
+                }
+            }
+            item.children = map_toc_chapter_indices(item.children, href_to_index);
+            item
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,6 +360,70 @@ mod tests {
         zip.write_all(
             br#"<?xml version="1.0" encoding="UTF-8"?>
 <package version="2.0" xmlns="http://www.idpf.org/2007/opf">
+  <manifest>
+    <item id="chap1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="chap1"/>
+  </spine>
+</package>"#,
+        )
+        .unwrap();
+
+        zip.start_file("chapter1.xhtml", options).unwrap();
+        zip.write_all(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h1>第1章 开始</h1>
+    <p>第一段。</p>
+  </body>
+</html>"#
+                .as_bytes(),
+        )
+        .unwrap();
+
+        zip.finish().unwrap();
+        path
+    }
+
+    fn create_epub_with_metadata_fixture() -> std::path::PathBuf {
+        let path = temp_path("epub");
+        let file = fs::File::create(&path).unwrap();
+        let mut zip = ZipWriter::new(file);
+        let options = FileOptions::default();
+
+        zip.start_file("META-INF/container.xml", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#,
+        )
+        .unwrap();
+
+        zip.start_file("content.opf", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="2.0" xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <metadata>
+    <dc:title>"#,
+        )
+        .unwrap();
+        zip.write_all("测试书籍标题".as_bytes()).unwrap();
+        zip.write_all(
+            br#"</dc:title>
+    <dc:creator>"#,
+        )
+        .unwrap();
+        zip.write_all("测试作者".as_bytes()).unwrap();
+        zip.write_all(
+            br#"</dc:creator>
+    <dc:language>zh-CN</dc:language>
+    <dc:identifier>isbn-1234567890</dc:identifier>
+  </metadata>
   <manifest>
     <item id="chap1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
   </manifest>
@@ -415,6 +530,94 @@ mod tests {
         assert_eq!(adapter.state().ui_state.screen, ScreenKind::Reader);
         assert!(adapter.state().current_book.is_some());
         assert!(adapter.state().ui_state.pending_open_path.is_none());
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn epub_metadata_is_extracted() {
+        let path = create_epub_with_metadata_fixture();
+        let mut adapter = CompatAdapter::new();
+
+        adapter.dispatch(Action::OpenBookSelected(path.to_string_lossy().to_string()));
+
+        let book = adapter.state().current_book.as_ref().unwrap();
+        assert_eq!(book.metadata.title, "测试书籍标题");
+        assert_eq!(book.metadata.author.as_deref(), Some("测试作者"));
+        assert_eq!(book.metadata.language.as_deref(), Some("zh-CN"));
+        assert_eq!(book.metadata.identifier.as_deref(), Some("isbn-1234567890"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn epub_toc_chapter_index_mapped_from_ncx() {
+        let path = temp_path("epub");
+        let file = fs::File::create(&path).unwrap();
+        let mut zip = ZipWriter::new(file);
+        let options = FileOptions::default();
+
+        zip.start_file("META-INF/container.xml", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#,
+        )
+        .unwrap();
+
+        zip.start_file("OEBPS/content.opf", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="2.0" xmlns="http://www.idpf.org/2007/opf">
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+  </manifest>
+  <spine toc="ncx">
+    <itemref idref="ch1"/>
+    <itemref idref="ch2"/>
+  </spine>
+</package>"#,
+        )
+        .unwrap();
+
+        zip.start_file("OEBPS/toc.ncx", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/">
+  <navMap>
+    <navPoint id="np1"><navLabel><text>Chapter One</text></navLabel><content src="ch1.xhtml"/></navPoint>
+    <navPoint id="np2"><navLabel><text>Chapter Two</text></navLabel><content src="ch2.xhtml"/></navPoint>
+  </navMap>
+</ncx>"#,
+        )
+        .unwrap();
+
+        zip.start_file("OEBPS/ch1.xhtml", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p>Content one.</p></body></html>"#,
+        )
+        .unwrap();
+
+        zip.start_file("OEBPS/ch2.xhtml", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p>Content two.</p></body></html>"#,
+        )
+        .unwrap();
+
+        zip.finish().unwrap();
+
+        let mut adapter = CompatAdapter::new();
+        adapter.dispatch(Action::OpenBookSelected(path.to_string_lossy().to_string()));
+
+        let book = adapter.state().current_book.as_ref().unwrap();
+        assert!(book.toc.len() >= 2, "expected at least 2 TOC items, got {}", book.toc.len());
+        assert_eq!(book.toc[0].chapter_index, Some(0), "first TOC item should map to chapter 0");
+        assert_eq!(book.toc[1].chapter_index, Some(1), "second TOC item should map to chapter 1");
 
         let _ = fs::remove_file(path);
     }
