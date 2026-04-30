@@ -294,8 +294,8 @@ fn execute_search(state: &AppState, query: &crate::domain::search_query::SearchQ
                 paragraph.text.to_lowercase()
             };
             if let Some(pos) = haystack.find(&keyword) {
-                let snippet_start = pos.saturating_sub(20);
-                let snippet_end = (pos + keyword.len() + 20).min(paragraph.text.len());
+                let snippet_start = floor_char_boundary(&paragraph.text, pos.saturating_sub(20));
+                let snippet_end = ceil_char_boundary(&paragraph.text, (pos + keyword.len() + 20).min(paragraph.text.len()));
                 let snippet = paragraph.text[snippet_start..snippet_end].to_string();
                 results.push(crate::domain::search_result::SearchResult {
                     book_id: book.id.clone(),
@@ -311,6 +311,24 @@ fn execute_search(state: &AppState, query: &crate::domain::search_query::SearchQ
         }
     }
     results
+}
+
+/// Find the nearest valid UTF-8 char boundary at or before `index`.
+fn floor_char_boundary(s: &str, index: usize) -> usize {
+    let mut i = index.min(s.len());
+    while i > 0 && !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
+}
+
+/// Find the nearest valid UTF-8 char boundary at or after `index`.
+fn ceil_char_boundary(s: &str, index: usize) -> usize {
+    let mut i = index.min(s.len());
+    while i < s.len() && !s.is_char_boundary(i) {
+        i += 1;
+    }
+    i
 }
 
 fn set_status_message(state: &mut AppState, message: String) {
@@ -780,5 +798,41 @@ mod tests {
         assert!(state.status_message_set_at.is_some());
         reduce(&mut state, Action::StatusMessageTimedOut);
         assert!(state.status_message_set_at.is_none());
+    }
+
+    #[test]
+    fn search_chinese_text_does_not_panic_on_utf8_boundary() {
+        let mut state = AppState::default();
+        let mut book = sample_book(BookFormat::Txt);
+        book.chapters = vec![Chapter {
+            id: "ch-cn".to_string(),
+            index: 0,
+            title: "中文章节".to_string(),
+            raw_title: None,
+            content: "这是一段很长的中文测试文本，用于验证搜索摘要提取时不会因为UTF-8字符边界问题而崩溃。".to_string(),
+            paragraphs: vec![Paragraph {
+                index: 0,
+                text: "这是一段很长的中文测试文本，用于验证搜索摘要提取时不会因为UTF-8字符边界问题而崩溃。".to_string(),
+                kind: ParagraphKind::Body,
+                indent_level: 0,
+                source_line_hint: None,
+            }],
+            word_count: 40,
+            char_count: 40,
+            source_href: None,
+            anchor: None,
+            warnings: Vec::new(),
+        }];
+        reduce(&mut state, Action::OpenBookSucceeded(book));
+        let query = crate::domain::search_query::SearchQuery {
+            keyword: "验证".to_string(),
+            case_sensitive: true,
+            scope: crate::domain::search_enums::SearchScope::EntireBook,
+        };
+        reduce(&mut state, Action::SearchQueryChanged(query));
+        reduce(&mut state, Action::SearchSubmitted);
+        assert!(!state.search_state.results.is_empty());
+        let snippet = &state.search_state.results[0].snippet;
+        assert!(snippet.contains("验证"));
     }
 }
