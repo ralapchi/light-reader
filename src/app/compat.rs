@@ -30,14 +30,6 @@ impl CompatAdapter {
         }
     }
 
-    pub fn current_page(&self) -> usize {
-        self.state
-            .reading_progress
-            .as_ref()
-            .map(|progress| progress.chapter_index)
-            .unwrap_or(0)
-    }
-
     pub(crate) fn try_load_book(&self, path: &str) -> AppResult<Book> {
         info!("正在解析文件: {}", path);
         let start = std::time::Instant::now();

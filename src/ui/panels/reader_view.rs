@@ -1,9 +1,18 @@
+use std::cell::Cell;
+
 use eframe::egui;
 
+use crate::app::Action;
 use crate::domain::chapter::Chapter;
 use crate::domain::paragraph_kind::ParagraphKind;
 use crate::domain::reader_settings::ReaderSettings;
 use crate::ui::ThemeConfig;
+
+const SCROLL_OFFSET_THRESHOLD: f32 = 1.0;
+
+thread_local! {
+    static LAST_SCROLL_OFFSET: Cell<f32> = const { Cell::new(0.0) };
+}
 
 pub fn reader_view(
     ui: &mut egui::Ui,
@@ -11,15 +20,16 @@ pub fn reader_view(
     chapter_index: usize,
     settings: &ReaderSettings,
     theme: &ThemeConfig,
-) {
+) -> Vec<Action> {
     let s = &theme.spacing;
     let max_width = settings.content_width;
     let margin = settings.side_margin;
     let available_width = ui.available_width();
     let cw = available_width.min(max_width);
     let sm = (available_width - cw) / 2.0;
+    let mut actions = Vec::new();
 
-    egui::ScrollArea::vertical()
+    let scroll_output = egui::ScrollArea::vertical()
         .id_salt("reader_scroll")
         .auto_shrink([false; 2])
         .show(ui, |ui| {
@@ -28,11 +38,14 @@ pub fn reader_view(
 
                 ui.vertical(|ui| {
                     ui.set_width(cw);
-                    ui.add_space(s.xl);
+                    ui.add_space(s.reader_top_padding);
 
                     if let Some(chapter) = chapters.get(chapter_index) {
                         let font_size = settings.font_size;
                         let line_height = Some(font_size * settings.line_height);
+
+                        // Chapter header
+                        chapter_header(ui, &chapter.title, theme);
 
                         for paragraph in &chapter.paragraphs {
                             match paragraph.kind {
@@ -61,12 +74,16 @@ pub fn reader_view(
                                 }
                                 ParagraphKind::Quote => {
                                     ui.add_space(s.sm);
-                                    ui.label(
-                                        egui::RichText::new(&paragraph.text)
-                                            .size(font_size)
-                                            .italics()
-                                            .line_height(line_height),
-                                    );
+                                    ui.horizontal(|ui| {
+                                        ui.add_space(s.lg);
+                                        ui.label(
+                                            egui::RichText::new(&paragraph.text)
+                                                .size(font_size)
+                                                .italics()
+                                                .color(theme.colors.text_secondary.to_color32())
+                                                .line_height(line_height),
+                                        );
+                                    });
                                     ui.add_space(s.sm);
                                 }
                                 ParagraphKind::Separator => {
@@ -75,12 +92,16 @@ pub fn reader_view(
                                     ui.add_space(s.md);
                                 }
                                 ParagraphKind::Body => {
-                                    ui.label(
-                                        egui::RichText::new(&paragraph.text)
-                                            .size(font_size)
-                                            .line_height(line_height),
-                                    );
-                                    ui.add_space(paragraph.indent_level as f32 * s.lg);
+                                    let indent = paragraph.indent_level as f32 * s.lg;
+                                    ui.horizontal(|ui| {
+                                        ui.add_space(indent);
+                                        ui.label(
+                                            egui::RichText::new(&paragraph.text)
+                                                .size(font_size)
+                                                .line_height(line_height),
+                                        );
+                                    });
+                                    ui.add_space(s.paragraph_gap);
                                 }
                             }
                         }
@@ -95,21 +116,74 @@ pub fn reader_view(
                                             .size(font_size)
                                             .line_height(line_height),
                                     );
-                                    ui.add_space(s.sm);
+                                    ui.add_space(s.paragraph_gap);
                                 }
                             }
                         }
 
-                        ui.add_space(s.xl * 2.0);
+                        // Chapter end spacer
+                        chapter_end_spacer(ui, theme);
                     } else {
-                        ui.vertical_centered(|ui| {
-                            ui.add_space(s.xl * 4.0);
-                            ui.label("无内容");
-                        });
+                        empty_chapter(ui, theme);
                     }
                 });
 
                 ui.add_space(sm.max(margin));
             });
         });
+
+    // Track scroll offset with change detection
+    let scroll_offset = scroll_output.state.offset.y;
+    LAST_SCROLL_OFFSET.with(|last| {
+        let prev = last.get();
+        if (scroll_offset - prev).abs() > SCROLL_OFFSET_THRESHOLD {
+            last.set(scroll_offset);
+            actions.push(Action::UpdateScrollOffset(scroll_offset));
+        }
+    });
+
+    actions
+}
+
+fn chapter_header(ui: &mut egui::Ui, title: &str, theme: &ThemeConfig) {
+    let s = &theme.spacing;
+    let t = &theme.typography;
+
+    ui.add_space(s.lg);
+    ui.vertical_centered(|ui| {
+        ui.label(
+            egui::RichText::new(title)
+                .size(t.title_size)
+                .strong()
+                .color(theme.colors.text_primary.to_color32()),
+        );
+    });
+    ui.add_space(s.md);
+    ui.separator();
+    ui.add_space(s.lg);
+}
+
+fn chapter_end_spacer(ui: &mut egui::Ui, theme: &ThemeConfig) {
+    let s = &theme.spacing;
+    ui.add_space(s.xl * 3.0);
+    ui.vertical_centered(|ui| {
+        ui.label(
+            egui::RichText::new("--- 章节结束 ---")
+                .size(theme.typography.caption_size)
+                .color(theme.colors.text_muted.to_color32()),
+        );
+    });
+    ui.add_space(s.xl * 2.0);
+}
+
+fn empty_chapter(ui: &mut egui::Ui, theme: &ThemeConfig) {
+    let s = &theme.spacing;
+    ui.add_space(s.xl * 4.0);
+    ui.vertical_centered(|ui| {
+        ui.label(
+            egui::RichText::new("无内容")
+                .size(theme.typography.body_size)
+                .color(theme.colors.text_muted.to_color32()),
+        );
+    });
 }

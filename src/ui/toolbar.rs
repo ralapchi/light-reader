@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use eframe::egui;
 use log::info;
 use rfd::FileDialog;

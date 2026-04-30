@@ -33,6 +33,123 @@ pub fn reduce(state: &mut AppState, action: Action) {
         Action::SwitchLeftPanelTab(tab) => {
             state.ui_state.left_panel_tab = tab;
         }
+        Action::ToggleSidebar => {
+            state.ui_state.sidebar_collapsed = !state.ui_state.sidebar_collapsed;
+        }
+        Action::ToggleSettingsPanel => {
+            state.ui_state.show_settings_panel = !state.ui_state.show_settings_panel;
+        }
+        Action::ToggleSearchPanel => {
+            state.ui_state.show_search_panel = !state.ui_state.show_search_panel;
+            if state.ui_state.show_search_panel {
+                state.ui_state.focused_search_input = true;
+            }
+        }
+        Action::CloseBook => {
+            state.current_book = None;
+            state.reading_progress = None;
+            state.bookmarks.clear();
+            state.search_state = Default::default();
+            state.last_error = None;
+            state.ui_state.screen = ScreenKind::EmptyLibrary;
+            state.ui_state.is_loading = false;
+            state.ui_state.pending_open_path = None;
+            state.status_message = "就绪".to_string();
+        }
+        Action::ReaderSettingChanged(key, value) => {
+            apply_reader_setting(&mut state.reader_settings, &key, &value);
+        }
+        Action::RestoreDefaultSettings => {
+            state.reader_settings = Default::default();
+        }
+        Action::UpdateScrollOffset(offset) => {
+            if let Some(ref mut progress) = state.reading_progress {
+                progress.scroll_offset = offset;
+            }
+        }
+        Action::AddBookmarkRequested => {
+            if let (Some(book), Some(progress)) = (&state.current_book, &state.reading_progress) {
+                let chapter_index = progress.chapter_index;
+                let paragraph_index = progress.paragraph_index;
+                let snippet = book
+                    .chapters
+                    .get(chapter_index)
+                    .and_then(|ch| {
+                        paragraph_index
+                            .and_then(|pi| ch.paragraphs.get(pi))
+                            .or(ch.paragraphs.first())
+                            .map(|p| p.text.chars().take(100).collect::<String>())
+                    })
+                    .unwrap_or_default();
+                let title = book
+                    .chapters
+                    .get(chapter_index)
+                    .map(|ch| ch.title.clone())
+                    .unwrap_or_else(|| "书签".to_string());
+                let bookmark = crate::domain::bookmark::Bookmark {
+                    id: format!("bm-{}", Utc::now().timestamp_millis()),
+                    book_id: book.id.clone(),
+                    chapter_index,
+                    paragraph_index,
+                    title,
+                    snippet,
+                    created_at: Utc::now().to_rfc3339(),
+                    note: None,
+                };
+                state.bookmarks.push(bookmark);
+                state.status_message = "已添加书签".to_string();
+            }
+        }
+        Action::RemoveBookmark(id) => {
+            state.bookmarks.retain(|b| b.id != id);
+        }
+        Action::JumpToBookmark(id) => {
+            if let Some(bookmark) = state.bookmarks.iter().find(|b| b.id == id).cloned() {
+                go_to_chapter(state, bookmark.chapter_index);
+                if let Some(para_idx) = bookmark.paragraph_index {
+                    if let Some(ref mut progress) = state.reading_progress {
+                        progress.paragraph_index = Some(para_idx);
+                    }
+                }
+            }
+        }
+        Action::SearchQueryChanged(query) => {
+            state.search_state.current_query = Some(query);
+        }
+        Action::SearchSubmitted => {
+            if let Some(query) = &state.search_state.current_query {
+                let results = execute_search(state, query);
+                state.search_state.results = results;
+                state.search_state.selected_result_index = None;
+                state.search_state.last_search_at = Some(Utc::now().to_rfc3339());
+            }
+        }
+        Action::SearchResultSelected(index) => {
+            state.search_state.selected_result_index = Some(index);
+            if let Some(result) = state.search_state.results.get(index).cloned() {
+                go_to_chapter(state, result.chapter_index);
+                if let Some(ref mut progress) = state.reading_progress {
+                    progress.paragraph_index = Some(result.paragraph_index);
+                }
+            }
+        }
+        Action::ClearSearch => {
+            state.search_state = Default::default();
+        }
+        Action::RecentBookSelected(book_id) => {
+            if let Some(item) = state.recent_books.iter().find(|r| r.book_id == book_id) {
+                let path = item.source_path.clone();
+                state.ui_state.pending_open_path = Some(std::path::PathBuf::from(path));
+            }
+        }
+        Action::RemoveRecentBook(book_id) => {
+            state.recent_books.retain(|item| item.book_id != book_id);
+        }
+        Action::StatusMessageTimedOut => {
+            if state.last_error.is_none() {
+                state.status_message = "就绪".to_string();
+            }
+        }
         Action::DismissError => {
             state.last_error = None;
             state.ui_state.screen = if state.current_book.is_some() {
@@ -136,6 +253,95 @@ fn format_label(format: &BookFormat) -> &'static str {
         BookFormat::Txt => "txt",
         BookFormat::ReservedPdf => "pdf",
         BookFormat::ReservedMobi => "mobi",
+    }
+}
+
+fn execute_search(state: &AppState, query: &crate::domain::search_query::SearchQuery) -> Vec<crate::domain::search_result::SearchResult> {
+    let book = match &state.current_book {
+        Some(book) => book,
+        None => return Vec::new(),
+    };
+    let keyword = if query.case_sensitive {
+        query.keyword.clone()
+    } else {
+        query.keyword.to_lowercase()
+    };
+    let mut results = Vec::new();
+    let search_all = matches!(query.scope, crate::domain::search_enums::SearchScope::EntireBook);
+    let current_chapter = state
+        .reading_progress
+        .as_ref()
+        .map(|p| p.chapter_index)
+        .unwrap_or(0);
+
+    for chapter in &book.chapters {
+        if !search_all && chapter.index != current_chapter {
+            continue;
+        }
+        for paragraph in &chapter.paragraphs {
+            let haystack = if query.case_sensitive {
+                paragraph.text.clone()
+            } else {
+                paragraph.text.to_lowercase()
+            };
+            if let Some(pos) = haystack.find(&keyword) {
+                let snippet_start = pos.saturating_sub(20);
+                let snippet_end = (pos + keyword.len() + 20).min(paragraph.text.len());
+                let snippet = paragraph.text[snippet_start..snippet_end].to_string();
+                results.push(crate::domain::search_result::SearchResult {
+                    book_id: book.id.clone(),
+                    chapter_index: chapter.index,
+                    paragraph_index: paragraph.index,
+                    match_start: pos,
+                    match_end: pos + keyword.len(),
+                    chapter_title: chapter.title.clone(),
+                    snippet,
+                    score: 1.0,
+                });
+            }
+        }
+    }
+    results
+}
+
+fn apply_reader_setting(settings: &mut crate::domain::reader_settings::ReaderSettings, key: &str, value: &str) {
+    match key {
+        "font_size" => {
+            if let Ok(v) = value.parse::<f32>() {
+                settings.font_size = v.max(8.0);
+            }
+        }
+        "line_height" => {
+            if let Ok(v) = value.parse::<f32>() {
+                settings.line_height = v.max(1.0);
+            }
+        }
+        "paragraph_spacing" => {
+            if let Ok(v) = value.parse::<f32>() {
+                settings.paragraph_spacing = v.max(0.0);
+            }
+        }
+        "content_width" => {
+            if let Ok(v) = value.parse::<f32>() {
+                settings.content_width = v.max(200.0);
+            }
+        }
+        "side_margin" => {
+            if let Ok(v) = value.parse::<f32>() {
+                settings.side_margin = v.max(0.0);
+            }
+        }
+        "show_toc" => {
+            if let Ok(v) = value.parse::<bool>() {
+                settings.show_toc = v;
+            }
+        }
+        "show_status_bar" => {
+            if let Ok(v) = value.parse::<bool>() {
+                settings.show_status_bar = v;
+            }
+        }
+        _ => {}
     }
 }
 
@@ -274,5 +480,249 @@ mod tests {
         let mut state = AppState::default();
         reduce(&mut state, Action::ThemeChanged(ThemeKind::Sepia));
         assert_eq!(state.reader_settings.theme, ThemeKind::Sepia);
+    }
+
+    #[test]
+    fn toggle_sidebar_flips_collapsed() {
+        let mut state = AppState::default();
+        assert!(!state.ui_state.sidebar_collapsed);
+        reduce(&mut state, Action::ToggleSidebar);
+        assert!(state.ui_state.sidebar_collapsed);
+        reduce(&mut state, Action::ToggleSidebar);
+        assert!(!state.ui_state.sidebar_collapsed);
+    }
+
+    #[test]
+    fn toggle_settings_panel() {
+        let mut state = AppState::default();
+        assert!(!state.ui_state.show_settings_panel);
+        reduce(&mut state, Action::ToggleSettingsPanel);
+        assert!(state.ui_state.show_settings_panel);
+        reduce(&mut state, Action::ToggleSettingsPanel);
+        assert!(!state.ui_state.show_settings_panel);
+    }
+
+    #[test]
+    fn toggle_search_panel_sets_focus() {
+        let mut state = AppState::default();
+        assert!(!state.ui_state.show_search_panel);
+        reduce(&mut state, Action::ToggleSearchPanel);
+        assert!(state.ui_state.show_search_panel);
+        assert!(state.ui_state.focused_search_input);
+        reduce(&mut state, Action::ToggleSearchPanel);
+        assert!(!state.ui_state.show_search_panel);
+    }
+
+    #[test]
+    fn close_book_resets_to_empty_library() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        assert!(state.current_book.is_some());
+        assert_eq!(state.ui_state.screen, ScreenKind::Reader);
+
+        reduce(&mut state, Action::CloseBook);
+        assert!(state.current_book.is_none());
+        assert!(state.reading_progress.is_none());
+        assert!(state.bookmarks.is_empty());
+        assert_eq!(state.ui_state.screen, ScreenKind::EmptyLibrary);
+        assert_eq!(state.status_message, "就绪");
+    }
+
+    #[test]
+    fn reader_setting_changed_font_size() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::ReaderSettingChanged("font_size".to_string(), "20.0".to_string()));
+        assert!((state.reader_settings.font_size - 20.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn reader_setting_changed_font_size_clamp() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::ReaderSettingChanged("font_size".to_string(), "1.0".to_string()));
+        assert!((state.reader_settings.font_size - 8.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn reader_setting_changed_line_height() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::ReaderSettingChanged("line_height".to_string(), "2.0".to_string()));
+        assert!((state.reader_settings.line_height - 2.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn reader_setting_changed_content_width() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::ReaderSettingChanged("content_width".to_string(), "800.0".to_string()));
+        assert!((state.reader_settings.content_width - 800.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn reader_setting_changed_show_toc() {
+        let mut state = AppState::default();
+        assert!(state.reader_settings.show_toc);
+        reduce(&mut state, Action::ReaderSettingChanged("show_toc".to_string(), "false".to_string()));
+        assert!(!state.reader_settings.show_toc);
+    }
+
+    #[test]
+    fn reader_setting_changed_show_status_bar() {
+        let mut state = AppState::default();
+        assert!(state.reader_settings.show_status_bar);
+        reduce(&mut state, Action::ReaderSettingChanged("show_status_bar".to_string(), "false".to_string()));
+        assert!(!state.reader_settings.show_status_bar);
+    }
+
+    #[test]
+    fn reader_setting_changed_unknown_key_is_noop() {
+        let mut state = AppState::default();
+        let before = state.reader_settings.clone();
+        reduce(&mut state, Action::ReaderSettingChanged("unknown_key".to_string(), "123".to_string()));
+        assert_eq!(state.reader_settings, before);
+    }
+
+    #[test]
+    fn restore_default_settings() {
+        let mut state = AppState::default();
+        state.reader_settings.font_size = 99.0;
+        reduce(&mut state, Action::RestoreDefaultSettings);
+        assert!((state.reader_settings.font_size - 16.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn update_scroll_offset() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        reduce(&mut state, Action::UpdateScrollOffset(42.5));
+        assert_eq!(
+            state.reading_progress.as_ref().map(|p| p.scroll_offset),
+            Some(42.5)
+        );
+    }
+
+    #[test]
+    fn add_bookmark_from_current_position() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        reduce(&mut state, Action::AddBookmarkRequested);
+        assert_eq!(state.bookmarks.len(), 1);
+        assert_eq!(state.bookmarks[0].chapter_index, 0);
+        assert_eq!(state.bookmarks[0].book_id, "book-1");
+        assert_eq!(state.status_message, "已添加书签");
+    }
+
+    #[test]
+    fn remove_bookmark() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        reduce(&mut state, Action::AddBookmarkRequested);
+        let bm_id = state.bookmarks[0].id.clone();
+        reduce(&mut state, Action::RemoveBookmark(bm_id));
+        assert!(state.bookmarks.is_empty());
+    }
+
+    #[test]
+    fn jump_to_bookmark() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        reduce(&mut state, Action::GoToChapter(1));
+        reduce(&mut state, Action::AddBookmarkRequested);
+        let bm_id = state.bookmarks[0].id.clone();
+        reduce(&mut state, Action::GoToChapter(0));
+        assert_eq!(state.reading_progress.as_ref().map(|p| p.chapter_index), Some(0));
+
+        reduce(&mut state, Action::JumpToBookmark(bm_id));
+        assert_eq!(state.reading_progress.as_ref().map(|p| p.chapter_index), Some(1));
+    }
+
+    #[test]
+    fn search_query_changed() {
+        let mut state = AppState::default();
+        let query = crate::domain::search_query::SearchQuery {
+            keyword: "test".to_string(),
+            case_sensitive: false,
+            scope: crate::domain::search_enums::SearchScope::CurrentChapter,
+        };
+        reduce(&mut state, Action::SearchQueryChanged(query));
+        assert!(state.search_state.current_query.is_some());
+        assert_eq!(state.search_state.current_query.as_ref().unwrap().keyword, "test");
+    }
+
+    #[test]
+    fn search_submitted_finds_matches() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        let query = crate::domain::search_query::SearchQuery {
+            keyword: "Body".to_string(),
+            case_sensitive: true,
+            scope: crate::domain::search_enums::SearchScope::EntireBook,
+        };
+        reduce(&mut state, Action::SearchQueryChanged(query));
+        reduce(&mut state, Action::SearchSubmitted);
+        assert!(!state.search_state.results.is_empty());
+    }
+
+    #[test]
+    fn search_result_selected_jumps_to_chapter() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        let query = crate::domain::search_query::SearchQuery {
+            keyword: "Body 2".to_string(),
+            case_sensitive: true,
+            scope: crate::domain::search_enums::SearchScope::EntireBook,
+        };
+        reduce(&mut state, Action::SearchQueryChanged(query));
+        reduce(&mut state, Action::SearchSubmitted);
+        let result_count = state.search_state.results.len();
+        assert!(result_count > 0);
+
+        reduce(&mut state, Action::SearchResultSelected(0));
+        assert_eq!(state.search_state.selected_result_index, Some(0));
+    }
+
+    #[test]
+    fn clear_search_resets_state() {
+        let mut state = AppState::default();
+        state.search_state.is_searching = true;
+        reduce(&mut state, Action::ClearSearch);
+        assert!(!state.search_state.is_searching);
+        assert!(state.search_state.current_query.is_none());
+    }
+
+    #[test]
+    fn recent_book_selected_sets_pending_path() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        let book_id = state.current_book.as_ref().unwrap().id.clone();
+        state.current_book = None;
+        state.ui_state.screen = ScreenKind::EmptyLibrary;
+
+        reduce(&mut state, Action::RecentBookSelected(book_id));
+        assert!(state.ui_state.pending_open_path.is_some());
+    }
+
+    #[test]
+    fn remove_recent_book() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        assert_eq!(state.recent_books.len(), 1);
+        reduce(&mut state, Action::RemoveRecentBook("book-1".to_string()));
+        assert!(state.recent_books.is_empty());
+    }
+
+    #[test]
+    fn status_message_timed_out_clears_message() {
+        let mut state = AppState::default();
+        state.status_message = "测试消息".to_string();
+        reduce(&mut state, Action::StatusMessageTimedOut);
+        assert_eq!(state.status_message, "就绪");
+    }
+
+    #[test]
+    fn status_message_timed_out_preserves_error() {
+        let mut state = AppState::default();
+        state.status_message = "错误消息".to_string();
+        state.last_error = Some(crate::domain::app_error::AppError::new("TEST", "error"));
+        reduce(&mut state, Action::StatusMessageTimedOut);
+        assert_eq!(state.status_message, "错误消息");
     }
 }

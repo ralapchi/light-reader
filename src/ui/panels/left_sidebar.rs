@@ -1,17 +1,23 @@
 use eframe::egui;
 
+use crate::app::Action;
+use crate::domain::bookmark::Bookmark;
 use crate::domain::enums::LeftPanelTab;
+use crate::domain::recent_book_item::RecentBookItem;
 use crate::domain::toc_item::TocItem;
 use crate::ui::ThemeConfig;
 
 pub fn left_sidebar(
     ctx: &egui::Context,
-    active_tab: &mut LeftPanelTab,
+    active_tab: &LeftPanelTab,
     toc: &[TocItem],
+    bookmarks: &[Bookmark],
+    recent_books: &[RecentBookItem],
     theme: &ThemeConfig,
-) {
+) -> Option<Action> {
     let p = &theme.panel;
     let s = &theme.spacing;
+    let mut action = None;
 
     egui::SidePanel::left("left_sidebar")
         .default_width(p.sidebar_default_width)
@@ -30,7 +36,7 @@ pub fn left_sidebar(
                 for (label, variant) in tabs.iter().zip(variants.iter()) {
                     let selected = *active_tab == *variant;
                     if ui.selectable_label(selected, *label).clicked() {
-                        *active_tab = variant.clone();
+                        action = Some(Action::SwitchLeftPanelTab(variant.clone()));
                     }
                 }
             });
@@ -50,17 +56,103 @@ pub fn left_sidebar(
                                     item.chapter_index.unwrap_or(0) + 1,
                                     item.title
                                 );
-                                ui.label(label);
+                                if ui.selectable_label(false, label).clicked() {
+                                    if let Some(idx) = item.chapter_index {
+                                        action = Some(Action::GoToChapter(idx));
+                                    }
+                                }
                                 ui.add_space(s.xxs);
                             }
                         });
                 }
                 LeftPanelTab::Bookmarks => {
-                    ui.label("（书签功能将在 Phase 5 实现）");
+                    if bookmarks.is_empty() {
+                        ui.add_space(s.xl);
+                        ui.vertical_centered(|ui| {
+                            ui.label("暂无书签");
+                            ui.add_space(s.xs);
+                            ui.label(
+                                egui::RichText::new("点击工具栏书签按钮添加")
+                                    .size(theme.typography.caption_size),
+                            );
+                        });
+                    } else {
+                        egui::ScrollArea::vertical()
+                            .id_salt("bookmarks_scroll")
+                            .show(ui, |ui| {
+                                for bookmark in bookmarks {
+                                    let resp = ui
+                                        .group(|ui| {
+                                            ui.label(
+                                                egui::RichText::new(&bookmark.title).strong(),
+                                            );
+                                            if !bookmark.snippet.is_empty() {
+                                                ui.add_space(s.xxs);
+                                                ui.label(
+                                                    egui::RichText::new(&bookmark.snippet)
+                                                        .size(theme.typography.caption_size),
+                                                );
+                                            }
+                                        })
+                                        .response;
+                                    if resp.interact(egui::Sense::click()).clicked() {
+                                        action =
+                                            Some(Action::JumpToBookmark(bookmark.id.clone()));
+                                    }
+                                    ui.add_space(s.xxs);
+                                }
+                            });
+                    }
                 }
                 LeftPanelTab::Recent => {
-                    ui.label("（最近阅读将在 Phase 5 完善）");
+                    if recent_books.is_empty() {
+                        ui.add_space(s.xl);
+                        ui.vertical_centered(|ui| {
+                            ui.label("暂无阅读记录");
+                            ui.add_space(s.xs);
+                            ui.label(
+                                egui::RichText::new("打开书籍后将自动记录")
+                                    .size(theme.typography.caption_size),
+                            );
+                        });
+                    } else {
+                        egui::ScrollArea::vertical()
+                            .id_salt("recent_scroll")
+                            .show(ui, |ui| {
+                                for item in recent_books {
+                                    let resp = ui
+                                        .group(|ui| {
+                                            ui.label(egui::RichText::new(&item.title).strong());
+                                            if let Some(author) = &item.author {
+                                                ui.add_space(s.xxs);
+                                                ui.label(
+                                                    egui::RichText::new(author)
+                                                        .size(theme.typography.caption_size),
+                                                );
+                                            }
+                                            ui.add_space(s.xxs);
+                                            ui.label(
+                                                egui::RichText::new(format!(
+                                                    "{} · {:.0}%",
+                                                    item.format,
+                                                    item.last_progress_percent * 100.0
+                                                ))
+                                                .size(theme.typography.caption_size),
+                                            );
+                                        })
+                                        .response;
+                                    if resp.interact(egui::Sense::click()).clicked() {
+                                        action = Some(Action::RecentBookSelected(
+                                            item.book_id.clone(),
+                                        ));
+                                    }
+                                    ui.add_space(s.xxs);
+                                }
+                            });
+                    }
                 }
             }
         });
+
+    action
 }

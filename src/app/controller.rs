@@ -15,6 +15,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
                 state.ui_state.is_loading = true;
                 state.ui_state.screen = ScreenKind::LoadingBook;
                 state.ui_state.pending_open_path = Some(PathBuf::from(&path));
+                state.ui_state.last_attempted_path = Some(PathBuf::from(&path));
             }
 
             match adapter.try_load_book(&path) {

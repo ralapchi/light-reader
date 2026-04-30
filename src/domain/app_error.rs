@@ -42,11 +42,7 @@ impl AppError {
         }
     }
 
-    pub fn is_recoverable(&self) -> bool {
-        self.recoverable
-    }
-
-    /// Attach an inner error source.
+    #[allow(dead_code)]
     pub fn with_source(mut self, err: impl Error + Send + Sync + 'static) -> Self {
         self.source = Some(Box::new(err));
         self
@@ -98,10 +94,15 @@ mod tests {
     use std::io;
 
     #[test]
-    fn recoverable_flag_is_reported() {
-        let mut err = AppError::new("TEST", "message");
-        err.recoverable = true;
-        assert!(err.is_recoverable());
+    fn app_error_display() {
+        let err = AppError::new("TEST_CODE", "test message");
+        assert_eq!(format!("{}", err), "[TEST_CODE] test message");
+    }
+
+    #[test]
+    fn app_error_with_detail() {
+        let err = AppError::with_detail("CODE", "msg", "detail");
+        assert_eq!(err.detail, Some("detail".to_string()));
     }
 
     #[test]

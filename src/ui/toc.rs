@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use eframe::egui;
 
 use crate::domain::toc_item::TocItem;

@@ -2,16 +2,6 @@ use eframe::egui;
 
 use crate::ui::ThemeConfig;
 
-pub fn empty_state(ui: &mut egui::Ui, title: &str, description: &str, theme: &ThemeConfig) {
-    let s = &theme.spacing;
-    ui.vertical_centered(|ui| {
-        ui.add_space(s.xl * 4.0);
-        ui.heading(title);
-        ui.add_space(s.sm);
-        ui.label(description);
-    });
-}
-
 pub fn empty_state_with_button(
     ui: &mut egui::Ui,
     title: &str,

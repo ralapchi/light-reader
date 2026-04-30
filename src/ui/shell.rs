@@ -3,6 +3,7 @@ use log::info;
 use rfd::FileDialog;
 
 use crate::app::compat::CompatAdapter;
+use crate::app::Action;
 use crate::domain::enums::ScreenKind;
 use crate::ui::panels::left_sidebar::left_sidebar;
 use crate::ui::panels::reader_view::reader_view;
@@ -39,7 +40,7 @@ impl AppShell {
                         {
                             let path_str = path.to_str().unwrap_or("").to_string();
                             info!("打开文件: {}", path_str);
-                            shell.open_book(&path_str);
+                            shell.dispatch(Action::OpenBookSelected(path_str));
                         }
                     }
                 });
@@ -59,75 +60,100 @@ impl AppShell {
                     .as_ref()
                     .map(|e| format!("[{}] {}", e.code, e.message))
                     .unwrap_or_else(|| "未知错误".to_string());
+                let last_path = shell.state().ui_state.last_attempted_path.clone();
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    let (_retry, _reopen) =
+                    let (retry, reopen) =
                         error_state(ui, "出错了", &err_msg, "重试", "重新打开", &config);
+                    if retry {
+                        if let Some(path) = &last_path {
+                            let path_str = path.to_string_lossy().to_string();
+                            shell.dispatch(Action::OpenBookSelected(path_str));
+                        }
+                    }
+                    if reopen {
+                        if let Some(path) = FileDialog::new()
+                            .add_filter("电子书", &["epub", "txt"])
+                            .pick_file()
+                        {
+                            let path_str = path.to_string_lossy().to_string();
+                            shell.dispatch(Action::OpenBookSelected(path_str));
+                        }
+                    }
                 });
             }
         }
     }
 
     fn reader_layout(shell: &mut CompatAdapter, ctx: &egui::Context, theme: &ThemeConfig) {
-        if let Some(path) = TopBar::take_open_book_path() {
-            shell.open_book(&path);
-        }
-
-        let current_page = shell.current_page();
-        let content_len = shell.content().len();
-        let status = shell.status().to_owned();
-        let chapters = shell
-            .state()
+        // Clone state upfront to avoid borrow conflicts during UI rendering
+        let state_snapshot = shell.state().clone();
+        let chapters = state_snapshot
             .current_book
             .as_ref()
             .map(|b| b.chapters.clone())
             .unwrap_or_default();
-        let settings = shell.state().reader_settings.clone();
+        let toc = state_snapshot
+            .current_book
+            .as_ref()
+            .map(|b| b.toc.clone())
+            .unwrap_or_default();
+        let settings = &state_snapshot.reader_settings;
+        let active_tab = &state_snapshot.ui_state.left_panel_tab;
 
-        let mut page = current_page;
-        let mut active_tab = shell.state().ui_state.left_panel_tab.clone();
+        let mut pending_actions: Vec<Action> = Vec::new();
 
         // Left sidebar
         if settings.show_toc {
-            let toc = shell
-                .state()
-                .current_book
-                .as_ref()
-                .map(|b| b.toc.clone())
-                .unwrap_or_default();
-            left_sidebar(ctx, &mut active_tab, &toc, theme);
+            if let Some(action) = left_sidebar(
+                ctx,
+                active_tab,
+                &toc,
+                &state_snapshot.bookmarks,
+                &state_snapshot.recent_books,
+                theme,
+            ) {
+                pending_actions.push(action);
+            }
         }
 
         // Top bar
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
-            TopBar::show(ui, &status, content_len, &mut page, theme);
+            let actions = TopBar::show(ui, &state_snapshot, theme);
+            pending_actions.extend(actions);
         });
 
         // Reader content
+        let current_page = state_snapshot
+            .reading_progress
+            .as_ref()
+            .map(|p| p.chapter_index)
+            .unwrap_or(0);
         egui::CentralPanel::default().show(ctx, |ui| {
-            reader_view(ui, &chapters, page, &settings, theme);
+            let actions = reader_view(ui, &chapters, current_page, settings, theme);
+            pending_actions.extend(actions);
         });
 
         // Status bar
         if settings.show_status_bar {
-            let progress = shell
-                .state()
+            let progress = state_snapshot
                 .reading_progress
                 .as_ref()
                 .map(|p| p.progress_percent)
                 .unwrap_or(0.0);
+            let content_len = chapters.len();
             let chapter_pos = if content_len > 0 {
-                format!("{}/{}", page + 1, content_len)
+                format!("{}/{}", current_page + 1, content_len)
             } else {
                 String::new()
             };
             egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
-                status_bar(ui, progress, &chapter_pos, &shell.state().status_message, theme);
+                status_bar(ui, progress, &chapter_pos, &state_snapshot.status_message, theme);
             });
         }
 
-        // Sync back
-        if page != current_page {
-            shell.set_current_page(page);
+        // Dispatch all collected actions
+        for action in pending_actions {
+            shell.dispatch(action);
         }
     }
 }
