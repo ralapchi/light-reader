@@ -9,6 +9,7 @@ use crate::domain::enums::ScreenKind;
 use crate::ui::panels::left_sidebar::left_sidebar;
 use crate::ui::panels::reader_view::reader_view;
 use crate::ui::panels::search_panel::search_panel;
+use crate::ui::panels::settings_panel::settings_panel;
 use crate::ui::panels::status_bar::status_bar;
 use crate::ui::panels::top_bar::TopBar;
 use crate::ui::widgets::{empty_state_with_button, error_state, loading_state};
@@ -240,6 +241,12 @@ impl AppShell {
         // Search panel (overlay on right side)
         if state_snapshot.ui_state.show_search_panel {
             let actions = search_panel(ctx, &state_snapshot, theme);
+            pending_actions.extend(actions);
+        }
+
+        // Settings panel (overlay on right side)
+        if state_snapshot.ui_state.show_settings_panel {
+            let actions = settings_panel(ctx, &state_snapshot, theme);
             pending_actions.extend(actions);
         }
 

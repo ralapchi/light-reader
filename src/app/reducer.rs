@@ -45,6 +45,9 @@ pub fn reduce(state: &mut AppState, action: Action) {
                 state.ui_state.focused_search_input = true;
             }
         }
+        Action::ToggleSearchCaseSensitive => {
+            state.ui_state.search_case_sensitive = !state.ui_state.search_case_sensitive;
+        }
         Action::CloseBook => {
             state.current_book = None;
             state.reading_progress = None;

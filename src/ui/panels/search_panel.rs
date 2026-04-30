@@ -26,6 +26,7 @@ pub fn search_panel(
         .as_ref()
         .map(|q| q.scope.clone())
         .unwrap_or(SearchScope::CurrentChapter);
+    let case_sensitive = state.ui_state.search_case_sensitive;
 
     egui::SidePanel::right("search_panel")
         .default_width(320.0)
@@ -60,7 +61,7 @@ pub fn search_panel(
                 if !query_text.is_empty() {
                     actions.push(Action::SearchQueryChanged(SearchQuery {
                         keyword: query_text.clone(),
-                        case_sensitive: false,
+                        case_sensitive,
                         scope: current_scope.clone(),
                     }));
                     actions.push(Action::SearchSubmitted);
@@ -72,7 +73,7 @@ pub fn search_panel(
             if response.changed() {
                 actions.push(Action::SearchQueryChanged(SearchQuery {
                     keyword: query_text.clone(),
-                    case_sensitive: false,
+                    case_sensitive,
                     scope: current_scope.clone(),
                 }));
             }
@@ -91,18 +92,29 @@ pub fn search_panel(
                 {
                     actions.push(Action::SearchQueryChanged(SearchQuery {
                         keyword: query_text.clone(),
-                        case_sensitive: false,
+                        case_sensitive,
                         scope: SearchScope::CurrentChapter,
                     }));
                 }
                 if ui.selectable_label(scope_all, "全书").clicked() && !scope_all {
                     actions.push(Action::SearchQueryChanged(SearchQuery {
                         keyword: query_text.clone(),
-                        case_sensitive: false,
+                        case_sensitive,
                         scope: SearchScope::EntireBook,
                     }));
                 }
             });
+
+            // Case sensitivity toggle
+            let mut cs = case_sensitive;
+            if ui.checkbox(&mut cs, "区分大小写").changed() {
+                actions.push(Action::ToggleSearchCaseSensitive);
+                actions.push(Action::SearchQueryChanged(SearchQuery {
+                    keyword: query_text.clone(),
+                    case_sensitive: cs,
+                    scope: current_scope.clone(),
+                }));
+            }
 
             ui.add_space(s.sm);
             ui.separator();

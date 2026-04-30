@@ -278,7 +278,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis();
-        std::env::temp_dir().join(format!("reader-demo-test-{}.{ext}", millis))
+        let thread_id = std::thread::current().id();
+        std::env::temp_dir().join(format!("reader-demo-test-{}-{:?}.{ext}", millis, thread_id))
     }
 
     fn create_txt_fixture() -> std::path::PathBuf {
@@ -384,6 +385,36 @@ mod tests {
 
         assert_eq!(adapter.state().recent_books[0].format, "epub");
         assert_eq!(adapter.state().ui_state.screen, crate::domain::enums::ScreenKind::Reader);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn recent_book_selected_reopens_book() {
+        let path = create_txt_fixture();
+        let path_str = path.to_string_lossy().to_string();
+        let mut adapter = CompatAdapter::new();
+
+        // Open the book to populate recent_books
+        adapter.dispatch(Action::OpenBookSelected(path_str));
+        let book_id = adapter
+            .state()
+            .current_book
+            .as_ref()
+            .map(|b| b.id.clone())
+            .unwrap();
+        assert_eq!(adapter.state().ui_state.screen, ScreenKind::Reader);
+
+        // Close the book
+        adapter.dispatch(Action::CloseBook);
+        assert_eq!(adapter.state().ui_state.screen, ScreenKind::EmptyLibrary);
+        assert!(adapter.state().current_book.is_none());
+
+        // Select from recent books — should reopen
+        adapter.dispatch(Action::RecentBookSelected(book_id));
+        assert_eq!(adapter.state().ui_state.screen, ScreenKind::Reader);
+        assert!(adapter.state().current_book.is_some());
+        assert!(adapter.state().ui_state.pending_open_path.is_none());
 
         let _ = fs::remove_file(path);
     }

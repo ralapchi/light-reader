@@ -41,6 +41,22 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
             reducer::reduce(adapter.state_mut(), action);
             save_bookmarks(adapter);
         }
+        Action::RecentBookSelected(_) => {
+            reducer::reduce(adapter.state_mut(), action);
+            let path = adapter
+                .state()
+                .ui_state
+                .pending_open_path
+                .as_ref()
+                .filter(|p| p.exists())
+                .cloned();
+            adapter.state_mut().ui_state.pending_open_path = None;
+            if let Some(path) = path {
+                if let Some(path_str) = path.to_str() {
+                    dispatch(adapter, Action::OpenBookSelected(path_str.to_string()));
+                }
+            }
+        }
         Action::RemoveRecentBook(_) => {
             reducer::reduce(adapter.state_mut(), action);
             save_recent(adapter);
