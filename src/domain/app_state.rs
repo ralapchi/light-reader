@@ -19,6 +19,7 @@ pub struct AppState {
     pub search_state: SearchState,
     pub ui_state: UiState,
     pub status_message: String,
+    pub status_message_set_at: Option<String>,
     pub last_error: Option<AppError>,
 }
 
@@ -33,6 +34,7 @@ impl Default for AppState {
             search_state: SearchState::default(),
             ui_state: UiState::default(),
             status_message: "就绪".to_string(),
+            status_message_set_at: None,
             last_error: None,
         }
     }

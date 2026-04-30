@@ -12,7 +12,7 @@ pub fn reduce(state: &mut AppState, action: Action) {
     match action {
         Action::OpenBookSucceeded(book) => open_book_succeeded(state, book),
         Action::OpenBookFailed(err) => {
-            state.status_message = err.message.clone();
+            set_status_message(state, err.message.clone());
             state.last_error = Some(err);
             state.ui_state.is_loading = false;
             state.ui_state.screen = ScreenKind::Error;
@@ -54,7 +54,7 @@ pub fn reduce(state: &mut AppState, action: Action) {
             state.ui_state.screen = ScreenKind::EmptyLibrary;
             state.ui_state.is_loading = false;
             state.ui_state.pending_open_path = None;
-            state.status_message = "就绪".to_string();
+            clear_status_message(state);
         }
         Action::ReaderSettingChanged(key, value) => {
             apply_reader_setting(&mut state.reader_settings, &key, &value);
@@ -97,7 +97,7 @@ pub fn reduce(state: &mut AppState, action: Action) {
                     note: None,
                 };
                 state.bookmarks.push(bookmark);
-                state.status_message = "已添加书签".to_string();
+                set_status_message(state, "已添加书签".to_string());
             }
         }
         Action::RemoveBookmark(id) => {
@@ -147,7 +147,7 @@ pub fn reduce(state: &mut AppState, action: Action) {
         }
         Action::StatusMessageTimedOut => {
             if state.last_error.is_none() {
-                state.status_message = "就绪".to_string();
+                clear_status_message(state);
             }
         }
         Action::DismissError => {
@@ -158,7 +158,16 @@ pub fn reduce(state: &mut AppState, action: Action) {
                 ScreenKind::EmptyLibrary
             };
             if state.status_message.is_empty() {
-                state.status_message = "就绪".to_string();
+                clear_status_message(state);
+            }
+        }
+        Action::CloseSearchOrSettings => {
+            if state.ui_state.show_search_panel {
+                state.ui_state.show_search_panel = false;
+                state.search_state = Default::default();
+            }
+            if state.ui_state.show_settings_panel {
+                state.ui_state.show_settings_panel = false;
             }
         }
         _ => {}
@@ -196,7 +205,7 @@ fn open_book_succeeded(state: &mut AppState, book: Book) {
     state.ui_state.is_loading = false;
     state.ui_state.pending_open_path = None;
     state.ui_state.screen = ScreenKind::Reader;
-    state.status_message = format!("内容已加载，共 {} 章", chapter_count);
+    set_status_message(state, format!("内容已加载，共 {} 章", chapter_count));
 }
 
 fn go_to_chapter(state: &mut AppState, index: usize) {
@@ -302,6 +311,16 @@ fn execute_search(state: &AppState, query: &crate::domain::search_query::SearchQ
         }
     }
     results
+}
+
+fn set_status_message(state: &mut AppState, message: String) {
+    state.status_message = message;
+    state.status_message_set_at = Some(Utc::now().to_rfc3339());
+}
+
+fn clear_status_message(state: &mut AppState) {
+    state.status_message = "就绪".to_string();
+    state.status_message_set_at = None;
 }
 
 fn apply_reader_setting(settings: &mut crate::domain::reader_settings::ReaderSettings, key: &str, value: &str) {
@@ -724,5 +743,42 @@ mod tests {
         state.last_error = Some(crate::domain::app_error::AppError::new("TEST", "error"));
         reduce(&mut state, Action::StatusMessageTimedOut);
         assert_eq!(state.status_message, "错误消息");
+    }
+
+    #[test]
+    fn add_bookmark_sets_timestamp() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        let before = state.status_message_set_at.clone();
+        reduce(&mut state, Action::AddBookmarkRequested);
+        assert!(state.status_message_set_at.is_some());
+        assert_ne!(state.status_message_set_at, before);
+    }
+
+    #[test]
+    fn open_book_succeeded_sets_timestamp() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        assert!(state.status_message_set_at.is_some());
+        assert!(state.status_message.contains("内容已加载"));
+    }
+
+    #[test]
+    fn close_book_clears_timestamp() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        assert!(state.status_message_set_at.is_some());
+        reduce(&mut state, Action::CloseBook);
+        assert!(state.status_message_set_at.is_none());
+        assert_eq!(state.status_message, "就绪");
+    }
+
+    #[test]
+    fn status_message_timed_out_clears_timestamp() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+        assert!(state.status_message_set_at.is_some());
+        reduce(&mut state, Action::StatusMessageTimedOut);
+        assert!(state.status_message_set_at.is_none());
     }
 }

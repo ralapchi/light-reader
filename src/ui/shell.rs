@@ -1,3 +1,4 @@
+use chrono::Utc;
 use eframe::egui;
 use log::info;
 use rfd::FileDialog;
@@ -7,6 +8,7 @@ use crate::app::Action;
 use crate::domain::enums::ScreenKind;
 use crate::ui::panels::left_sidebar::left_sidebar;
 use crate::ui::panels::reader_view::reader_view;
+use crate::ui::panels::search_panel::search_panel;
 use crate::ui::panels::status_bar::status_bar;
 use crate::ui::panels::top_bar::TopBar;
 use crate::ui::widgets::{empty_state_with_button, error_state, loading_state};
@@ -19,6 +21,22 @@ impl AppShell {
         let theme_kind = shell.state().reader_settings.theme.clone();
         let config = ThemeConfig::from(theme_kind);
         ThemeService::apply_theme(ctx, &config);
+
+        // Auto-clear status messages after 3 seconds
+        if let Some(ref set_at) = shell.state().status_message_set_at {
+            if let Ok(set_time) = chrono::DateTime::parse_from_rfc3339(set_at) {
+                let elapsed = Utc::now().signed_duration_since(set_time);
+                if elapsed.num_seconds() >= 3 {
+                    shell.dispatch(Action::StatusMessageTimedOut);
+                }
+            }
+        }
+
+        // Keyboard shortcuts
+        let shortcuts = Self::collect_shortcuts(ctx);
+        for action in shortcuts {
+            shell.dispatch(action);
+        }
 
         let screen = shell.state().ui_state.screen.clone();
 
@@ -84,6 +102,70 @@ impl AppShell {
         }
     }
 
+    fn collect_shortcuts(ctx: &egui::Context) -> Vec<Action> {
+        use crate::domain::theme_kind::ThemeKind;
+
+        let mut actions = Vec::new();
+
+        ctx.input(|i| {
+            let ctrl_or_cmd = i.modifiers.command || i.modifiers.ctrl;
+
+            // Ctrl/Cmd + O → 打开书籍
+            if ctrl_or_cmd && i.key_pressed(egui::Key::O) {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("电子书", &["epub", "txt"])
+                    .pick_file()
+                {
+                    let path_str = path.to_string_lossy().to_string();
+                    actions.push(Action::OpenBookSelected(path_str));
+                }
+            }
+
+            // Ctrl/Cmd + F → 打开搜索
+            if ctrl_or_cmd && i.key_pressed(egui::Key::F) {
+                actions.push(Action::ToggleSearchPanel);
+            }
+
+            // Ctrl/Cmd + , → 打开设置
+            if ctrl_or_cmd && i.key_pressed(egui::Key::Comma) {
+                actions.push(Action::ToggleSettingsPanel);
+            }
+
+            // Ctrl/Cmd + B → 添加书签
+            if ctrl_or_cmd && i.key_pressed(egui::Key::B) {
+                actions.push(Action::AddBookmarkRequested);
+            }
+
+            // Left / PageUp → 上一章
+            if i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::PageUp) {
+                actions.push(Action::PrevChapter);
+            }
+
+            // Right / PageDown → 下一章
+            if i.key_pressed(egui::Key::ArrowRight) || i.key_pressed(egui::Key::PageDown) {
+                actions.push(Action::NextChapter);
+            }
+
+            // Esc → 关闭搜索或设置面板
+            if i.key_pressed(egui::Key::Escape) {
+                actions.push(Action::CloseSearchOrSettings);
+            }
+
+            // Ctrl/Cmd + 1/2/3 → 主题切换
+            if ctrl_or_cmd && i.key_pressed(egui::Key::Num1) {
+                actions.push(Action::ThemeChanged(ThemeKind::Light));
+            }
+            if ctrl_or_cmd && i.key_pressed(egui::Key::Num2) {
+                actions.push(Action::ThemeChanged(ThemeKind::Dark));
+            }
+            if ctrl_or_cmd && i.key_pressed(egui::Key::Num3) {
+                actions.push(Action::ThemeChanged(ThemeKind::Sepia));
+            }
+        });
+
+        actions
+    }
+
     fn reader_layout(shell: &mut CompatAdapter, ctx: &egui::Context, theme: &ThemeConfig) {
         // Clone state upfront to avoid borrow conflicts during UI rendering
         let state_snapshot = shell.state().clone();
@@ -128,8 +210,12 @@ impl AppShell {
             .as_ref()
             .map(|p| p.chapter_index)
             .unwrap_or(0);
+        let selected_search_result = state_snapshot
+            .search_state
+            .selected_result_index
+            .and_then(|idx| state_snapshot.search_state.results.get(idx));
         egui::CentralPanel::default().show(ctx, |ui| {
-            let actions = reader_view(ui, &chapters, current_page, settings, theme);
+            let actions = reader_view(ui, &chapters, current_page, settings, theme, selected_search_result);
             pending_actions.extend(actions);
         });
 
@@ -149,6 +235,12 @@ impl AppShell {
             egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
                 status_bar(ui, progress, &chapter_pos, &state_snapshot.status_message, theme);
             });
+        }
+
+        // Search panel (overlay on right side)
+        if state_snapshot.ui_state.show_search_panel {
+            let actions = search_panel(ctx, &state_snapshot, theme);
+            pending_actions.extend(actions);
         }
 
         // Dispatch all collected actions

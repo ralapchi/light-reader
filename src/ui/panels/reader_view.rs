@@ -6,6 +6,7 @@ use crate::app::Action;
 use crate::domain::chapter::Chapter;
 use crate::domain::paragraph_kind::ParagraphKind;
 use crate::domain::reader_settings::ReaderSettings;
+use crate::domain::search_result::SearchResult;
 use crate::ui::ThemeConfig;
 
 const SCROLL_OFFSET_THRESHOLD: f32 = 1.0;
@@ -20,6 +21,7 @@ pub fn reader_view(
     chapter_index: usize,
     settings: &ReaderSettings,
     theme: &ThemeConfig,
+    selected_search_result: Option<&SearchResult>,
 ) -> Vec<Action> {
     let s = &theme.spacing;
     let max_width = settings.content_width;
@@ -28,6 +30,13 @@ pub fn reader_view(
     let cw = available_width.min(max_width);
     let sm = (available_width - cw) / 2.0;
     let mut actions = Vec::new();
+
+    // Check if we need to highlight a search result
+    let highlight_para_index = selected_search_result
+        .filter(|r| r.chapter_index == chapter_index)
+        .map(|r| r.paragraph_index);
+
+    let mut scroll_to_highlight = false;
 
     let scroll_output = egui::ScrollArea::vertical()
         .id_salt("reader_scroll")
@@ -48,9 +57,15 @@ pub fn reader_view(
                         chapter_header(ui, &chapter.title, theme);
 
                         for paragraph in &chapter.paragraphs {
+                            let is_highlighted = highlight_para_index == Some(paragraph.index);
+
+                            if is_highlighted && !scroll_to_highlight {
+                                scroll_to_highlight = true;
+                            }
+
                             match paragraph.kind {
                                 ParagraphKind::Title => {
-                                    ui.vertical_centered(|ui| {
+                                    let resp = ui.vertical_centered(|ui| {
                                         ui.add_space(s.lg);
                                         ui.label(
                                             egui::RichText::new(&paragraph.text)
@@ -59,10 +74,13 @@ pub fn reader_view(
                                                 .line_height(line_height.map(|l| l * 1.2)),
                                         );
                                         ui.add_space(s.sm);
-                                    });
+                                    }).response;
+                                    if is_highlighted {
+                                        highlight_paragraph(ui, resp.rect, theme);
+                                    }
                                 }
                                 ParagraphKind::Subtitle => {
-                                    ui.vertical_centered(|ui| {
+                                    let resp = ui.vertical_centered(|ui| {
                                         ui.label(
                                             egui::RichText::new(&paragraph.text)
                                                 .size(font_size * 1.15)
@@ -70,11 +88,14 @@ pub fn reader_view(
                                                 .line_height(line_height),
                                         );
                                         ui.add_space(s.xs);
-                                    });
+                                    }).response;
+                                    if is_highlighted {
+                                        highlight_paragraph(ui, resp.rect, theme);
+                                    }
                                 }
                                 ParagraphKind::Quote => {
                                     ui.add_space(s.sm);
-                                    ui.horizontal(|ui| {
+                                    let resp = ui.horizontal(|ui| {
                                         ui.add_space(s.lg);
                                         ui.label(
                                             egui::RichText::new(&paragraph.text)
@@ -83,7 +104,10 @@ pub fn reader_view(
                                                 .color(theme.colors.text_secondary.to_color32())
                                                 .line_height(line_height),
                                         );
-                                    });
+                                    }).response;
+                                    if is_highlighted {
+                                        highlight_paragraph(ui, resp.rect, theme);
+                                    }
                                     ui.add_space(s.sm);
                                 }
                                 ParagraphKind::Separator => {
@@ -93,14 +117,17 @@ pub fn reader_view(
                                 }
                                 ParagraphKind::Body => {
                                     let indent = paragraph.indent_level as f32 * s.lg;
-                                    ui.horizontal(|ui| {
+                                    let resp = ui.horizontal(|ui| {
                                         ui.add_space(indent);
                                         ui.label(
                                             egui::RichText::new(&paragraph.text)
                                                 .size(font_size)
                                                 .line_height(line_height),
                                         );
-                                    });
+                                    }).response;
+                                    if is_highlighted {
+                                        highlight_paragraph(ui, resp.rect, theme);
+                                    }
                                     ui.add_space(s.paragraph_gap);
                                 }
                             }
@@ -186,4 +213,26 @@ fn empty_chapter(ui: &mut egui::Ui, theme: &ThemeConfig) {
                 .color(theme.colors.text_muted.to_color32()),
         );
     });
+}
+
+fn highlight_paragraph(ui: &mut egui::Ui, rect: egui::Rect, theme: &ThemeConfig) {
+    let painter = ui.painter();
+
+    // Background highlight
+    painter.rect_filled(
+        rect,
+        egui::CornerRadius::same(4),
+        theme.colors.accent.to_color32().gamma_multiply(0.15),
+    );
+
+    // Left accent bar
+    let bar_rect = egui::Rect::from_min_size(
+        rect.left_top(),
+        egui::vec2(3.0, rect.height()),
+    );
+    painter.rect_filled(
+        bar_rect,
+        egui::CornerRadius::same(2),
+        theme.colors.accent.to_color32(),
+    );
 }

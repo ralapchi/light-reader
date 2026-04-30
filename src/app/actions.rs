@@ -42,4 +42,5 @@ pub enum Action {
     RemoveRecentBook(String),
     DismissError,
     StatusMessageTimedOut,
+    CloseSearchOrSettings,
 }

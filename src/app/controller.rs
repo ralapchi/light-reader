@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use chrono::Utc;
+
 use crate::app::Action;
 use crate::app::compat::CompatAdapter;
 use crate::app::reducer;
@@ -12,6 +14,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
             {
                 let state = adapter.state_mut();
                 state.status_message = format!("正在打开文件: {}", path);
+                state.status_message_set_at = Some(Utc::now().to_rfc3339());
                 state.last_error = None;
                 state.ui_state.is_loading = true;
                 state.ui_state.screen = ScreenKind::LoadingBook;
