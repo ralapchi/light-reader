@@ -38,11 +38,16 @@ pub fn reader_view(
 
     let mut scroll_to_highlight = false;
 
+    // Use chapter_index in id_salt so scroll resets when switching chapters
+    let scroll_id = format!("reader_chapter_{}", chapter_index);
     let scroll_output = egui::ScrollArea::vertical()
-        .id_salt("reader_scroll")
+        .id_salt(scroll_id)
         .auto_shrink([false; 2])
         .show(ui, |ui| {
             ui.horizontal(|ui| {
+                // Ensure horizontal layout expands to full width
+                ui.set_min_width(ui.available_width());
+
                 ui.add_space(sm.max(margin));
 
                 ui.vertical(|ui| {
@@ -95,16 +100,14 @@ pub fn reader_view(
                                 }
                                 ParagraphKind::Quote => {
                                     ui.add_space(s.sm);
-                                    let resp = ui.horizontal(|ui| {
-                                        ui.add_space(s.lg);
-                                        ui.label(
-                                            egui::RichText::new(&paragraph.text)
-                                                .size(font_size)
-                                                .italics()
-                                                .color(theme.colors.text_secondary.to_color32())
-                                                .line_height(line_height),
-                                        );
-                                    }).response;
+                                    ui.add_space(s.lg);
+                                    let resp = ui.label(
+                                        egui::RichText::new(&paragraph.text)
+                                            .size(font_size)
+                                            .italics()
+                                            .color(theme.colors.text_secondary.to_color32())
+                                            .line_height(line_height),
+                                    );
                                     if is_highlighted {
                                         highlight_paragraph(ui, resp.rect, theme);
                                     }
@@ -117,14 +120,12 @@ pub fn reader_view(
                                 }
                                 ParagraphKind::Body => {
                                     let indent = paragraph.indent_level as f32 * s.lg;
-                                    let resp = ui.horizontal(|ui| {
-                                        ui.add_space(indent);
-                                        ui.label(
-                                            egui::RichText::new(&paragraph.text)
-                                                .size(font_size)
-                                                .line_height(line_height),
-                                        );
-                                    }).response;
+                                    ui.add_space(indent);
+                                    let resp = ui.label(
+                                        egui::RichText::new(&paragraph.text)
+                                            .size(font_size)
+                                            .line_height(line_height),
+                                    );
                                     if is_highlighted {
                                         highlight_paragraph(ui, resp.rect, theme);
                                     }
@@ -161,6 +162,9 @@ pub fn reader_view(
 
     // Track scroll offset with change detection
     let scroll_offset = scroll_output.state.offset.y;
+    let content_height = scroll_output.content_size.y;
+    let viewport_height = scroll_output.inner_rect.height();
+
     LAST_SCROLL_OFFSET.with(|last| {
         let prev = last.get();
         if (scroll_offset - prev).abs() > SCROLL_OFFSET_THRESHOLD {
@@ -168,6 +172,32 @@ pub fn reader_view(
             actions.push(Action::UpdateScrollOffset(scroll_offset));
         }
     });
+
+    // Auto-advance to next chapter when scrolled near bottom
+    // Only trigger if content is tall enough to scroll
+    if content_height > viewport_height {
+        let distance_to_bottom = content_height - scroll_offset - viewport_height;
+        if distance_to_bottom < 50.0 {
+            // Use thread_local to avoid repeated triggers
+            thread_local! {
+                static REACHED_BOTTOM: Cell<bool> = const { Cell::new(false) };
+            }
+            REACHED_BOTTOM.with(|reached| {
+                if !reached.get() {
+                    reached.set(true);
+                    actions.push(Action::NextChapter);
+                }
+            });
+        } else {
+            // Reset when scrolled away from bottom
+            thread_local! {
+                static REACHED_BOTTOM: Cell<bool> = const { Cell::new(false) };
+            }
+            REACHED_BOTTOM.with(|reached| {
+                reached.set(false);
+            });
+        }
+    }
 
     actions
 }

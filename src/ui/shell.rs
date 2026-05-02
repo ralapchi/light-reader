@@ -186,7 +186,7 @@ impl AppShell {
         let mut pending_actions: Vec<Action> = Vec::new();
 
         // Left sidebar
-        if settings.show_toc {
+        if settings.show_toc && !state_snapshot.ui_state.sidebar_collapsed {
             if let Some(action) = left_sidebar(
                 ctx,
                 active_tab,
@@ -194,6 +194,7 @@ impl AppShell {
                 &state_snapshot.bookmarks,
                 &state_snapshot.recent_books,
                 theme,
+                settings.toc_width,
             ) {
                 pending_actions.push(action);
             }

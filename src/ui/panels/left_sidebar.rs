@@ -14,15 +14,16 @@ pub fn left_sidebar(
     bookmarks: &[Bookmark],
     recent_books: &[RecentBookItem],
     theme: &ThemeConfig,
+    current_toc_width: f32,
 ) -> Option<Action> {
     let p = &theme.panel;
     let s = &theme.spacing;
     let mut action = None;
 
-    egui::SidePanel::left("left_sidebar")
-        .default_width(p.sidebar_default_width)
-        .min_width(p.sidebar_min_width)
-        .max_width(p.sidebar_max_width)
+    let panel_response = egui::SidePanel::left("left_sidebar")
+        .default_width(current_toc_width)
+        .width_range(p.sidebar_min_width..=p.sidebar_max_width)
+        .resizable(true)
         .show(ctx, |ui| {
             ui.add_space(s.sm);
 
@@ -143,6 +144,15 @@ pub fn left_sidebar(
                 }
             }
         });
+
+    // Check if panel was resized and emit width change action
+    let new_width = panel_response.response.rect.width();
+    if (new_width - current_toc_width).abs() > 1.0 {
+        action = Some(Action::ReaderSettingChanged(
+            "toc_width".to_string(),
+            new_width.to_string(),
+        ));
+    }
 
     action
 }

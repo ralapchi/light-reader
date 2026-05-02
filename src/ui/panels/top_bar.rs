@@ -5,7 +5,6 @@ use rfd::FileDialog;
 use crate::app::Action;
 use crate::domain::app_state::AppState;
 use crate::domain::enums::LeftPanelTab;
-use crate::domain::theme_kind::ThemeKind;
 use crate::ui::ThemeConfig;
 
 pub struct TopBar;
@@ -27,6 +26,18 @@ impl TopBar {
             .unwrap_or(0);
 
         ui.horizontal(|ui| {
+            ui.add_space(s.sm);
+
+            // SidebarToggleButton
+            let sidebar_open = !state.ui_state.sidebar_collapsed;
+            let sidebar_label = if sidebar_open { "☰" } else { "☰" };
+            let sidebar_btn = egui::Button::new(sidebar_label)
+                .min_size(egui::vec2(32.0, 24.0))
+                .selected(sidebar_open);
+            if ui.add(sidebar_btn).clicked() {
+                actions.push(Action::ToggleSidebar);
+            }
+
             ui.add_space(s.sm);
 
             // OpenBookButton
@@ -89,27 +100,6 @@ impl TopBar {
             ui.add_space(s.lg);
             ui.separator();
             ui.add_space(s.lg);
-
-            // ThemeSwitcher - cycles Light -> Dark -> Sepia -> Light
-            let current_theme = &state.reader_settings.theme;
-            let theme_label = match current_theme {
-                ThemeKind::Light => "浅色",
-                ThemeKind::Dark => "深色",
-                ThemeKind::Sepia => "护眼",
-                ThemeKind::Paper => "纸张",
-                ThemeKind::Custom => "自定义",
-            };
-            if ui.button(theme_label).clicked() {
-                let next_theme = match current_theme {
-                    ThemeKind::Light => ThemeKind::Dark,
-                    ThemeKind::Dark => ThemeKind::Sepia,
-                    ThemeKind::Sepia => ThemeKind::Light,
-                    _ => ThemeKind::Light,
-                };
-                actions.push(Action::ThemeChanged(next_theme));
-            }
-
-            ui.add_space(s.sm);
 
             // BookmarkButton
             if ui.button("书签").clicked() {
