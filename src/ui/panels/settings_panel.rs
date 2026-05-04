@@ -173,6 +173,35 @@ fn typography_section(
             ));
         }
     });
+
+    // Font family
+    let font_options = [
+        ("sans-serif", "无衬线"),
+        ("serif", "衬线"),
+        ("monospace", "等宽"),
+    ];
+    let current_font_label = font_options
+        .iter()
+        .find(|(key, _)| *key == settings.font_family)
+        .map(|(_, label)| *label)
+        .unwrap_or(&settings.font_family);
+
+    ui.horizontal(|ui| {
+        ui.label("字体");
+        egui::ComboBox::from_id_salt("font_family_select")
+            .selected_text(current_font_label)
+            .show_ui(ui, |ui| {
+                for (key, label) in font_options {
+                    let is_selected = settings.font_family == key;
+                    if ui.selectable_label(is_selected, label).clicked() && !is_selected {
+                        actions.push(Action::ReaderSettingChanged(
+                            "font_family".to_string(),
+                            key.to_string(),
+                        ));
+                    }
+                }
+            });
+    });
 }
 
 fn layout_section(
@@ -300,4 +329,55 @@ fn behavior_section(
             show_toc.to_string(),
         ));
     }
+
+    // Show chapter progress
+    let mut show_chapter_progress = settings.show_chapter_progress;
+    if ui
+        .checkbox(&mut show_chapter_progress, "显示章节进度")
+        .changed()
+    {
+        actions.push(Action::ReaderSettingChanged(
+            "show_chapter_progress".to_string(),
+            show_chapter_progress.to_string(),
+        ));
+    }
+
+    // Smooth scroll
+    let mut smooth_scroll = settings.smooth_scroll;
+    if ui
+        .checkbox(&mut smooth_scroll, "平滑滚动")
+        .changed()
+    {
+        actions.push(Action::ReaderSettingChanged(
+            "smooth_scroll".to_string(),
+            smooth_scroll.to_string(),
+        ));
+    }
+
+    // Open last book on startup
+    let mut open_last = settings.open_last_book_on_startup;
+    if ui
+        .checkbox(&mut open_last, "启动时恢复最近阅读")
+        .changed()
+    {
+        actions.push(Action::ReaderSettingChanged(
+            "open_last_book_on_startup".to_string(),
+            open_last.to_string(),
+        ));
+    }
+
+    // Window padding
+    let mut window_padding = settings.window_padding;
+    ui.horizontal(|ui| {
+        ui.label("主区域内边距");
+        if ui
+            .add(egui::Slider::new(&mut window_padding, 0.0..=32.0).suffix(" px"))
+            .changed()
+        {
+            actions.push(Action::ReaderSettingChanged(
+                "window_padding".to_string(),
+                window_padding.to_string(),
+            ));
+        }
+    });
 }

@@ -21,6 +21,10 @@ pub struct AppState {
     pub status_message: String,
     pub status_message_set_at: Option<String>,
     pub last_error: Option<AppError>,
+    pub window_size: Option<(f32, f32)>,
+    pub window_pos: Option<(f32, f32)>,
+    pub session_started_at: Option<String>,
+    pub total_read_seconds_at_session_start: u64,
 }
 
 impl Default for AppState {
@@ -36,6 +40,10 @@ impl Default for AppState {
             status_message: "就绪".to_string(),
             status_message_set_at: None,
             last_error: None,
+            window_size: None,
+            window_pos: None,
+            session_started_at: None,
+            total_read_seconds_at_session_start: 0,
         }
     }
 }

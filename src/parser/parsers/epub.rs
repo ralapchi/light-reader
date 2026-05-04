@@ -612,7 +612,7 @@ impl EpubParser {
                 stack.push((depth, index));
             } else {
                 // 子项：找到父节点并添加
-                let &(_, parent_idx) = stack.last().unwrap();
+                let &(_, _parent_idx) = stack.last().unwrap();
                 // 需要递归找到正确的父节点
                 let parent = self.find_parent_mut(&mut root, &stack);
                 let child_index = parent.children.len();

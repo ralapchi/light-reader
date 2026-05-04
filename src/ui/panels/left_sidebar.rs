@@ -74,16 +74,41 @@ pub fn left_sidebar(
                                 for bookmark in bookmarks {
                                     let resp = ui
                                         .group(|ui| {
-                                            ui.label(
-                                                egui::RichText::new(&bookmark.title).strong(),
-                                            );
-                                            if !bookmark.snippet.is_empty() {
-                                                ui.add_space(s.xxs);
-                                                ui.label(
-                                                    egui::RichText::new(&bookmark.snippet)
-                                                        .size(theme.typography.caption_size),
+                                            ui.horizontal(|ui| {
+                                                ui.vertical(|ui| {
+                                                    ui.label(
+                                                        egui::RichText::new(&bookmark.title).strong(),
+                                                    );
+                                                    if !bookmark.snippet.is_empty() {
+                                                        ui.add_space(s.xxs);
+                                                        ui.label(
+                                                            egui::RichText::new(&bookmark.snippet)
+                                                                .size(theme.typography.caption_size),
+                                                        );
+                                                    }
+                                                });
+                                                ui.with_layout(
+                                                    egui::Layout::right_to_left(egui::Align::Center),
+                                                    |ui| {
+                                                        if ui
+                                                            .add(
+                                                                egui::Button::new(
+                                                                    egui::RichText::new("×")
+                                                                        .size(theme.typography.caption_size)
+                                                                        .color(theme.colors.danger.to_color32()),
+                                                                )
+                                                                .fill(egui::Color32::TRANSPARENT)
+                                                                .stroke(egui::Stroke::NONE),
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            action = Some(Action::RemoveBookmark(
+                                                                bookmark.id.clone(),
+                                                            ));
+                                                        }
+                                                    },
                                                 );
-                                            }
+                                            });
                                         })
                                         .response;
                                     if resp.interact(egui::Sense::click()).clicked() {
@@ -113,23 +138,48 @@ pub fn left_sidebar(
                                 for item in recent_books {
                                     let resp = ui
                                         .group(|ui| {
-                                            ui.label(egui::RichText::new(&item.title).strong());
-                                            if let Some(author) = &item.author {
-                                                ui.add_space(s.xxs);
-                                                ui.label(
-                                                    egui::RichText::new(author)
+                                            ui.horizontal(|ui| {
+                                                ui.vertical(|ui| {
+                                                    ui.label(egui::RichText::new(&item.title).strong());
+                                                    if let Some(author) = &item.author {
+                                                        ui.add_space(s.xxs);
+                                                        ui.label(
+                                                            egui::RichText::new(author)
+                                                                .size(theme.typography.caption_size),
+                                                        );
+                                                    }
+                                                    ui.add_space(s.xxs);
+                                                    ui.label(
+                                                        egui::RichText::new(format!(
+                                                            "{} · {:.0}%",
+                                                            item.format,
+                                                            item.last_progress_percent * 100.0
+                                                        ))
                                                         .size(theme.typography.caption_size),
+                                                    );
+                                                });
+                                                ui.with_layout(
+                                                    egui::Layout::right_to_left(egui::Align::Center),
+                                                    |ui| {
+                                                        if ui
+                                                            .add(
+                                                                egui::Button::new(
+                                                                    egui::RichText::new("×")
+                                                                        .size(theme.typography.caption_size)
+                                                                        .color(theme.colors.danger.to_color32()),
+                                                                )
+                                                                .fill(egui::Color32::TRANSPARENT)
+                                                                .stroke(egui::Stroke::NONE),
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            action = Some(Action::RemoveRecentBook(
+                                                                item.book_id.clone(),
+                                                            ));
+                                                        }
+                                                    },
                                                 );
-                                            }
-                                            ui.add_space(s.xxs);
-                                            ui.label(
-                                                egui::RichText::new(format!(
-                                                    "{} · {:.0}%",
-                                                    item.format,
-                                                    item.last_progress_percent * 100.0
-                                                ))
-                                                .size(theme.typography.caption_size),
-                                            );
+                                            });
                                         })
                                         .response;
                                     if resp.interact(egui::Sense::click()).clicked() {

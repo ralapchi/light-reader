@@ -22,6 +22,8 @@ pub fn reader_view(
     settings: &ReaderSettings,
     theme: &ThemeConfig,
     selected_search_result: Option<&SearchResult>,
+    search_keyword: Option<&str>,
+    status_message: &str,
 ) -> Vec<Action> {
     let s = &theme.spacing;
     let max_width = settings.content_width;
@@ -57,6 +59,7 @@ pub fn reader_view(
                     if let Some(chapter) = chapters.get(chapter_index) {
                         let font_size = settings.font_size;
                         let line_height = Some(font_size * settings.line_height);
+                        let font_family = parse_font_family(&settings.font_family);
 
                         // Chapter header
                         chapter_header(ui, &chapter.title, theme);
@@ -70,11 +73,12 @@ pub fn reader_view(
 
                             match paragraph.kind {
                                 ParagraphKind::Title => {
+                                    let title_font_id = egui::FontId::new(font_size * 1.5, font_family.clone());
                                     let resp = ui.vertical_centered(|ui| {
                                         ui.add_space(s.lg);
                                         ui.label(
                                             egui::RichText::new(&paragraph.text)
-                                                .size(font_size * 1.5)
+                                                .font(title_font_id)
                                                 .strong()
                                                 .line_height(line_height.map(|l| l * 1.2)),
                                         );
@@ -85,10 +89,11 @@ pub fn reader_view(
                                     }
                                 }
                                 ParagraphKind::Subtitle => {
+                                    let subtitle_font_id = egui::FontId::new(font_size * 1.15, font_family.clone());
                                     let resp = ui.vertical_centered(|ui| {
                                         ui.label(
                                             egui::RichText::new(&paragraph.text)
-                                                .size(font_size * 1.15)
+                                                .font(subtitle_font_id)
                                                 .weak()
                                                 .line_height(line_height),
                                         );
@@ -101,9 +106,10 @@ pub fn reader_view(
                                 ParagraphKind::Quote => {
                                     ui.add_space(s.sm);
                                     ui.add_space(s.lg);
+                                    let quote_font_id = egui::FontId::new(font_size, font_family.clone());
                                     let resp = ui.label(
                                         egui::RichText::new(&paragraph.text)
-                                            .size(font_size)
+                                            .font(quote_font_id)
                                             .italics()
                                             .color(theme.colors.text_secondary.to_color32())
                                             .line_height(line_height),
@@ -121,30 +127,53 @@ pub fn reader_view(
                                 ParagraphKind::Body => {
                                     let indent = paragraph.indent_level as f32 * s.lg;
                                     ui.add_space(indent);
-                                    let resp = ui.label(
-                                        egui::RichText::new(&paragraph.text)
-                                            .size(font_size)
-                                            .line_height(line_height),
-                                    );
+                                    let font_id = egui::FontId::new(font_size, font_family.clone());
+
                                     if is_highlighted {
-                                        highlight_paragraph(ui, resp.rect, theme);
+                                        // Highlight search keyword within the paragraph
+                                        if let Some(keyword) = search_keyword {
+                                            let resp = render_text_with_highlight(
+                                                ui,
+                                                &paragraph.text,
+                                                keyword,
+                                                font_size,
+                                                line_height,
+                                                theme,
+                                                &font_family,
+                                            );
+                                            highlight_paragraph(ui, resp.rect, theme);
+                                        } else {
+                                            let resp = ui.label(
+                                                egui::RichText::new(&paragraph.text)
+                                                    .font(font_id.clone())
+                                                    .line_height(line_height),
+                                            );
+                                            highlight_paragraph(ui, resp.rect, theme);
+                                        }
+                                    } else {
+                                        ui.label(
+                                            egui::RichText::new(&paragraph.text)
+                                                .font(font_id)
+                                                .line_height(line_height),
+                                        );
                                     }
-                                    ui.add_space(s.paragraph_gap);
+                                    ui.add_space(settings.paragraph_spacing);
                                 }
                             }
                         }
 
                         // Fallback for chapters with no paragraphs
                         if chapter.paragraphs.is_empty() {
+                            let fallback_font_id = egui::FontId::new(font_size, font_family.clone());
                             for text in chapter.content.split("\n\n") {
                                 let trimmed = text.trim();
                                 if !trimmed.is_empty() {
                                     ui.label(
                                         egui::RichText::new(trimmed)
-                                            .size(font_size)
+                                            .font(fallback_font_id.clone())
                                             .line_height(line_height),
                                     );
-                                    ui.add_space(s.paragraph_gap);
+                                    ui.add_space(settings.paragraph_spacing);
                                 }
                             }
                         }
@@ -177,11 +206,10 @@ pub fn reader_view(
     // Only trigger if content is tall enough to scroll
     if content_height > viewport_height {
         let distance_to_bottom = content_height - scroll_offset - viewport_height;
+        thread_local! {
+            static REACHED_BOTTOM: Cell<bool> = const { Cell::new(false) };
+        }
         if distance_to_bottom < 50.0 {
-            // Use thread_local to avoid repeated triggers
-            thread_local! {
-                static REACHED_BOTTOM: Cell<bool> = const { Cell::new(false) };
-            }
             REACHED_BOTTOM.with(|reached| {
                 if !reached.get() {
                     reached.set(true);
@@ -189,17 +217,49 @@ pub fn reader_view(
                 }
             });
         } else {
-            // Reset when scrolled away from bottom
-            thread_local! {
-                static REACHED_BOTTOM: Cell<bool> = const { Cell::new(false) };
-            }
             REACHED_BOTTOM.with(|reached| {
                 reached.set(false);
             });
         }
     }
 
+    // Render inline Toast if there's a status message
+    if !status_message.is_empty() {
+        render_toast(ui, status_message, theme);
+    }
+
     actions
+}
+
+fn render_toast(ui: &mut egui::Ui, message: &str, theme: &ThemeConfig) {
+    let toast_width = 280.0;
+    let toast_margin = 16.0;
+
+    egui::Area::new(egui::Id::new("reader_toast"))
+        .anchor(egui::Align2::RIGHT_BOTTOM, [-toast_margin, -toast_margin])
+        .show(ui.ctx(), |ui| {
+            egui::Frame::new()
+                .fill(theme.colors.panel_bg.to_color32())
+                .stroke(egui::Stroke::new(1.0, theme.colors.border_subtle.to_color32()))
+                .corner_radius(egui::CornerRadius::same(theme.radius.card as u8))
+                .inner_margin(egui::Margin::symmetric(16, 10))
+                .shadow(egui::epaint::Shadow {
+                    offset: [0, 2],
+                    blur: 8,
+                    spread: 0,
+                    color: egui::Color32::from_black_alpha(32),
+                })
+                .show(ui, |ui| {
+                    ui.set_max_width(toast_width);
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(message)
+                                .size(theme.typography.body_size)
+                                .color(theme.colors.text_primary.to_color32()),
+                        );
+                    });
+                });
+        });
 }
 
 fn chapter_header(ui: &mut egui::Ui, title: &str, theme: &ThemeConfig) {
@@ -265,4 +325,62 @@ fn highlight_paragraph(ui: &mut egui::Ui, rect: egui::Rect, theme: &ThemeConfig)
         egui::CornerRadius::same(2),
         theme.colors.accent.to_color32(),
     );
+}
+
+/// Parse font family string to egui::FontFamily
+fn parse_font_family(family: &str) -> egui::FontFamily {
+    match family {
+        "monospace" => egui::FontFamily::Monospace,
+        "serif" => egui::FontFamily::Name("serif".into()),
+        _ => egui::FontFamily::Proportional, // sans-serif and default
+    }
+}
+
+/// Render text with highlighted search keyword
+fn render_text_with_highlight(
+    ui: &mut egui::Ui,
+    text: &str,
+    keyword: &str,
+    font_size: f32,
+    line_height: Option<f32>,
+    theme: &ThemeConfig,
+    font_family: &egui::FontFamily,
+) -> egui::Response {
+    let highlight_color = theme.colors.accent.to_color32().gamma_multiply(0.3);
+    let font_id = egui::FontId::new(font_size, font_family.clone());
+
+    ui.horizontal_wrapped(|ui| {
+        let lower_text = text.to_lowercase();
+        let lower_keyword = keyword.to_lowercase();
+
+        let mut last_end = 0;
+
+        for (start, _) in lower_text.match_indices(&lower_keyword) {
+            if start > last_end {
+                ui.label(
+                    egui::RichText::new(&text[last_end..start])
+                        .font(font_id.clone())
+                        .line_height(line_height),
+                );
+            }
+
+            let end = start + keyword.len();
+            ui.label(
+                egui::RichText::new(&text[start..end])
+                    .font(font_id.clone())
+                    .line_height(line_height)
+                    .background_color(highlight_color),
+            );
+            last_end = end;
+        }
+
+        if last_end < text.len() {
+            ui.label(
+                egui::RichText::new(&text[last_end..])
+                    .font(font_id.clone())
+                    .line_height(line_height),
+            );
+        }
+    })
+    .response
 }

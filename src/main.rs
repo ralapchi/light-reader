@@ -5,6 +5,7 @@ EPUB 阅读器主入口
 */
 
 use eframe;
+use eframe::egui;
 use log::info;
 
 mod app;
@@ -19,8 +20,22 @@ mod ui;
 fn main() {
     env_logger::init();
     info!("EPUB 阅读器启动");
-    
-    let options = eframe::NativeOptions::default();
+
+    let _ = storage::paths::ensure_dirs();
+    let saved_settings = storage::settings_store::load();
+
+    let mut viewport = egui::ViewportBuilder::default();
+    if let Some((w, h)) = saved_settings.window_size {
+        viewport = viewport.with_inner_size(egui::vec2(w, h));
+    }
+    if let Some((x, y)) = saved_settings.window_pos {
+        viewport = viewport.with_position(egui::pos2(x, y));
+    }
+
+    let options = eframe::NativeOptions {
+        viewport,
+        ..Default::default()
+    };
     eframe::run_native(
         "EPUB 阅读器",
         options,

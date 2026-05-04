@@ -43,6 +43,7 @@ impl AppShell {
 
         match screen {
             ScreenKind::EmptyLibrary => {
+                let recent_books = shell.state().recent_books.clone();
                 egui::CentralPanel::default().show(ctx, |ui| {
                     if empty_state_with_button(
                         ui,
@@ -61,6 +62,47 @@ impl AppShell {
                             info!("打开文件: {}", path_str);
                             shell.dispatch(Action::OpenBookSelected(path_str));
                         }
+                    }
+
+                    // Show recent books if available
+                    if !recent_books.is_empty() {
+                        let s = &config.spacing;
+                        ui.add_space(s.lg);
+                        ui.separator();
+                        ui.add_space(s.md);
+
+                        ui.vertical_centered(|ui| {
+                            ui.label(
+                                egui::RichText::new("最近阅读")
+                                    .size(config.typography.body_size)
+                                    .strong()
+                                    .color(config.colors.text_secondary.to_color32()),
+                            );
+                            ui.add_space(s.sm);
+
+                            for item in recent_books.iter().take(5) {
+                                if item.is_missing {
+                                    continue;
+                                }
+                                let label = if let Some(author) = &item.author {
+                                    format!("{} - {}", item.title, author)
+                                } else {
+                                    item.title.clone()
+                                };
+                                let btn = ui.add(
+                                    egui::Button::new(
+                                        egui::RichText::new(&label)
+                                            .size(config.typography.body_size),
+                                    )
+                                    .fill(egui::Color32::TRANSPARENT)
+                                    .stroke(egui::Stroke::NONE),
+                                );
+                                if btn.clicked() {
+                                    shell.dispatch(Action::RecentBookSelected(item.book_id.clone()));
+                                }
+                                btn.on_hover_text(&item.source_path);
+                            }
+                        });
                     }
                 });
             }
@@ -216,8 +258,14 @@ impl AppShell {
             .search_state
             .selected_result_index
             .and_then(|idx| state_snapshot.search_state.results.get(idx));
+        let search_keyword = state_snapshot
+            .search_state
+            .current_query
+            .as_ref()
+            .map(|q| q.keyword.as_str());
+        let status_message = state_snapshot.status_message.clone();
         egui::CentralPanel::default().show(ctx, |ui| {
-            let actions = reader_view(ui, &chapters, current_page, settings, theme, selected_search_result);
+            let actions = reader_view(ui, &chapters, current_page, settings, theme, selected_search_result, search_keyword, &status_message);
             pending_actions.extend(actions);
         });
 
@@ -234,8 +282,12 @@ impl AppShell {
             } else {
                 String::new()
             };
+            let char_count = chapters
+                .get(current_page)
+                .map(|c| c.char_count)
+                .unwrap_or(0);
             egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
-                status_bar(ui, progress, &chapter_pos, &state_snapshot.status_message, theme);
+                status_bar(ui, progress, &chapter_pos, &state_snapshot.status_message, char_count, theme);
             });
         }
 

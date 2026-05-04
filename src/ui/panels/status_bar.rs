@@ -7,6 +7,7 @@ pub fn status_bar(
     progress: f32,
     chapter_pos: &str,
     status_message: &str,
+    char_count: usize,
     theme: &ThemeConfig,
 ) {
     let s = &theme.spacing;
@@ -17,9 +18,15 @@ pub fn status_bar(
         ui.separator();
         ui.add_space(s.lg);
         ui.label(chapter_pos);
-        ui.add_space(s.lg);
-        ui.separator();
-        ui.add_space(s.lg);
-        ui.label(status_message);
+        if char_count > 0 {
+            ui.add_space(s.lg);
+            ui.separator();
+            ui.add_space(s.lg);
+            ui.label(format!("{} 字", char_count));
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_space(s.sm);
+            ui.label(status_message);
+        });
     });
 }

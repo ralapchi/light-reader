@@ -36,6 +36,7 @@ pub enum Action {
     RestoreDefaultSettings,
     RecentBookSelected(String),
     RemoveRecentBook(String),
+    ClearMissingRecentBooks,
     DismissError,
     StatusMessageTimedOut,
     CloseSearchOrSettings,

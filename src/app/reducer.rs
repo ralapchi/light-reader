@@ -54,6 +54,7 @@ pub fn reduce(state: &mut AppState, action: Action) {
             state.bookmarks.clear();
             state.search_state = Default::default();
             state.last_error = None;
+            state.session_started_at = None;
             state.ui_state.screen = ScreenKind::EmptyLibrary;
             state.ui_state.is_loading = false;
             state.ui_state.pending_open_path = None;
@@ -148,6 +149,9 @@ pub fn reduce(state: &mut AppState, action: Action) {
         Action::RemoveRecentBook(book_id) => {
             state.recent_books.retain(|item| item.book_id != book_id);
         }
+        Action::ClearMissingRecentBooks => {
+            state.recent_books.retain(|item| !item.is_missing);
+        }
         Action::StatusMessageTimedOut => {
             if state.last_error.is_none() {
                 clear_status_message(state);
@@ -209,6 +213,7 @@ fn open_book_succeeded(state: &mut AppState, book: Book) {
     state.ui_state.is_loading = false;
     state.ui_state.pending_open_path = None;
     state.ui_state.screen = ScreenKind::Reader;
+    state.session_started_at = Some(Utc::now().to_rfc3339());
     if warning_count > 0 {
         set_status_message(state, format!("内容已加载，共 {} 章（{} 条告警）", chapter_count, warning_count));
     } else {
@@ -385,6 +390,9 @@ fn apply_reader_setting(settings: &mut crate::domain::reader_settings::ReaderSet
             if let Ok(v) = value.parse::<bool>() {
                 settings.show_status_bar = v;
             }
+        }
+        "font_family" => {
+            settings.font_family = value.to_string();
         }
         _ => {}
     }

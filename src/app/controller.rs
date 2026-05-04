@@ -61,6 +61,10 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
             reducer::reduce(adapter.state_mut(), action);
             save_recent(adapter);
         }
+        Action::ClearMissingRecentBooks => {
+            reducer::reduce(adapter.state_mut(), action);
+            save_recent(adapter);
+        }
         Action::CloseBook => {
             save_progress(adapter);
             save_bookmarks(adapter);
@@ -84,6 +88,7 @@ fn after_book_opened(adapter: &mut CompatAdapter) {
     };
 
     if let Some(progress) = storage::progress_store::load(&book_id) {
+        adapter.state_mut().total_read_seconds_at_session_start = progress.total_read_seconds;
         adapter.state_mut().reading_progress = Some(progress);
     }
 
@@ -98,6 +103,19 @@ fn after_book_opened(adapter: &mut CompatAdapter) {
 fn save_progress(adapter: &CompatAdapter) {
     let state = adapter.state();
     if let (Some(book), Some(progress)) = (&state.current_book, &state.reading_progress) {
+        // Calculate elapsed session time
+        if let Some(ref started_at) = state.session_started_at {
+            if let Ok(start) = chrono::DateTime::parse_from_rfc3339(started_at) {
+                let elapsed = Utc::now().signed_duration_since(start).num_seconds().max(0) as u64;
+                let mut progress = progress.clone();
+                progress.session_read_seconds = elapsed;
+                progress.total_read_seconds = state.total_read_seconds_at_session_start + elapsed;
+                if let Err(e) = storage::progress_store::save(&book.id, &progress) {
+                    log::warn!("保存阅读进度失败: {}", e);
+                }
+                return;
+            }
+        }
         if let Err(e) = storage::progress_store::save(&book.id, progress) {
             log::warn!("保存阅读进度失败: {}", e);
         }

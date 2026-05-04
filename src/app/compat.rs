@@ -35,6 +35,11 @@ impl CompatAdapter {
         state.reader_settings = settings_file.reader_settings;
         state.recent_books = recent_books;
 
+        // Mark missing files in recent books
+        for item in &mut state.recent_books {
+            item.is_missing = !std::path::Path::new(&item.source_path).exists();
+        }
+
         Self { state }
     }
 
@@ -178,10 +183,12 @@ impl CompatAdapter {
     pub fn save_persisted_state(&self) {
         let state = &self.state;
 
-        let settings_file = storage::settings_store::SettingsFile::from_reader_settings(
+        let mut settings_file = storage::settings_store::SettingsFile::from_reader_settings(
             &state.reader_settings,
             state.current_book.as_ref().map(|b| b.id.clone()),
         );
+        settings_file.window_size = state.window_size;
+        settings_file.window_pos = state.window_pos;
         if let Err(e) = storage::settings_store::save(&settings_file) {
             warn!("保存设置失败: {}", e);
         }
