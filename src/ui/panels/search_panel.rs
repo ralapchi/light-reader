@@ -225,16 +225,20 @@ fn render_snippet_with_highlight(
     keyword: &str,
     font_size: f32,
     theme: &ThemeConfig,
+    case_sensitive: bool,
 ) {
     let highlight_color = theme.colors.accent.to_color32().gamma_multiply(0.3);
 
     ui.horizontal_wrapped(|ui| {
-        let lower_text = text.to_lowercase();
-        let lower_keyword = keyword.to_lowercase();
+        let (search_text, search_keyword) = if case_sensitive {
+            (text.to_string(), keyword.to_string())
+        } else {
+            (text.to_lowercase(), keyword.to_lowercase())
+        };
 
         let mut last_end = 0;
 
-        for (start, _) in lower_text.match_indices(&lower_keyword) {
+        for (start, _) in search_text.match_indices(&search_keyword) {
             if start > last_end {
                 ui.label(
                     egui::RichText::new(&text[last_end..start])
