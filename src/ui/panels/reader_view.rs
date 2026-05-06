@@ -8,6 +8,7 @@ use crate::domain::paragraph_kind::ParagraphKind;
 use crate::domain::reader_settings::ReaderSettings;
 use crate::domain::search_result::SearchResult;
 use crate::ui::ThemeConfig;
+use crate::ui::widgets::render_highlighted_text;
 
 const SCROLL_OFFSET_THRESHOLD: f32 = 1.0;
 
@@ -137,29 +138,29 @@ pub fn reader_view(
 
                                         if is_highlighted {
                                             if let Some(keyword) = search_keyword {
-                                                render_text_with_highlight(
+                                                render_highlighted_text(
                                                     ui,
                                                     &paragraph.text,
                                                     keyword,
                                                     font_size,
+                                                    Some(&font_id),
                                                     line_height,
                                                     theme,
-                                                    &font_family,
                                                     case_sensitive,
-                                                )
+                                                );
                                             } else {
                                                 ui.label(
                                                     egui::RichText::new(&paragraph.text)
                                                         .font(font_id.clone())
                                                         .line_height(line_height),
-                                                )
+                                                );
                                             }
                                         } else {
                                             ui.label(
                                                 egui::RichText::new(&paragraph.text)
                                                     .font(font_id)
                                                     .line_height(line_height),
-                                            )
+                                            );
                                         }
                                     }).response;
 
@@ -330,57 +331,4 @@ fn parse_font_family(family: &str) -> egui::FontFamily {
         "serif" => egui::FontFamily::Name("serif".into()),
         _ => egui::FontFamily::Proportional, // sans-serif and default
     }
-}
-
-/// Render text with highlighted search keyword
-fn render_text_with_highlight(
-    ui: &mut egui::Ui,
-    text: &str,
-    keyword: &str,
-    font_size: f32,
-    line_height: Option<f32>,
-    theme: &ThemeConfig,
-    font_family: &egui::FontFamily,
-    case_sensitive: bool,
-) -> egui::Response {
-    let highlight_color = theme.colors.accent.to_color32().gamma_multiply(0.3);
-    let font_id = egui::FontId::new(font_size, font_family.clone());
-
-    ui.horizontal_wrapped(|ui| {
-        let (search_text, search_keyword) = if case_sensitive {
-            (text.to_string(), keyword.to_string())
-        } else {
-            (text.to_lowercase(), keyword.to_lowercase())
-        };
-
-        let mut last_end = 0;
-
-        for (start, _) in search_text.match_indices(&search_keyword) {
-            if start > last_end {
-                ui.label(
-                    egui::RichText::new(&text[last_end..start])
-                        .font(font_id.clone())
-                        .line_height(line_height),
-                );
-            }
-
-            let end = start + keyword.len();
-            ui.label(
-                egui::RichText::new(&text[start..end])
-                    .font(font_id.clone())
-                    .line_height(line_height)
-                    .background_color(highlight_color),
-            );
-            last_end = end;
-        }
-
-        if last_end < text.len() {
-            ui.label(
-                egui::RichText::new(&text[last_end..])
-                    .font(font_id.clone())
-                    .line_height(line_height),
-            );
-        }
-    })
-    .response
 }

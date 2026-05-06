@@ -5,6 +5,7 @@ use crate::domain::search_enums::SearchScope;
 use crate::domain::search_query::SearchQuery;
 use crate::domain::search_result::SearchResult;
 use crate::ui::ThemeConfig;
+use crate::ui::widgets::render_highlighted_text;
 
 /// Lightweight read-only props for SearchPanel, derived from AppState.
 pub struct SearchPanelProps<'a> {
@@ -180,7 +181,7 @@ pub fn search_panel(
                                     // Snippet with highlight
                                     let keyword = &query_text;
                                     if !keyword.is_empty() {
-                                        render_snippet_with_highlight(ui, &result.snippet, keyword, t.body_size, theme, case_sensitive);
+                                        render_highlighted_text(ui, &result.snippet, keyword, t.body_size, None, None, theme, case_sensitive);
                                     } else {
                                         ui.label(
                                             egui::RichText::new(&result.snippet)
@@ -224,50 +225,4 @@ pub fn search_panel(
         });
 
     actions
-}
-
-/// Render snippet text with highlighted search keyword
-fn render_snippet_with_highlight(
-    ui: &mut egui::Ui,
-    text: &str,
-    keyword: &str,
-    font_size: f32,
-    theme: &ThemeConfig,
-    case_sensitive: bool,
-) {
-    let highlight_color = theme.colors.accent.to_color32().gamma_multiply(0.3);
-
-    ui.horizontal_wrapped(|ui| {
-        let (search_text, search_keyword) = if case_sensitive {
-            (text.to_string(), keyword.to_string())
-        } else {
-            (text.to_lowercase(), keyword.to_lowercase())
-        };
-
-        let mut last_end = 0;
-
-        for (start, _) in search_text.match_indices(&search_keyword) {
-            if start > last_end {
-                ui.label(
-                    egui::RichText::new(&text[last_end..start])
-                        .size(font_size),
-                );
-            }
-
-            let end = start + keyword.len();
-            ui.label(
-                egui::RichText::new(&text[start..end])
-                    .size(font_size)
-                    .background_color(highlight_color),
-            );
-            last_end = end;
-        }
-
-        if last_end < text.len() {
-            ui.label(
-                egui::RichText::new(&text[last_end..])
-                    .size(font_size),
-            );
-        }
-    });
 }
