@@ -49,6 +49,10 @@ impl ThemeService {
                 debug!("Not on macOS, using default egui fonts");
             }
 
+            // Register "serif" font family (same data as Proportional)
+            let proportional = fonts.families.get(&egui::FontFamily::Proportional).unwrap().clone();
+            fonts.families.insert(egui::FontFamily::Name("serif".into()), proportional);
+
             ctx.set_fonts(fonts);
         });
     }

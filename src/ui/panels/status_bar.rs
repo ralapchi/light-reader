@@ -6,7 +6,6 @@ pub fn status_bar(
     ui: &mut egui::Ui,
     progress: f32,
     chapter_pos: &str,
-    status_message: &str,
     char_count: usize,
     theme: &ThemeConfig,
 ) {
@@ -24,9 +23,5 @@ pub fn status_bar(
             ui.add_space(s.lg);
             ui.label(format!("{} 字", char_count));
         }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.add_space(s.sm);
-            ui.label(status_message);
-        });
     });
 }

@@ -1,3 +1,4 @@
+use log::warn;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::reader_settings::ReaderSettings;
@@ -47,8 +48,17 @@ pub fn load() -> SettingsFile {
         return SettingsFile::default();
     }
     match std::fs::read_to_string(&path) {
-        Ok(data) => serde_json::from_str(&data).unwrap_or_default(),
-        Err(_) => SettingsFile::default(),
+        Ok(data) => match serde_json::from_str::<SettingsFile>(&data) {
+            Ok(file) => file,
+            Err(e) => {
+                warn!("设置文件解析失败，使用默认设置: {}", e);
+                SettingsFile::default()
+            }
+        },
+        Err(e) => {
+            warn!("设置文件读取失败，使用默认设置: {}", e);
+            SettingsFile::default()
+        }
     }
 }
 

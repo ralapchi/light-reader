@@ -1,3 +1,4 @@
+use log::warn;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::recent_book_item::RecentBookItem;
@@ -17,14 +18,17 @@ pub fn load() -> Vec<RecentBookItem> {
         return Vec::new();
     }
     match std::fs::read_to_string(&path) {
-        Ok(data) => {
-            let file: RecentFile = serde_json::from_str(&data).unwrap_or_else(|_| RecentFile {
-                version: RECENT_VERSION,
-                items: Vec::new(),
-            });
-            file.items
+        Ok(data) => match serde_json::from_str::<RecentFile>(&data) {
+            Ok(file) => file.items,
+            Err(e) => {
+                warn!("最近阅读文件解析失败: {}", e);
+                Vec::new()
+            }
+        },
+        Err(e) => {
+            warn!("最近阅读文件读取失败: {}", e);
+            Vec::new()
         }
-        Err(_) => Vec::new(),
     }
 }
 

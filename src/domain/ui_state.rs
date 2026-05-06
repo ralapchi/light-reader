@@ -20,7 +20,6 @@ pub struct UiState {
     pub show_command_hint: bool,
     pub window_size: Option<(f32, f32)>,
     pub sidebar_collapsed: bool,
-    pub search_case_sensitive: bool,
 }
 
 impl Default for UiState {
@@ -40,7 +39,6 @@ impl Default for UiState {
             show_command_hint: false,
             window_size: None,
             sidebar_collapsed: false,
-            search_case_sensitive: false,
         }
     }
 }

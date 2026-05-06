@@ -228,6 +228,57 @@ fn txt_no_chapter_fallback() {
     assert!(result.content.len() >= 1);
 }
 
+#[test]
+fn txt_arabic_cn_mixed_chapter() {
+    let content = "第1章 开始\n\n段落一。\n\n第12章 结束\n\n段落二。";
+    let tmp = write_temp_txt(content);
+    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    assert_eq!(result.content.len(), 2);
+    assert_eq!(result.chapter_titles[0], "第1章 开始");
+    assert_eq!(result.chapter_titles[1], "第12章 结束");
+}
+
+#[test]
+fn txt_special_cn_chapters() {
+    let content = "序章 引子\n\n段落一。\n\n第一章 正文\n\n段落二。\n\n终章 结局\n\n段落三。";
+    let tmp = write_temp_txt(content);
+    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    assert_eq!(result.content.len(), 3);
+    assert_eq!(result.chapter_titles[0], "序章 引子");
+    assert_eq!(result.chapter_titles[1], "第一章 正文");
+    assert_eq!(result.chapter_titles[2], "终章 结局");
+}
+
+#[test]
+fn txt_english_part_detection() {
+    let content = "Part 1 Beginning\n\nText.\n\nPart 2 End\n\nMore text.";
+    let tmp = write_temp_txt(content);
+    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    assert_eq!(result.content.len(), 2);
+    assert_eq!(result.chapter_titles[0], "Part 1 Beginning");
+    assert_eq!(result.chapter_titles[1], "Part 2 End");
+}
+
+#[test]
+fn txt_number_dot_prefix() {
+    let content = "1. 开篇\n\n段落一。\n\n12. 结尾\n\n段落二。";
+    let tmp = write_temp_txt(content);
+    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    assert_eq!(result.content.len(), 2);
+    assert_eq!(result.chapter_titles[0], "1. 开篇");
+    assert_eq!(result.chapter_titles[1], "12. 结尾");
+}
+
+#[test]
+fn txt_cn_number_prefix() {
+    let content = "一、开篇\n\n段落一。\n\n二十、结尾\n\n段落二。";
+    let tmp = write_temp_txt(content);
+    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    assert_eq!(result.content.len(), 2);
+    assert_eq!(result.chapter_titles[0], "一、开篇");
+    assert_eq!(result.chapter_titles[1], "二十、结尾");
+}
+
 // ---------------------------------------------------------------------------
 // 告警收集测试
 // ---------------------------------------------------------------------------

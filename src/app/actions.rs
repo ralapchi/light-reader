@@ -7,6 +7,25 @@ use crate::domain::search_query::SearchQuery;
 use crate::domain::theme_kind::ThemeKind;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum ReaderSettingUpdate {
+    SetFontSize(f32),
+    SetLineHeight(f32),
+    SetParagraphSpacing(f32),
+    SetContentWidth(f32),
+    SetSideMargin(f32),
+    SetTocWidth(f32),
+    SetWindowPadding(f32),
+    SetFontFamily(String),
+    SetShowToc(bool),
+    SetShowStatusBar(bool),
+    SetShowChapterProgress(bool),
+    SetAutoSaveProgress(bool),
+    SetSmoothScroll(bool),
+    SetOpenLastBookOnStartup(bool),
+    SetRestoreLastPosition(bool),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Action {
     OpenBookSelected(String),
     OpenBookSucceeded(Book),
@@ -29,10 +48,7 @@ pub enum Action {
     ToggleSettingsPanel,
     ToggleSearchCaseSensitive,
     ThemeChanged(ThemeKind),
-    /// Change a single reader setting. Tuple of (setting_key, setting_value).
-    /// Keys follow the format `"font_size"`, `"line_height"`, etc.
-    /// TODO(Phase-5): Replace key-value strings with typed setting action variants.
-    ReaderSettingChanged(String, String),
+    ReaderSettingChanged(ReaderSettingUpdate),
     RestoreDefaultSettings,
     RecentBookSelected(String),
     RemoveRecentBook(String),

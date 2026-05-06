@@ -46,7 +46,8 @@ pub fn reduce(state: &mut AppState, action: Action) {
             }
         }
         Action::ToggleSearchCaseSensitive => {
-            state.ui_state.search_case_sensitive = !state.ui_state.search_case_sensitive;
+            let query = state.search_state.current_query.get_or_insert_with(Default::default);
+            query.case_sensitive = !query.case_sensitive;
         }
         Action::CloseBook => {
             state.current_book = None;
@@ -60,8 +61,8 @@ pub fn reduce(state: &mut AppState, action: Action) {
             state.ui_state.pending_open_path = None;
             clear_status_message(state);
         }
-        Action::ReaderSettingChanged(key, value) => {
-            apply_reader_setting(&mut state.reader_settings, &key, &value);
+        Action::ReaderSettingChanged(update) => {
+            apply_reader_setting(&mut state.reader_settings, update);
         }
         Action::RestoreDefaultSettings => {
             state.reader_settings = Default::default();
@@ -233,13 +234,22 @@ fn go_to_chapter(state: &mut AppState, index: usize) {
     }
 
     let clamped = index.min(total.saturating_sub(1));
-    let book_id = state
-        .current_book
-        .as_ref()
-        .map(|book| book.id.clone())
-        .unwrap_or_default();
 
-    state.reading_progress = Some(progress_for(&book_id, clamped, total));
+    if let Some(ref mut progress) = state.reading_progress {
+        let progress_percent = ((clamped + 1) as f32 / total as f32).clamp(0.0, 1.0);
+        progress.chapter_index = clamped;
+        progress.paragraph_index = None;
+        progress.scroll_offset = 0.0;
+        progress.progress_percent = progress_percent;
+        progress.last_read_at = Utc::now().to_rfc3339();
+    } else {
+        let book_id = state
+            .current_book
+            .as_ref()
+            .map(|book| book.id.clone())
+            .unwrap_or_default();
+        state.reading_progress = Some(progress_for(&book_id, clamped, total));
+    }
 }
 
 fn progress_for(book_id: &str, chapter_index: usize, total: usize) -> ReadingProgress {
@@ -354,53 +364,31 @@ fn clear_status_message(state: &mut AppState) {
     state.status_message_set_at = None;
 }
 
-fn apply_reader_setting(settings: &mut crate::domain::reader_settings::ReaderSettings, key: &str, value: &str) {
-    match key {
-        "font_size" => {
-            if let Ok(v) = value.parse::<f32>() {
-                settings.font_size = v.max(8.0);
-            }
-        }
-        "line_height" => {
-            if let Ok(v) = value.parse::<f32>() {
-                settings.line_height = v.max(1.0);
-            }
-        }
-        "paragraph_spacing" => {
-            if let Ok(v) = value.parse::<f32>() {
-                settings.paragraph_spacing = v.max(0.0);
-            }
-        }
-        "content_width" => {
-            if let Ok(v) = value.parse::<f32>() {
-                settings.content_width = v.max(200.0);
-            }
-        }
-        "side_margin" => {
-            if let Ok(v) = value.parse::<f32>() {
-                settings.side_margin = v.max(0.0);
-            }
-        }
-        "show_toc" => {
-            if let Ok(v) = value.parse::<bool>() {
-                settings.show_toc = v;
-            }
-        }
-        "show_status_bar" => {
-            if let Ok(v) = value.parse::<bool>() {
-                settings.show_status_bar = v;
-            }
-        }
-        "font_family" => {
-            settings.font_family = value.to_string();
-        }
-        _ => {}
+fn apply_reader_setting(settings: &mut crate::domain::reader_settings::ReaderSettings, update: crate::app::actions::ReaderSettingUpdate) {
+    use crate::app::actions::ReaderSettingUpdate::*;
+    match update {
+        SetFontSize(v) => settings.font_size = v.max(8.0),
+        SetLineHeight(v) => settings.line_height = v.max(1.0),
+        SetParagraphSpacing(v) => settings.paragraph_spacing = v.max(0.0),
+        SetContentWidth(v) => settings.content_width = v.max(200.0),
+        SetSideMargin(v) => settings.side_margin = v.max(0.0),
+        SetTocWidth(v) => settings.toc_width = v.max(160.0),
+        SetWindowPadding(v) => settings.window_padding = v.max(0.0),
+        SetFontFamily(v) => settings.font_family = v,
+        SetShowToc(v) => settings.show_toc = v,
+        SetShowStatusBar(v) => settings.show_status_bar = v,
+        SetShowChapterProgress(v) => settings.show_chapter_progress = v,
+        SetAutoSaveProgress(v) => settings.auto_save_progress = v,
+        SetSmoothScroll(v) => settings.smooth_scroll = v,
+        SetOpenLastBookOnStartup(v) => settings.open_last_book_on_startup = v,
+        SetRestoreLastPosition(v) => settings.restore_last_position = v,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::actions::ReaderSettingUpdate;
     use crate::domain::book_assets::BookAssets;
     use crate::domain::book_load_info::BookLoadInfo;
     use crate::domain::book_metadata::BookMetadata;
@@ -529,6 +517,32 @@ mod tests {
     }
 
     #[test]
+    fn chapter_navigation_preserves_session_time() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
+
+        // Simulate accumulated read time
+        if let Some(ref mut progress) = state.reading_progress {
+            progress.session_read_seconds = 120;
+            progress.total_read_seconds = 3600;
+        }
+
+        reduce(&mut state, Action::GoToChapter(1));
+        let progress = state.reading_progress.as_ref().unwrap();
+        assert_eq!(progress.chapter_index, 1);
+        assert_eq!(progress.session_read_seconds, 120);
+        assert_eq!(progress.total_read_seconds, 3600);
+        assert_eq!(progress.paragraph_index, None);
+        assert!((progress.scroll_offset).abs() < f32::EPSILON);
+
+        reduce(&mut state, Action::NextChapter);
+        let progress = state.reading_progress.as_ref().unwrap();
+        assert_eq!(progress.chapter_index, 1); // clamped, only 2 chapters
+        assert_eq!(progress.session_read_seconds, 120);
+        assert_eq!(progress.total_read_seconds, 3600);
+    }
+
+    #[test]
     fn theme_change_updates_reader_settings() {
         let mut state = AppState::default();
         reduce(&mut state, Action::ThemeChanged(ThemeKind::Sepia));
@@ -567,6 +581,22 @@ mod tests {
     }
 
     #[test]
+    fn toggle_search_case_sensitive_updates_query() {
+        let mut state = AppState::default();
+        assert!(state.search_state.current_query.is_none());
+
+        // Toggle creates a default query with case_sensitive=true
+        reduce(&mut state, Action::ToggleSearchCaseSensitive);
+        let query = state.search_state.current_query.as_ref().unwrap();
+        assert!(query.case_sensitive);
+
+        // Toggle again flips to false
+        reduce(&mut state, Action::ToggleSearchCaseSensitive);
+        let query = state.search_state.current_query.as_ref().unwrap();
+        assert!(!query.case_sensitive);
+    }
+
+    #[test]
     fn close_book_resets_to_empty_library() {
         let mut state = AppState::default();
         reduce(&mut state, Action::OpenBookSucceeded(sample_book(BookFormat::Txt)));
@@ -584,28 +614,28 @@ mod tests {
     #[test]
     fn reader_setting_changed_font_size() {
         let mut state = AppState::default();
-        reduce(&mut state, Action::ReaderSettingChanged("font_size".to_string(), "20.0".to_string()));
+        reduce(&mut state, Action::ReaderSettingChanged(ReaderSettingUpdate::SetFontSize(20.0)));
         assert!((state.reader_settings.font_size - 20.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn reader_setting_changed_font_size_clamp() {
         let mut state = AppState::default();
-        reduce(&mut state, Action::ReaderSettingChanged("font_size".to_string(), "1.0".to_string()));
+        reduce(&mut state, Action::ReaderSettingChanged(ReaderSettingUpdate::SetFontSize(1.0)));
         assert!((state.reader_settings.font_size - 8.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn reader_setting_changed_line_height() {
         let mut state = AppState::default();
-        reduce(&mut state, Action::ReaderSettingChanged("line_height".to_string(), "2.0".to_string()));
+        reduce(&mut state, Action::ReaderSettingChanged(ReaderSettingUpdate::SetLineHeight(2.0)));
         assert!((state.reader_settings.line_height - 2.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn reader_setting_changed_content_width() {
         let mut state = AppState::default();
-        reduce(&mut state, Action::ReaderSettingChanged("content_width".to_string(), "800.0".to_string()));
+        reduce(&mut state, Action::ReaderSettingChanged(ReaderSettingUpdate::SetContentWidth(800.0)));
         assert!((state.reader_settings.content_width - 800.0).abs() < f32::EPSILON);
     }
 
@@ -613,7 +643,7 @@ mod tests {
     fn reader_setting_changed_show_toc() {
         let mut state = AppState::default();
         assert!(state.reader_settings.show_toc);
-        reduce(&mut state, Action::ReaderSettingChanged("show_toc".to_string(), "false".to_string()));
+        reduce(&mut state, Action::ReaderSettingChanged(ReaderSettingUpdate::SetShowToc(false)));
         assert!(!state.reader_settings.show_toc);
     }
 
@@ -621,16 +651,8 @@ mod tests {
     fn reader_setting_changed_show_status_bar() {
         let mut state = AppState::default();
         assert!(state.reader_settings.show_status_bar);
-        reduce(&mut state, Action::ReaderSettingChanged("show_status_bar".to_string(), "false".to_string()));
+        reduce(&mut state, Action::ReaderSettingChanged(ReaderSettingUpdate::SetShowStatusBar(false)));
         assert!(!state.reader_settings.show_status_bar);
-    }
-
-    #[test]
-    fn reader_setting_changed_unknown_key_is_noop() {
-        let mut state = AppState::default();
-        let before = state.reader_settings.clone();
-        reduce(&mut state, Action::ReaderSettingChanged("unknown_key".to_string(), "123".to_string()));
-        assert_eq!(state.reader_settings, before);
     }
 
     #[test]

@@ -211,22 +211,41 @@ impl CompatAdapter {
     }
 }
 
+/// EPUB 缩进标记前缀（由 strip_html_tags 注入）
+const INDENT_MARKER: &str = "\x01INDENT\x01";
+
 fn build_chapter(index: usize, title: &str, text: &str) -> Chapter {
+    let mut line_number = 0usize;
     let paragraphs = text
         .split("\n\n")
         .enumerate()
         .filter_map(|(paragraph_index, raw)| {
+            line_number += 1;
             let trimmed = raw.trim();
             if trimmed.is_empty() {
                 return None;
             }
 
+            // 检测 EPUB 缩进标记
+            let (indent_level, clean_text) = if trimmed.starts_with(INDENT_MARKER) {
+                (1u8, &trimmed[INDENT_MARKER.len()..])
+            } else {
+                // 检测 TXT 行首缩进：全角空格、半角空格、Tab
+                let indent = detect_indent(trimmed);
+                (indent, trimmed)
+            };
+
+            let clean_text = clean_text.trim();
+            if clean_text.is_empty() {
+                return None;
+            }
+
             Some(Paragraph {
                 index: paragraph_index,
-                text: trimmed.to_string(),
-                kind: infer_paragraph_kind(trimmed),
-                indent_level: 0,
-                source_line_hint: None,
+                text: clean_text.to_string(),
+                kind: infer_paragraph_kind(clean_text),
+                indent_level,
+                source_line_hint: Some(line_number),
             })
         })
         .collect::<Vec<_>>();
@@ -252,17 +271,134 @@ fn build_chapter(index: usize, title: &str, text: &str) -> Chapter {
     }
 }
 
-fn infer_paragraph_kind(text: &str) -> ParagraphKind {
-    let is_cn_title = text.starts_with('第')
-        && (text.contains('章') || text.contains('节') || text.contains('卷'))
-        && text.chars().count() < 50;
-    let is_en_title = text.starts_with("Chapter") && text.chars().count() < 50;
-
-    if is_cn_title || is_en_title {
-        ParagraphKind::Title
-    } else {
-        ParagraphKind::Body
+/// 检测段落行首缩进级别
+/// 全角空格（\u{3000}）、半角空格、Tab 均算作缩进
+fn detect_indent(text: &str) -> u8 {
+    let mut indent: u8 = 0;
+    for ch in text.chars() {
+        match ch {
+            '\u{3000}' => indent += 1, // 全角空格
+            ' ' => indent += 1,
+            '\t' => indent += 1,
+            _ => break,
+        }
+        if indent >= 4 {
+            break;
+        }
     }
+    indent.min(4)
+}
+
+fn infer_paragraph_kind(text: &str) -> ParagraphKind {
+    let char_count = text.chars().count();
+
+    // Separator: pure symbol lines like ***, ---, ＊＊＊, * * *, ————
+    if is_separator_line(text) {
+        return ParagraphKind::Separator;
+    }
+
+    // Quote: lines starting with > or wrapped in quotation marks
+    if text.starts_with('>') {
+        return ParagraphKind::Quote;
+    }
+    if is_quote_wrapped(text) {
+        return ParagraphKind::Quote;
+    }
+
+    // Title: 第X章, Chapter X, Part X, and special Chinese chapter words
+    if is_title_line(text, char_count) {
+        return ParagraphKind::Title;
+    }
+
+    // Subtitle: short text (<30 chars) that looks like a section header
+    if char_count < 30 && char_count >= 2 && is_subtitle_like(text) {
+        return ParagraphKind::Subtitle;
+    }
+
+    ParagraphKind::Body
+}
+
+fn is_separator_line(text: &str) -> bool {
+    let separators = ["***", "---", "＊＊＊", "* * *", "————", "====", "~~~~", "___"];
+    let trimmed = text.trim();
+    if separators.contains(&trimmed) {
+        return true;
+    }
+    // Repeated single symbol (3+ times)
+    let chars: Vec<char> = trimmed.chars().collect();
+    if chars.len() >= 3 && chars.iter().all(|&c| c == chars[0]) {
+        let c = chars[0];
+        if c == '*' || c == '-' || c == '—' || c == '＊' || c == '~' || c == '=' || c == '_' {
+            return true;
+        }
+    }
+    false
+}
+
+fn is_quote_wrapped(text: &str) -> bool {
+    let pairs = [('「', '」'), ('『', '』'), ('"', '"'), ('\'', '\'')];
+    let trimmed = text.trim();
+    for (open, close) in pairs {
+        if trimmed.starts_with(open) && trimmed.ends_with(close) && trimmed.len() > 2 {
+            return true;
+        }
+    }
+    // 《》 book title marks wrapping the entire text
+    if trimmed.starts_with('《') && trimmed.ends_with('》') && trimmed.len() > 2 {
+        return true;
+    }
+    false
+}
+
+fn is_title_line(text: &str, char_count: usize) -> bool {
+    if char_count >= 50 {
+        return false;
+    }
+    // Chinese chapter: 第X章/回/节/卷
+    if text.starts_with('第') && (text.contains('章') || text.contains('回') || text.contains('节') || text.contains('卷')) {
+        return true;
+    }
+    // English chapter/part
+    let upper = text.to_uppercase();
+    if upper.starts_with("CHAPTER ") || upper.starts_with("PART ") {
+        return true;
+    }
+    // Special Chinese chapter words
+    let special = ["序章", "终章", "番外", "楔子", "尾声", "引子", "后记", "前言", "序言"];
+    for word in special {
+        if text.starts_with(word) {
+            return true;
+        }
+    }
+    false
+}
+
+fn is_subtitle_like(text: &str) -> bool {
+    let trimmed = text.trim();
+    // Chinese number + separator: 一、xxx; 1. xxx
+    if let Some(first) = trimmed.chars().next() {
+        if first.is_ascii_digit() {
+            let rest = trimmed.trim_start_matches(|c: char| c.is_ascii_digit());
+            if rest.starts_with('.') || rest.starts_with('、') {
+                return true;
+            }
+        }
+    }
+    // Chinese number prefix + separator (single and multi-digit)
+    let cn_numbers = [
+        "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
+        "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
+        "三十", "四十", "五十", "六十", "七十", "八十", "九十",
+    ];
+    for num in cn_numbers {
+        if trimmed.starts_with(num) {
+            let rest = &trimmed[num.len()..];
+            if rest.starts_with('、') || rest.starts_with('，') || rest.starts_with(',') {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn stable_book_id(path: &str) -> String {
@@ -627,5 +763,139 @@ mod tests {
         assert_eq!(book.toc[1].chapter_index, Some(1), "second TOC item should map to chapter 1");
 
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn strip_href_fragment_removes_hash() {
+        assert_eq!(strip_href_fragment("ch1.xhtml#section1"), "ch1.xhtml");
+        assert_eq!(strip_href_fragment("ch1.xhtml"), "ch1.xhtml");
+        assert_eq!(strip_href_fragment("#fragment"), "");
+    }
+
+    #[test]
+    fn href_filename_strips_fragment_and_path() {
+        assert_eq!(href_filename("OEBPS/ch1.xhtml#section1"), "ch1.xhtml");
+        assert_eq!(href_filename("ch1.xhtml"), "ch1.xhtml");
+        assert_eq!(href_filename("OEBPS/ch1.xhtml"), "ch1.xhtml");
+    }
+
+    #[test]
+    fn build_href_index_matches_fragments() {
+        let spine = vec!["OEBPS/ch1.xhtml".to_string(), "OEBPS/ch2.xhtml".to_string()];
+        let index = build_href_index(&spine);
+
+        assert_eq!(index.get("ch1.xhtml"), Some(&0));
+        assert_eq!(index.get("ch2.xhtml"), Some(&1));
+    }
+
+    #[test]
+    fn epub_toc_with_fragment_hrefs_maps_correctly() {
+        let path = temp_path("epub");
+        let file = fs::File::create(&path).unwrap();
+        let mut zip = ZipWriter::new(file);
+        let options = FileOptions::default();
+
+        zip.start_file("META-INF/container.xml", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#,
+        )
+        .unwrap();
+
+        zip.start_file("OEBPS/content.opf", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="2.0" xmlns="http://www.idpf.org/2007/opf">
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+  </manifest>
+  <spine toc="ncx">
+    <itemref idref="ch1"/>
+    <itemref idref="ch2"/>
+  </spine>
+</package>"#,
+        )
+        .unwrap();
+
+        zip.start_file("OEBPS/toc.ncx", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/">
+  <navMap>
+    <navPoint id="np1"><navLabel><text>Chapter One</text></navLabel><content src="ch1.xhtml#intro"/></navPoint>
+    <navPoint id="np2"><navLabel><text>Chapter Two</text></navLabel><content src="ch2.xhtml#part1"/></navPoint>
+  </navMap>
+</ncx>"#,
+        )
+        .unwrap();
+
+        zip.start_file("OEBPS/ch1.xhtml", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p>Content one.</p></body></html>"#,
+        )
+        .unwrap();
+
+        zip.start_file("OEBPS/ch2.xhtml", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p>Content two.</p></body></html>"#,
+        )
+        .unwrap();
+
+        zip.finish().unwrap();
+
+        let mut adapter = CompatAdapter::new();
+        adapter.dispatch(Action::OpenBookSelected(path.to_string_lossy().to_string()));
+
+        let book = adapter.state().current_book.as_ref().unwrap();
+        assert!(book.toc.len() >= 2, "expected at least 2 TOC items, got {}", book.toc.len());
+        assert_eq!(book.toc[0].chapter_index, Some(0), "fragment href should map to chapter 0");
+        assert_eq!(book.toc[1].chapter_index, Some(1), "fragment href should map to chapter 1");
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn paragraph_kind_separator() {
+        assert_eq!(infer_paragraph_kind("***"), ParagraphKind::Separator);
+        assert_eq!(infer_paragraph_kind("---"), ParagraphKind::Separator);
+        assert_eq!(infer_paragraph_kind("* * *"), ParagraphKind::Separator);
+        assert_eq!(infer_paragraph_kind("————"), ParagraphKind::Separator);
+        assert_eq!(infer_paragraph_kind("＊＊＊"), ParagraphKind::Separator);
+    }
+
+    #[test]
+    fn paragraph_kind_quote() {
+        assert_eq!(infer_paragraph_kind("> 引用内容"), ParagraphKind::Quote);
+        assert_eq!(infer_paragraph_kind("「对话内容」"), ParagraphKind::Quote);
+        assert_eq!(infer_paragraph_kind("『引用文字』"), ParagraphKind::Quote);
+        assert_eq!(infer_paragraph_kind("\"引用段落\""), ParagraphKind::Quote);
+    }
+
+    #[test]
+    fn paragraph_kind_title() {
+        assert_eq!(infer_paragraph_kind("第1章 开始"), ParagraphKind::Title);
+        assert_eq!(infer_paragraph_kind("Chapter 1 Beginning"), ParagraphKind::Title);
+        assert_eq!(infer_paragraph_kind("Part 1"), ParagraphKind::Title);
+        assert_eq!(infer_paragraph_kind("序章"), ParagraphKind::Title);
+        assert_eq!(infer_paragraph_kind("终章 结局"), ParagraphKind::Title);
+    }
+
+    #[test]
+    fn paragraph_kind_subtitle() {
+        assert_eq!(infer_paragraph_kind("一、开篇"), ParagraphKind::Subtitle);
+        assert_eq!(infer_paragraph_kind("1. 小节"), ParagraphKind::Subtitle);
+        assert_eq!(infer_paragraph_kind("十二、总结"), ParagraphKind::Subtitle);
+    }
+
+    #[test]
+    fn paragraph_kind_body() {
+        assert_eq!(infer_paragraph_kind("这是一段普通的正文内容，足够长以避免被误判为标题。"), ParagraphKind::Body);
+        assert_eq!(infer_paragraph_kind("他说：今天天气真好。"), ParagraphKind::Body);
     }
 }

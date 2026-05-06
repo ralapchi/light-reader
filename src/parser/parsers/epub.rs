@@ -311,7 +311,8 @@ impl EpubParser {
                 Ok(Event::Text(ref e)) => {
                     if let Ok(text) = e.unescape() {
                         if text_indent && current_paragraph.is_empty() {
-                            current_paragraph.push_str("    ");
+                            // 注入缩进标记，由 build_chapter 解析
+                            current_paragraph.push_str("\x01INDENT\x01");
                             text_indent = false;
                         }
                         current_paragraph.push_str(&text);
@@ -341,8 +342,12 @@ impl EpubParser {
         let mut reader = Reader::from_str(html);
         reader.config_mut().trim_text(true);
 
-        let mut title = String::new();
-        let mut depth = 0;
+        let mut h_title = String::new();
+        let mut html_title = String::new();
+        let mut depth: u8 = 0;
+        let mut in_title_tag = false;
+        let mut in_class_title = false;
+        let mut class_title_depth: u8 = 0;
 
         let mut buffer = Vec::new();
 
@@ -351,13 +356,44 @@ impl EpubParser {
                 Ok(Event::Start(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
+
+                    // h1-h3 标签
                     if name.starts_with(&b"h1"[..]) || name.starts_with(&b"h2"[..]) || name.starts_with(&b"h3"[..]) {
+                        if depth == 0 {
+                            h_title.clear();
+                        }
                         depth += 1;
+                    }
+
+                    // <title> 标签
+                    if name.starts_with(&b"title"[..]) {
+                        in_title_tag = true;
+                        html_title.clear();
+                    }
+
+                    // class 包含 "title" 或 "heading" 的元素
+                    if depth == 0 && !in_class_title {
+                        for attr in e.attributes() {
+                            if let Ok(attr) = attr {
+                                if attr.key.as_ref() == b"class" {
+                                    if let Ok(val) = std::str::from_utf8(attr.value.as_ref()) {
+                                        if val.contains("title") || val.contains("heading") {
+                                            in_class_title = true;
+                                            class_title_depth = 1;
+                                            h_title.clear();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if in_class_title {
+                        class_title_depth += 1;
                     }
                 }
                 Ok(Event::End(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
+
                     if name.starts_with(&b"h1"[..]) || name.starts_with(&b"h2"[..]) || name.starts_with(&b"h3"[..]) {
                         if depth > 0 {
                             depth -= 1;
@@ -366,11 +402,31 @@ impl EpubParser {
                             }
                         }
                     }
+
+                    if name.starts_with(&b"title"[..]) {
+                        in_title_tag = false;
+                    }
+
+                    if in_class_title {
+                        class_title_depth = class_title_depth.saturating_sub(1);
+                        if class_title_depth == 0 {
+                            in_class_title = false;
+                            if !h_title.is_empty() {
+                                break;
+                            }
+                        }
+                    }
                 }
                 Ok(Event::Text(ref e)) => {
-                    if depth > 0 {
-                        if let Ok(text) = e.unescape() {
-                            title.push_str(&text);
+                    if let Ok(text) = e.unescape() {
+                        if depth > 0 {
+                            h_title.push_str(&text);
+                        }
+                        if in_title_tag {
+                            html_title.push_str(&text);
+                        }
+                        if in_class_title {
+                            h_title.push_str(&text);
                         }
                     }
                 }
@@ -380,7 +436,77 @@ impl EpubParser {
             buffer.clear();
         }
 
-        title.trim().to_string()
+        let result = if !h_title.is_empty() {
+            h_title.trim().to_string()
+        } else if !html_title.is_empty() {
+            html_title.trim().to_string()
+        } else {
+            String::new()
+        };
+
+        Self::clean_title(&result)
+    }
+
+    /// 清理标题：去除多余空白和编号前缀
+    fn clean_title(title: &str) -> String {
+        let cleaned: String = title.split_whitespace().collect::<Vec<&str>>().join(" ");
+        let trimmed = cleaned.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+
+        // 去除常见编号前缀
+        let prefixes = [
+            "第一章 ", "第二章 ", "第三章 ", "第四章 ", "第五章 ",
+            "第六章 ", "第七章 ", "第八章 ", "第九章 ", "第十章 ",
+            "第十一章 ", "第十二章 ", "第十三章 ", "第十四章 ", "第十五章 ",
+            "第十六章 ", "第十七章 ", "第十八章 ", "第十九章 ", "第二十章 ",
+            "Chapter ", "CHAPTER ", "CH ",
+        ];
+
+        for prefix in &prefixes {
+            if trimmed.starts_with(prefix) {
+                let rest = &trimmed[prefix.len()..];
+                // 跳过可能的数字和分隔符
+                let rest = rest.trim_start_matches(|c: char| c.is_ascii_digit());
+                let rest = rest.trim_start_matches(|c: char| c == ' ' || c == ':' || c == '.' || c == '-' || c == '–' || c == '—');
+                let rest = rest.trim();
+                if !rest.is_empty() {
+                    return rest.to_string();
+                }
+            }
+        }
+
+        // 数字+点号前缀：如 "1. 标题"
+        if let Some(pos) = trimmed.find(". ") {
+            let num_part = &trimmed[..pos];
+            if !num_part.is_empty() && num_part.chars().all(|c| c.is_ascii_digit()) {
+                let rest = trimmed[pos + 2..].trim();
+                if !rest.is_empty() {
+                    return rest.to_string();
+                }
+            }
+        }
+
+        trimmed.to_string()
+    }
+
+    /// 从扁平 TOC 列表构建 href → title 映射（用于优先使用 TOC 标题）
+    fn build_toc_title_map(toc: &[TocItem]) -> HashMap<String, String> {
+        let mut map = HashMap::new();
+        for item in toc {
+            if let Some(href) = &item.href {
+                // 去掉 fragment（# 后面的部分），只保留文件路径
+                let base_href = href.split('#').next().unwrap_or(href);
+                if !item.title.is_empty() {
+                    map.insert(base_href.to_string(), item.title.clone());
+                }
+            }
+            // 递归处理子项
+            let child_map = Self::build_toc_title_map(&item.children);
+            map.extend(child_map);
+        }
+        map
     }
 
     /// 解析 EPUB3 nav.xhtml 文件（Navigation Document）
@@ -717,6 +843,12 @@ impl BookParser for EpubParser {
             warnings.push("未找到结构化目录，使用 spine 顺序".to_string());
         }
 
+        // 构建 TOC href → title 映射，优先使用 TOC 标题
+        let toc_title_map = toc_items
+            .as_ref()
+            .map(|toc| Self::build_toc_title_map(toc))
+            .unwrap_or_default();
+
         let mut content = Vec::new();
         let mut chapter_titles = Vec::new();
         let mut spine_hrefs = Vec::new();
@@ -732,11 +864,17 @@ impl BookParser for EpubParser {
                     if !text_content.is_empty() {
                         content.push(text_content);
                         spine_hrefs.push(href.clone());
-                        let title = self.extract_title(&html_content);
-                        let chapter_title = if title.is_empty() {
-                            format!("章节 {}", content.len())
+
+                        // 优先使用 TOC 标题
+                        let chapter_title = if let Some(toc_title) = toc_title_map.get(href.as_str()) {
+                            toc_title.clone()
                         } else {
-                            title
+                            let title = self.extract_title(&html_content);
+                            if title.is_empty() {
+                                format!("章节 {}", content.len())
+                            } else {
+                                title
+                            }
                         };
                         chapter_titles.push(chapter_title);
                     } else {

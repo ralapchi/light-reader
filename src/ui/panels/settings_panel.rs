@@ -1,18 +1,24 @@
 use eframe::egui;
 
 use crate::app::Action;
-use crate::domain::app_state::AppState;
+use crate::app::actions::ReaderSettingUpdate;
+use crate::domain::reader_settings::ReaderSettings;
 use crate::domain::theme_kind::ThemeKind;
 use crate::ui::ThemeConfig;
 
+/// Lightweight read-only props for SettingsPanel, derived from AppState.
+pub struct SettingsPanelProps<'a> {
+    pub reader_settings: &'a ReaderSettings,
+}
+
 pub fn settings_panel(
     ctx: &egui::Context,
-    state: &AppState,
+    props: &SettingsPanelProps<'_>,
     theme: &ThemeConfig,
 ) -> Vec<Action> {
     let s = &theme.spacing;
     let t = &theme.typography;
-    let settings = &state.reader_settings;
+    let settings = props.reader_settings;
     let mut actions = Vec::new();
 
     egui::SidePanel::right("settings_panel")
@@ -43,34 +49,26 @@ pub fn settings_panel(
             egui::ScrollArea::vertical()
                 .id_salt("settings_scroll")
                 .show(ui, |ui| {
-                    // Theme section
-                    theme_section(ui, settings, theme, &mut actions);
+                    // 外观：主题、字体、字号
+                    appearance_section(ui, settings, theme, &mut actions);
                     ui.add_space(s.md);
                     ui.separator();
                     ui.add_space(s.md);
 
-                    // Typography section
+                    // 排版：行距、段距、正文宽度、侧边距
                     typography_section(ui, settings, theme, &mut actions);
                     ui.add_space(s.md);
                     ui.separator();
                     ui.add_space(s.md);
 
-                    // Layout section
-                    layout_section(ui, settings, theme, &mut actions);
+                    // 阅读行为：目录、状态栏、章节进度、启动恢复
+                    reading_behavior_section(ui, settings, theme, &mut actions);
                     ui.add_space(s.md);
                     ui.separator();
                     ui.add_space(s.md);
 
-                    // Behavior section
-                    behavior_section(ui, settings, theme, &mut actions);
-                    ui.add_space(s.md);
-                    ui.separator();
-                    ui.add_space(s.md);
-
-                    // Restore defaults
-                    if ui.button("恢复默认设置").clicked() {
-                        actions.push(Action::RestoreDefaultSettings);
-                    }
+                    // 高级：平滑滚动、窗口内边距、自动保存、恢复默认
+                    advanced_section(ui, settings, theme, &mut actions);
 
                     ui.add_space(s.lg);
                 });
@@ -79,7 +77,7 @@ pub fn settings_panel(
     actions
 }
 
-fn theme_section(
+fn appearance_section(
     ui: &mut egui::Ui,
     settings: &crate::domain::reader_settings::ReaderSettings,
     theme: &ThemeConfig,
@@ -89,20 +87,21 @@ fn theme_section(
     let t = &theme.typography;
 
     ui.label(
-        egui::RichText::new("主题")
+        egui::RichText::new("外观")
             .size(t.body_size)
             .strong(),
     );
     ui.add_space(s.xs);
 
+    // Theme
     ui.horizontal(|ui| {
+        ui.label("主题");
         let themes = [
             ("浅色", ThemeKind::Light),
             ("深色", ThemeKind::Dark),
             ("护眼", ThemeKind::Sepia),
             ("纸张", ThemeKind::Paper),
         ];
-
         for (label, kind) in themes {
             let is_selected = settings.theme == kind;
             let btn = ui.selectable_label(is_selected, label);
@@ -111,23 +110,6 @@ fn theme_section(
             }
         }
     });
-}
-
-fn typography_section(
-    ui: &mut egui::Ui,
-    settings: &crate::domain::reader_settings::ReaderSettings,
-    theme: &ThemeConfig,
-    actions: &mut Vec<Action>,
-) {
-    let s = &theme.spacing;
-    let t = &theme.typography;
-
-    ui.label(
-        egui::RichText::new("排版")
-            .size(t.body_size)
-            .strong(),
-    );
-    ui.add_space(s.xs);
 
     // Font size
     let mut font_size = settings.font_size;
@@ -137,40 +119,7 @@ fn typography_section(
             .add(egui::Slider::new(&mut font_size, 10.0..=32.0).suffix(" px"))
             .changed()
         {
-            actions.push(Action::ReaderSettingChanged(
-                "font_size".to_string(),
-                font_size.to_string(),
-            ));
-        }
-    });
-
-    // Line height
-    let mut line_height = settings.line_height;
-    ui.horizontal(|ui| {
-        ui.label("行距");
-        if ui
-            .add(egui::Slider::new(&mut line_height, 1.0..=3.0).step_by(0.1))
-            .changed()
-        {
-            actions.push(Action::ReaderSettingChanged(
-                "line_height".to_string(),
-                line_height.to_string(),
-            ));
-        }
-    });
-
-    // Paragraph spacing
-    let mut para_spacing = settings.paragraph_spacing;
-    ui.horizontal(|ui| {
-        ui.label("段间距");
-        if ui
-            .add(egui::Slider::new(&mut para_spacing, 0.0..=32.0).suffix(" px"))
-            .changed()
-        {
-            actions.push(Action::ReaderSettingChanged(
-                "paragraph_spacing".to_string(),
-                para_spacing.to_string(),
-            ));
+            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetFontSize(font_size)));
         }
     });
 
@@ -194,17 +143,14 @@ fn typography_section(
                 for (key, label) in font_options {
                     let is_selected = settings.font_family == key;
                     if ui.selectable_label(is_selected, label).clicked() && !is_selected {
-                        actions.push(Action::ReaderSettingChanged(
-                            "font_family".to_string(),
-                            key.to_string(),
-                        ));
+                        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetFontFamily(key.to_string())));
                     }
                 }
             });
     });
 }
 
-fn layout_section(
+fn typography_section(
     ui: &mut egui::Ui,
     settings: &crate::domain::reader_settings::ReaderSettings,
     theme: &ThemeConfig,
@@ -214,11 +160,35 @@ fn layout_section(
     let t = &theme.typography;
 
     ui.label(
-        egui::RichText::new("布局")
+        egui::RichText::new("排版")
             .size(t.body_size)
             .strong(),
     );
     ui.add_space(s.xs);
+
+    // Line height
+    let mut line_height = settings.line_height;
+    ui.horizontal(|ui| {
+        ui.label("行距");
+        if ui
+            .add(egui::Slider::new(&mut line_height, 1.0..=3.0).step_by(0.1))
+            .changed()
+        {
+            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetLineHeight(line_height)));
+        }
+    });
+
+    // Paragraph spacing
+    let mut para_spacing = settings.paragraph_spacing;
+    ui.horizontal(|ui| {
+        ui.label("段间距");
+        if ui
+            .add(egui::Slider::new(&mut para_spacing, 0.0..=32.0).suffix(" px"))
+            .changed()
+        {
+            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetParagraphSpacing(para_spacing)));
+        }
+    });
 
     // Content width
     let mut content_width = settings.content_width;
@@ -228,10 +198,7 @@ fn layout_section(
             .add(egui::Slider::new(&mut content_width, 400.0..=1200.0).suffix(" px"))
             .changed()
         {
-            actions.push(Action::ReaderSettingChanged(
-                "content_width".to_string(),
-                content_width.to_string(),
-            ));
+            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetContentWidth(content_width)));
         }
     });
 
@@ -243,30 +210,12 @@ fn layout_section(
             .add(egui::Slider::new(&mut side_margin, 0.0..=100.0).suffix(" px"))
             .changed()
         {
-            actions.push(Action::ReaderSettingChanged(
-                "side_margin".to_string(),
-                side_margin.to_string(),
-            ));
-        }
-    });
-
-    // Sidebar width
-    let mut toc_width = settings.toc_width;
-    ui.horizontal(|ui| {
-        ui.label("侧栏宽度");
-        if ui
-            .add(egui::Slider::new(&mut toc_width, 160.0..=480.0).suffix(" px"))
-            .changed()
-        {
-            actions.push(Action::ReaderSettingChanged(
-                "toc_width".to_string(),
-                toc_width.to_string(),
-            ));
+            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetSideMargin(side_margin)));
         }
     });
 }
 
-fn behavior_section(
+fn reading_behavior_section(
     ui: &mut egui::Ui,
     settings: &crate::domain::reader_settings::ReaderSettings,
     theme: &ThemeConfig,
@@ -276,7 +225,54 @@ fn behavior_section(
     let t = &theme.typography;
 
     ui.label(
-        egui::RichText::new("行为")
+        egui::RichText::new("阅读行为")
+            .size(t.body_size)
+            .strong(),
+    );
+    ui.add_space(s.xs);
+
+    // Show TOC sidebar
+    let mut show_toc = settings.show_toc;
+    if ui.checkbox(&mut show_toc, "显示目录侧栏").changed() {
+        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetShowToc(show_toc)));
+    }
+
+    // Show status bar
+    let mut show_status = settings.show_status_bar;
+    if ui.checkbox(&mut show_status, "显示状态栏").changed() {
+        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetShowStatusBar(show_status)));
+    }
+
+    // Show chapter progress
+    let mut show_chapter_progress = settings.show_chapter_progress;
+    if ui.checkbox(&mut show_chapter_progress, "显示章节进度").changed() {
+        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetShowChapterProgress(show_chapter_progress)));
+    }
+
+    // Restore last position on startup
+    let mut restore_last = settings.restore_last_position;
+    if ui.checkbox(&mut restore_last, "启动时恢复上次阅读位置").changed() {
+        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetRestoreLastPosition(restore_last)));
+    }
+
+    // Open last book on startup
+    let mut open_last = settings.open_last_book_on_startup;
+    if ui.checkbox(&mut open_last, "启动时恢复最近阅读").changed() {
+        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetOpenLastBookOnStartup(open_last)));
+    }
+}
+
+fn advanced_section(
+    ui: &mut egui::Ui,
+    settings: &crate::domain::reader_settings::ReaderSettings,
+    theme: &ThemeConfig,
+    actions: &mut Vec<Action>,
+) {
+    let s = &theme.spacing;
+    let t = &theme.typography;
+
+    ui.label(
+        egui::RichText::new("高级")
             .size(t.body_size)
             .strong(),
     );
@@ -284,87 +280,27 @@ fn behavior_section(
 
     // Auto save progress
     let mut auto_save = settings.auto_save_progress;
-    if ui
-        .checkbox(&mut auto_save, "自动保存进度")
-        .changed()
-    {
-        actions.push(Action::ReaderSettingChanged(
-            "auto_save_progress".to_string(),
-            auto_save.to_string(),
-        ));
-    }
-
-    // Restore last position on startup
-    let mut restore_last = settings.restore_last_position;
-    if ui
-        .checkbox(&mut restore_last, "启动时恢复上次阅读位置")
-        .changed()
-    {
-        actions.push(Action::ReaderSettingChanged(
-            "restore_last_position".to_string(),
-            restore_last.to_string(),
-        ));
-    }
-
-    // Show status bar
-    let mut show_status = settings.show_status_bar;
-    if ui
-        .checkbox(&mut show_status, "显示状态栏")
-        .changed()
-    {
-        actions.push(Action::ReaderSettingChanged(
-            "show_status_bar".to_string(),
-            show_status.to_string(),
-        ));
-    }
-
-    // Show TOC sidebar
-    let mut show_toc = settings.show_toc;
-    if ui
-        .checkbox(&mut show_toc, "显示目录侧栏")
-        .changed()
-    {
-        actions.push(Action::ReaderSettingChanged(
-            "show_toc".to_string(),
-            show_toc.to_string(),
-        ));
-    }
-
-    // Show chapter progress
-    let mut show_chapter_progress = settings.show_chapter_progress;
-    if ui
-        .checkbox(&mut show_chapter_progress, "显示章节进度")
-        .changed()
-    {
-        actions.push(Action::ReaderSettingChanged(
-            "show_chapter_progress".to_string(),
-            show_chapter_progress.to_string(),
-        ));
+    if ui.checkbox(&mut auto_save, "自动保存进度").changed() {
+        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetAutoSaveProgress(auto_save)));
     }
 
     // Smooth scroll
     let mut smooth_scroll = settings.smooth_scroll;
-    if ui
-        .checkbox(&mut smooth_scroll, "平滑滚动")
-        .changed()
-    {
-        actions.push(Action::ReaderSettingChanged(
-            "smooth_scroll".to_string(),
-            smooth_scroll.to_string(),
-        ));
+    if ui.checkbox(&mut smooth_scroll, "平滑滚动").changed() {
+        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetSmoothScroll(smooth_scroll)));
     }
 
-    // Open last book on startup
-    let mut open_last = settings.open_last_book_on_startup;
-    if ui
-        .checkbox(&mut open_last, "启动时恢复最近阅读")
-        .changed()
-    {
-        actions.push(Action::ReaderSettingChanged(
-            "open_last_book_on_startup".to_string(),
-            open_last.to_string(),
-        ));
-    }
+    // Sidebar width
+    let mut toc_width = settings.toc_width;
+    ui.horizontal(|ui| {
+        ui.label("侧栏宽度");
+        if ui
+            .add(egui::Slider::new(&mut toc_width, 160.0..=480.0).suffix(" px"))
+            .changed()
+        {
+            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetTocWidth(toc_width)));
+        }
+    });
 
     // Window padding
     let mut window_padding = settings.window_padding;
@@ -374,10 +310,14 @@ fn behavior_section(
             .add(egui::Slider::new(&mut window_padding, 0.0..=32.0).suffix(" px"))
             .changed()
         {
-            actions.push(Action::ReaderSettingChanged(
-                "window_padding".to_string(),
-                window_padding.to_string(),
-            ));
+            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetWindowPadding(window_padding)));
         }
     });
+
+    ui.add_space(s.md);
+
+    // Restore defaults
+    if ui.button("恢复默认设置").clicked() {
+        actions.push(Action::RestoreDefaultSettings);
+    }
 }

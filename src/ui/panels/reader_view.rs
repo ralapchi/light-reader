@@ -23,6 +23,7 @@ pub fn reader_view(
     theme: &ThemeConfig,
     selected_search_result: Option<&SearchResult>,
     search_keyword: Option<&str>,
+    case_sensitive: bool,
     status_message: &str,
 ) -> Vec<Action> {
     let s = &theme.spacing;
@@ -39,6 +40,7 @@ pub fn reader_view(
         .map(|r| r.paragraph_index);
 
     let mut scroll_to_highlight = false;
+    let next_chapter_clicked = Cell::new(false);
 
     // Use chapter_index in id_salt so scroll resets when switching chapters
     let scroll_id = format!("reader_chapter_{}", chapter_index);
@@ -126,37 +128,45 @@ pub fn reader_view(
                                 }
                                 ParagraphKind::Body => {
                                     let indent = paragraph.indent_level as f32 * s.lg;
-                                    ui.add_space(indent);
                                     let font_id = egui::FontId::new(font_size, font_family.clone());
 
-                                    if is_highlighted {
-                                        // Highlight search keyword within the paragraph
-                                        if let Some(keyword) = search_keyword {
-                                            let resp = render_text_with_highlight(
-                                                ui,
-                                                &paragraph.text,
-                                                keyword,
-                                                font_size,
-                                                line_height,
-                                                theme,
-                                                &font_family,
-                                            );
-                                            highlight_paragraph(ui, resp.rect, theme);
-                                        } else {
-                                            let resp = ui.label(
-                                                egui::RichText::new(&paragraph.text)
-                                                    .font(font_id.clone())
-                                                    .line_height(line_height),
-                                            );
-                                            highlight_paragraph(ui, resp.rect, theme);
+                                    let resp = ui.horizontal_wrapped(|ui| {
+                                        if indent > 0.0 {
+                                            ui.add_space(indent);
                                         }
-                                    } else {
-                                        ui.label(
-                                            egui::RichText::new(&paragraph.text)
-                                                .font(font_id)
-                                                .line_height(line_height),
-                                        );
+
+                                        if is_highlighted {
+                                            if let Some(keyword) = search_keyword {
+                                                render_text_with_highlight(
+                                                    ui,
+                                                    &paragraph.text,
+                                                    keyword,
+                                                    font_size,
+                                                    line_height,
+                                                    theme,
+                                                    &font_family,
+                                                    case_sensitive,
+                                                )
+                                            } else {
+                                                ui.label(
+                                                    egui::RichText::new(&paragraph.text)
+                                                        .font(font_id.clone())
+                                                        .line_height(line_height),
+                                                )
+                                            }
+                                        } else {
+                                            ui.label(
+                                                egui::RichText::new(&paragraph.text)
+                                                    .font(font_id)
+                                                    .line_height(line_height),
+                                            )
+                                        }
+                                    }).response;
+
+                                    if is_highlighted {
+                                        highlight_paragraph(ui, resp.rect, theme);
                                     }
+
                                     ui.add_space(settings.paragraph_spacing);
                                 }
                             }
@@ -178,8 +188,8 @@ pub fn reader_view(
                             }
                         }
 
-                        // Chapter end spacer
-                        chapter_end_spacer(ui, theme);
+                        // Chapter end spacer with next chapter button
+                        chapter_end_spacer(ui, theme, &next_chapter_clicked);
                     } else {
                         empty_chapter(ui, theme);
                     }
@@ -189,10 +199,13 @@ pub fn reader_view(
             });
         });
 
+    // Check if "next chapter" button was clicked
+    if next_chapter_clicked.get() {
+        actions.push(Action::NextChapter);
+    }
+
     // Track scroll offset with change detection
     let scroll_offset = scroll_output.state.offset.y;
-    let content_height = scroll_output.content_size.y;
-    let viewport_height = scroll_output.inner_rect.height();
 
     LAST_SCROLL_OFFSET.with(|last| {
         let prev = last.get();
@@ -201,27 +214,6 @@ pub fn reader_view(
             actions.push(Action::UpdateScrollOffset(scroll_offset));
         }
     });
-
-    // Auto-advance to next chapter when scrolled near bottom
-    // Only trigger if content is tall enough to scroll
-    if content_height > viewport_height {
-        let distance_to_bottom = content_height - scroll_offset - viewport_height;
-        thread_local! {
-            static REACHED_BOTTOM: Cell<bool> = const { Cell::new(false) };
-        }
-        if distance_to_bottom < 50.0 {
-            REACHED_BOTTOM.with(|reached| {
-                if !reached.get() {
-                    reached.set(true);
-                    actions.push(Action::NextChapter);
-                }
-            });
-        } else {
-            REACHED_BOTTOM.with(|reached| {
-                reached.set(false);
-            });
-        }
-    }
 
     // Render inline Toast if there's a status message
     if !status_message.is_empty() {
@@ -280,7 +272,7 @@ fn chapter_header(ui: &mut egui::Ui, title: &str, theme: &ThemeConfig) {
     ui.add_space(s.lg);
 }
 
-fn chapter_end_spacer(ui: &mut egui::Ui, theme: &ThemeConfig) {
+fn chapter_end_spacer(ui: &mut egui::Ui, theme: &ThemeConfig, next_chapter_clicked: &Cell<bool>) {
     let s = &theme.spacing;
     ui.add_space(s.xl * 3.0);
     ui.vertical_centered(|ui| {
@@ -289,6 +281,10 @@ fn chapter_end_spacer(ui: &mut egui::Ui, theme: &ThemeConfig) {
                 .size(theme.typography.caption_size)
                 .color(theme.colors.text_muted.to_color32()),
         );
+        ui.add_space(s.md);
+        if ui.button("下一章").clicked() {
+            next_chapter_clicked.set(true);
+        }
     });
     ui.add_space(s.xl * 2.0);
 }
@@ -345,17 +341,21 @@ fn render_text_with_highlight(
     line_height: Option<f32>,
     theme: &ThemeConfig,
     font_family: &egui::FontFamily,
+    case_sensitive: bool,
 ) -> egui::Response {
     let highlight_color = theme.colors.accent.to_color32().gamma_multiply(0.3);
     let font_id = egui::FontId::new(font_size, font_family.clone());
 
     ui.horizontal_wrapped(|ui| {
-        let lower_text = text.to_lowercase();
-        let lower_keyword = keyword.to_lowercase();
+        let (search_text, search_keyword) = if case_sensitive {
+            (text.to_string(), keyword.to_string())
+        } else {
+            (text.to_lowercase(), keyword.to_lowercase())
+        };
 
         let mut last_end = 0;
 
-        for (start, _) in lower_text.match_indices(&lower_keyword) {
+        for (start, _) in search_text.match_indices(&search_keyword) {
             if start > last_end {
                 ui.label(
                     egui::RichText::new(&text[last_end..start])

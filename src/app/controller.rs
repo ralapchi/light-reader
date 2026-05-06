@@ -71,7 +71,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
             reducer::reduce(adapter.state_mut(), action);
         }
         Action::ThemeChanged(_)
-        | Action::ReaderSettingChanged(_, _)
+        | Action::ReaderSettingChanged(_)
         | Action::RestoreDefaultSettings => {
             reducer::reduce(adapter.state_mut(), action);
             save_settings(adapter);

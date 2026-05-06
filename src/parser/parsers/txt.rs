@@ -8,6 +8,43 @@ use crate::parser::parsers::base::{BookParser, ParseResult};
 use std::fs::File;
 use std::io::Read;
 
+/// Skip a number prefix (Arabic digits or Chinese numerals), returning the remainder.
+fn skip_number(s: &str) -> &str {
+    // Arabic digits
+    if let Some(rest) = s.strip_prefix(|c: char| c.is_ascii_digit()) {
+        return rest.trim_start_matches(|c: char| c.is_ascii_digit());
+    }
+    // Chinese numerals
+    strip_cn_number_prefix(s).unwrap_or(s)
+}
+
+/// Strip a Chinese number prefix (一~九十九) from the input, returning the remainder.
+pub(crate) fn strip_cn_number_prefix(s: &str) -> Option<&str> {
+    let cn_units = ["二十", "三十", "四十", "五十", "六十", "七十", "八十", "九十", "十"];
+    let cn_digits = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
+
+    // Try unit + optional digit (e.g. "二十一", "十")
+    for unit in cn_units {
+        if let Some(rest) = s.strip_prefix(unit) {
+            for digit in cn_digits {
+                if let Some(r) = rest.strip_prefix(digit) {
+                    return Some(r);
+                }
+            }
+            return Some(rest);
+        }
+    }
+
+    // Single digit (e.g. "一")
+    for digit in cn_digits {
+        if let Some(rest) = s.strip_prefix(digit) {
+            return Some(rest);
+        }
+    }
+
+    None
+}
+
 /// TXT 解析器
 ///
 /// 负责解析 TXT 格式的书籍文件，支持自动章节检测
@@ -22,46 +59,58 @@ impl TxtParser {
     /// 检测行是否为章节标题
     fn is_chapter_line(line: &str) -> Option<String> {
         let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.len() > 100 {
+        if trimmed.is_empty() || trimmed.len() > 80 {
             return None;
         }
 
-        // 中文章节模式：第X章、第X回、第X节、第X卷
-        let cn_patterns = ["第", "章", "回", "节", "卷"];
-        if cn_patterns.iter().any(|p| trimmed.contains(p)) {
-            // 检查是否匹配常见模式
-            if trimmed.starts_with("第") && (trimmed.contains("章") || trimmed.contains("回") || trimmed.contains("节") || trimmed.contains("卷")) {
+        // 中文章节模式：第X章、第X回、第X节、第X卷（支持阿拉伯数字和中文数字）
+        if trimmed.starts_with("第") {
+            let after_first = &trimmed["第".len()..];
+            // Skip digits (Arabic or Chinese)
+            let rest = skip_number(after_first);
+            if !rest.is_empty() && rest == after_first {
+                // No number found after 第
+            } else if rest.starts_with("章") || rest.starts_with("回")
+                || rest.starts_with("节") || rest.starts_with("卷")
+            {
+                // After marker, remaining should be short title or empty (not body text)
+                let after_marker = &rest["章".len()..];
+                let after_trimmed = after_marker.trim();
+                if after_trimmed.is_empty() || after_trimmed.chars().count() <= 20 {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+
+        // 特殊中文章节词：序章、终章、番外、楔子、尾声、引子、后记、前言
+        let special_cn = ["序章", "终章", "番外", "楔子", "尾声", "引子", "后记", "前言", "序言", "序节"];
+        for word in special_cn {
+            if trimmed.starts_with(word) {
                 return Some(trimmed.to_string());
             }
         }
 
-        // 英文章节模式：Chapter X, CHAPTER X
+        // 英文章节模式：Chapter X, CHAPTER X, Part X, PART X
         let upper = trimmed.to_uppercase();
-        if upper.starts_with("CHAPTER ") {
+        if upper.starts_with("CHAPTER ") || upper.starts_with("PART ") {
             return Some(trimmed.to_string());
         }
 
-        // 数字开头模式：1. 标题、一、标题
+        // 数字开头模式：1. 标题、12、标题（阿拉伯数字 + 分隔符）
         if trimmed.len() >= 3 {
             let first_char = trimmed.chars().next().unwrap();
             if first_char.is_ascii_digit() {
-                // 匹配 "1." 或 "1、" 等模式
-                let rest = &trimmed[1..];
+                let rest = trimmed.trim_start_matches(|c: char| c.is_ascii_digit());
                 if rest.starts_with('.') || rest.starts_with('、') || rest.starts_with(' ') {
                     return Some(trimmed.to_string());
                 }
             }
         }
 
-        // 中文数字开头：一、二、三、...
-        let cn_numbers = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
-                          "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十"];
-        for num in cn_numbers {
-            if trimmed.starts_with(num) {
-                let rest = &trimmed[num.len()..];
-                if rest.starts_with('、') || rest.starts_with('，') || rest.starts_with(',') {
-                    return Some(trimmed.to_string());
-                }
+        // 中文数字开头：一、二、...、二十、三十...
+        if let Some(rest) = strip_cn_number_prefix(trimmed) {
+            if rest.starts_with('、') || rest.starts_with('，') || rest.starts_with(',') {
+                return Some(trimmed.to_string());
             }
         }
 

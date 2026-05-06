@@ -1,32 +1,41 @@
 use eframe::egui;
 
 use crate::app::Action;
-use crate::domain::app_state::AppState;
 use crate::domain::search_enums::SearchScope;
 use crate::domain::search_query::SearchQuery;
+use crate::domain::search_result::SearchResult;
 use crate::ui::ThemeConfig;
+
+/// Lightweight read-only props for SearchPanel, derived from AppState.
+pub struct SearchPanelProps<'a> {
+    pub current_query: &'a Option<SearchQuery>,
+    pub results: &'a [SearchResult],
+    pub selected_result_index: Option<usize>,
+}
 
 pub fn search_panel(
     ctx: &egui::Context,
-    state: &AppState,
+    props: &SearchPanelProps<'_>,
     theme: &ThemeConfig,
 ) -> Vec<Action> {
     let s = &theme.spacing;
     let t = &theme.typography;
     let mut actions = Vec::new();
-    let mut query_text = state
-        .search_state
+    let mut query_text = props
         .current_query
         .as_ref()
         .map(|q| q.keyword.clone())
         .unwrap_or_default();
-    let current_scope = state
-        .search_state
+    let current_scope = props
         .current_query
         .as_ref()
         .map(|q| q.scope.clone())
         .unwrap_or(SearchScope::CurrentChapter);
-    let case_sensitive = state.ui_state.search_case_sensitive;
+    let case_sensitive = props
+        .current_query
+        .as_ref()
+        .map(|q| q.case_sensitive)
+        .unwrap_or(false);
 
     egui::SidePanel::right("search_panel")
         .default_width(320.0)
@@ -108,7 +117,6 @@ pub fn search_panel(
             // Case sensitivity toggle
             let mut cs = case_sensitive;
             if ui.checkbox(&mut cs, "区分大小写").changed() {
-                actions.push(Action::ToggleSearchCaseSensitive);
                 actions.push(Action::SearchQueryChanged(SearchQuery {
                     keyword: query_text.clone(),
                     case_sensitive: cs,
@@ -121,11 +129,11 @@ pub fn search_panel(
             ui.add_space(s.sm);
 
             // Results
-            let results = &state.search_state.results;
-            let selected = state.search_state.selected_result_index;
+            let results = props.results;
+            let selected = props.selected_result_index;
 
             if results.is_empty() {
-                if state.search_state.current_query.is_some() && !query_text.is_empty() {
+                if props.current_query.is_some() && !query_text.is_empty() {
                     ui.add_space(s.xl);
                     ui.vertical_centered(|ui| {
                         ui.label(

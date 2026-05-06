@@ -1,3 +1,4 @@
+use log::warn;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::reading_progress::ReadingProgress;
@@ -17,11 +18,17 @@ pub fn load(book_id: &str) -> Option<ReadingProgress> {
         return None;
     }
     match std::fs::read_to_string(&path) {
-        Ok(data) => {
-            let file: ProgressFile = serde_json::from_str(&data).ok()?;
-            Some(file.progress)
+        Ok(data) => match serde_json::from_str::<ProgressFile>(&data) {
+            Ok(file) => Some(file.progress),
+            Err(e) => {
+                warn!("阅读进度文件解析失败 (book_id={}): {}", book_id, e);
+                None
+            }
+        },
+        Err(e) => {
+            warn!("阅读进度文件读取失败 (book_id={}): {}", book_id, e);
+            None
         }
-        Err(_) => None,
     }
 }
 
