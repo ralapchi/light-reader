@@ -231,12 +231,6 @@ fn reading_behavior_section(
     );
     ui.add_space(s.xs);
 
-    // Show TOC sidebar
-    let mut show_toc = settings.show_toc;
-    if ui.checkbox(&mut show_toc, "显示目录侧栏").changed() {
-        actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetShowToc(show_toc)));
-    }
-
     // Show status bar
     let mut show_status = settings.show_status_bar;
     if ui.checkbox(&mut show_status, "显示状态栏").changed() {

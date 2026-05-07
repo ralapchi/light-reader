@@ -9,6 +9,7 @@ use crate::domain::reader_settings::ReaderSettings;
 use crate::domain::search_result::SearchResult;
 use crate::ui::image_cache::ImageCache;
 use crate::ui::ThemeConfig;
+use crate::ui::theme::ThemeSpacing;
 use crate::ui::widgets::render_highlighted_text;
 
 const SCROLL_OFFSET_THRESHOLD: f32 = 1.0;
@@ -68,121 +69,41 @@ pub fn reader_view(
                         // Chapter header
                         chapter_header(ui, &chapter.title, theme);
 
-                        // Render image blocks from blocks if present
-                        let img_blocks: Vec<&crate::domain::chapter_block::InlineImageBlock> = chapter.blocks.iter()
-                            .filter_map(|b| match b {
-                                crate::domain::chapter_block::ChapterBlock::Image(img) => Some(img),
-                                _ => None,
-                            })
-                            .collect();
-                        if !img_blocks.is_empty() {
-                            for img in &img_blocks {
-                                render_image_block(ui, img, settings.content_width, s.sm, theme);
-                            }
-                        }
-
-                        for paragraph in &chapter.paragraphs {
-                            let is_highlighted = highlight_para_index == Some(paragraph.index);
-                            if is_highlighted && !scroll_to_highlight {
-                                scroll_to_highlight = true;
-                            }
-
-                            match paragraph.kind {
-                                ParagraphKind::Title => {
-                                    let title_font_id = egui::FontId::new(font_size * 1.5, font_family.clone());
-                                    let resp = ui.vertical_centered(|ui| {
-                                        ui.add_space(s.lg);
-                                        ui.label(
-                                            egui::RichText::new(&paragraph.text)
-                                                .font(title_font_id)
-                                                .strong()
-                                                .line_height(line_height.map(|l| l * 1.2)),
-                                        );
-                                        ui.add_space(s.sm);
-                                    }).response;
-                                    if is_highlighted {
-                                        highlight_paragraph(ui, resp.rect, theme);
-                                    }
-                                }
-                                ParagraphKind::Subtitle => {
-                                    let subtitle_font_id = egui::FontId::new(font_size * 1.15, font_family.clone());
-                                    let resp = ui.vertical_centered(|ui| {
-                                        ui.label(
-                                            egui::RichText::new(&paragraph.text)
-                                                .font(subtitle_font_id)
-                                                .weak()
-                                                .line_height(line_height),
-                                        );
-                                        ui.add_space(s.xs);
-                                    }).response;
-                                    if is_highlighted {
-                                        highlight_paragraph(ui, resp.rect, theme);
-                                    }
-                                }
-                                ParagraphKind::Quote => {
-                                    ui.add_space(s.sm);
-                                    ui.add_space(s.lg);
-                                    let quote_font_id = egui::FontId::new(font_size, font_family.clone());
-                                    let resp = ui.label(
-                                        egui::RichText::new(&paragraph.text)
-                                            .font(quote_font_id)
-                                            .italics()
-                                            .color(theme.colors.text_secondary.to_color32())
-                                            .line_height(line_height),
-                                    );
-                                    if is_highlighted {
-                                        highlight_paragraph(ui, resp.rect, theme);
-                                    }
-                                    ui.add_space(s.sm);
-                                }
-                                ParagraphKind::Separator => {
-                                    ui.add_space(s.md);
-                                    ui.separator();
-                                    ui.add_space(s.md);
-                                }
-                                ParagraphKind::Body => {
-                                    let indent = paragraph.indent_level as f32 * s.lg;
-                                    let font_id = egui::FontId::new(font_size, font_family.clone());
-
-                                    let resp = ui.horizontal_wrapped(|ui| {
-                                        if indent > 0.0 {
-                                            ui.add_space(indent);
+                        // Render content blocks in order (E-1: images interleaved with paragraphs)
+                        if !chapter.blocks.is_empty() {
+                            for block in &chapter.blocks {
+                                match block {
+                                    crate::domain::chapter_block::ChapterBlock::Paragraph(paragraph) => {
+                                        let is_highlighted = highlight_para_index == Some(paragraph.index);
+                                        if is_highlighted && !scroll_to_highlight {
+                                            scroll_to_highlight = true;
                                         }
-
-                                        if is_highlighted {
-                                            if let Some(keyword) = search_keyword {
-                                                render_highlighted_text(
-                                                    ui,
-                                                    &paragraph.text,
-                                                    keyword,
-                                                    font_size,
-                                                    Some(&font_id),
-                                                    line_height,
-                                                    theme,
-                                                    case_sensitive,
-                                                );
-                                            } else {
-                                                ui.label(
-                                                    egui::RichText::new(&paragraph.text)
-                                                        .font(font_id.clone())
-                                                        .line_height(line_height),
-                                                );
-                                            }
-                                        } else {
-                                            ui.label(
-                                                egui::RichText::new(&paragraph.text)
-                                                    .font(font_id)
-                                                    .line_height(line_height),
-                                            );
-                                        }
-                                    }).response;
-
-                                    if is_highlighted {
-                                        highlight_paragraph(ui, resp.rect, theme);
+                                        render_paragraph_block(
+                                            ui, paragraph, is_highlighted, font_size, &font_family,
+                                            line_height, settings, theme, case_sensitive, search_keyword, s,
+                                        );
                                     }
-
-                                    ui.add_space(settings.paragraph_spacing);
+                                    crate::domain::chapter_block::ChapterBlock::Image(img) => {
+                                        render_image_block(ui, img, settings.content_width, s.sm, theme);
+                                    }
+                                    crate::domain::chapter_block::ChapterBlock::Separator => {
+                                        ui.add_space(s.md);
+                                        ui.separator();
+                                        ui.add_space(s.md);
+                                    }
                                 }
+                            }
+                        } else {
+                            // Fallback to paragraphs-only rendering
+                            for paragraph in &chapter.paragraphs {
+                                let is_highlighted = highlight_para_index == Some(paragraph.index);
+                                if is_highlighted && !scroll_to_highlight {
+                                    scroll_to_highlight = true;
+                                }
+                                render_paragraph_block(
+                                    ui, paragraph, is_highlighted, font_size, &font_family,
+                                    line_height, settings, theme, case_sensitive, search_keyword, s,
+                                );
                             }
                         }
 
@@ -299,6 +220,107 @@ fn highlight_paragraph(ui: &mut egui::Ui, rect: egui::Rect, theme: &ThemeConfig)
         egui::CornerRadius::same(2),
         theme.colors.accent.to_color32(),
     );
+}
+
+/// Render a single paragraph block.
+fn render_paragraph_block(
+    ui: &mut egui::Ui,
+    paragraph: &crate::domain::paragraph::Paragraph,
+    is_highlighted: bool,
+    font_size: f32,
+    font_family: &egui::FontFamily,
+    line_height: Option<f32>,
+    settings: &ReaderSettings,
+    theme: &ThemeConfig,
+    case_sensitive: bool,
+    search_keyword: Option<&str>,
+    s: &ThemeSpacing,
+) {
+    match paragraph.kind {
+        ParagraphKind::Title => {
+            let title_font_id = egui::FontId::new(font_size * 1.5, font_family.clone());
+            let resp = ui.vertical_centered(|ui| {
+                ui.add_space(s.lg);
+                ui.label(
+                    egui::RichText::new(&paragraph.text)
+                        .font(title_font_id)
+                        .strong()
+                        .line_height(line_height.map(|l| l * 1.2)),
+                );
+                ui.add_space(s.sm);
+            }).response;
+            if is_highlighted {
+                highlight_paragraph(ui, resp.rect, theme);
+            }
+        }
+        ParagraphKind::Subtitle => {
+            let subtitle_font_id = egui::FontId::new(font_size * 1.15, font_family.clone());
+            let resp = ui.vertical_centered(|ui| {
+                ui.label(
+                    egui::RichText::new(&paragraph.text)
+                        .font(subtitle_font_id)
+                        .weak()
+                        .line_height(line_height),
+                );
+                ui.add_space(s.xs);
+            }).response;
+            if is_highlighted {
+                highlight_paragraph(ui, resp.rect, theme);
+            }
+        }
+        ParagraphKind::Quote => {
+            ui.add_space(s.sm);
+            ui.add_space(s.lg);
+            let quote_font_id = egui::FontId::new(font_size, font_family.clone());
+            let resp = ui.label(
+                egui::RichText::new(&paragraph.text)
+                    .font(quote_font_id)
+                    .italics()
+                    .color(theme.colors.text_secondary.to_color32())
+                    .line_height(line_height),
+            );
+            if is_highlighted {
+                highlight_paragraph(ui, resp.rect, theme);
+            }
+            ui.add_space(s.sm);
+        }
+        ParagraphKind::Separator => {
+            ui.add_space(s.md);
+            ui.separator();
+            ui.add_space(s.md);
+        }
+        ParagraphKind::Body => {
+            let indent = paragraph.indent_level as f32 * s.lg;
+            let font_id = egui::FontId::new(font_size, font_family.clone());
+            let resp = ui.horizontal_wrapped(|ui| {
+                if indent > 0.0 {
+                    ui.add_space(indent);
+                }
+                if is_highlighted {
+                    if let Some(keyword) = search_keyword {
+                        render_highlighted_text(
+                            ui, &paragraph.text, keyword, font_size, Some(&font_id),
+                            line_height, theme, case_sensitive,
+                        );
+                    } else {
+                        ui.label(
+                            egui::RichText::new(&paragraph.text)
+                                .font(font_id.clone()).line_height(line_height),
+                        );
+                    }
+                } else {
+                    ui.label(
+                        egui::RichText::new(&paragraph.text)
+                            .font(font_id).line_height(line_height),
+                    );
+                }
+            }).response;
+            if is_highlighted {
+                highlight_paragraph(ui, resp.rect, theme);
+            }
+            ui.add_space(settings.paragraph_spacing);
+        }
+    }
 }
 
 /// Render an inline image block from EPUB content.

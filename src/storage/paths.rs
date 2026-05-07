@@ -43,10 +43,6 @@ pub fn cover_cache_path(book_id: &str, ext: &str) -> PathBuf {
     app_data_dir().join("cache/covers").join(format!("{}.{}", book_id, ext))
 }
 
-pub fn cover_cache_dir() -> PathBuf {
-    app_data_dir().join("cache/covers")
-}
-
 pub fn image_cache_path(asset_id: &str, ext: &str) -> PathBuf {
     app_data_dir().join("cache/images").join(format!("{}.{}", asset_id, ext))
 }

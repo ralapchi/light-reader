@@ -86,6 +86,7 @@ pub fn empty_state_with_button(
     .inner
 }
 
+#[allow(dead_code)]
 pub fn loading_state(ui: &mut egui::Ui, title: &str, description: &str, theme: &ThemeConfig) {
     let s = &theme.spacing;
     ui.vertical_centered(|ui| {

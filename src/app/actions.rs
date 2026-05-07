@@ -62,6 +62,10 @@ pub enum Action {
     StatusMessageTimedOut,
     CloseSearchOrSettings,
 
+    // Reader UX
+    ToggleFloatingToc,
+    SetReaderToolbarVisible(bool),
+
     // Library actions (Phase 4)
     ImportBooksSelected(Vec<String>),
     ImportBookSucceeded(LibraryItem),

@@ -8,6 +8,7 @@ use crate::domain::recent_book_item::RecentBookItem;
 use crate::domain::toc_item::TocItem;
 use crate::ui::ThemeConfig;
 
+#[allow(dead_code)]
 pub fn left_sidebar(
     ctx: &egui::Context,
     active_tab: &LeftPanelTab,

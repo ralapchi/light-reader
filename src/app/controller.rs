@@ -148,7 +148,22 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
             }
         }
         Action::LibraryBookSelected(_) => {
-            reducer::reduce(adapter.state_mut(), action);
+            let book_id = {
+                reducer::reduce(adapter.state_mut(), action);
+                adapter.state().library_view_state.selected_book_id.clone()
+            };
+            // Set loading context from library item
+            if let Some(ref book_id) = book_id {
+                let ctx = adapter.state().library_index.items.iter()
+                    .find(|i| i.book_id == *book_id)
+                    .map(|item| (item.title.clone(), item.author.clone(), item.cover_cache_key.clone()));
+                if let Some((title, author, cover_key)) = ctx {
+                    let state = adapter.state_mut();
+                    state.ui_state.loading_book_title = Some(title);
+                    state.ui_state.loading_book_author = author;
+                    state.ui_state.loading_book_cover_key = cover_key;
+                }
+            }
             let path = adapter
                 .state()
                 .ui_state

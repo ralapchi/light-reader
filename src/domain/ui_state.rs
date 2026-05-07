@@ -15,6 +15,14 @@ pub struct UiState {
     pub last_attempted_path: Option<PathBuf>,
     pub focused_search_input: bool,
     pub sidebar_collapsed: bool,
+    /// 悬浮目录显隐
+    pub show_floating_toc: bool,
+    /// 阅读页顶部工具栏可见（hover reveal）
+    pub reader_toolbar_visible: bool,
+    /// LoadingBook 状态的书籍上下文
+    pub loading_book_title: Option<String>,
+    pub loading_book_author: Option<String>,
+    pub loading_book_cover_key: Option<String>,
 }
 
 impl Default for UiState {
@@ -29,6 +37,11 @@ impl Default for UiState {
             last_attempted_path: None,
             focused_search_input: false,
             sidebar_collapsed: false,
+            show_floating_toc: false,
+            reader_toolbar_visible: true, // visible by default for discoverability
+            loading_book_title: None,
+            loading_book_author: None,
+            loading_book_cover_key: None,
         }
     }
 }

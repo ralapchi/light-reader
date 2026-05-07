@@ -6,9 +6,9 @@ use crate::app::Action;
 use crate::ui::ThemeConfig;
 
 pub struct TopBarProps<'a> {
-    pub sidebar_collapsed: bool,
     pub chapter_index: usize,
     pub total_chapters: usize,
+    pub floating_toc_open: bool,
     pub status_message: &'a str,
 }
 
@@ -25,16 +25,15 @@ impl TopBar {
         let total_width = ui.available_width();
 
         ui.horizontal(|ui| {
-            // === Left section: sidebar toggle, open book ===
+            // === Left section: floating toc toggle, open book ===
             ui.add_space(s.sm);
 
-            let sidebar_open = !props.sidebar_collapsed;
-            let sidebar_label = if sidebar_open { "✕" } else { "☰" };
-            let sidebar_btn = egui::Button::new(sidebar_label)
-                .min_size(egui::vec2(32.0, 24.0))
-                .selected(sidebar_open);
-            if ui.add(sidebar_btn).clicked() {
-                actions.push(Action::ToggleSidebar);
+            // Floating TOC toggle — replaces old sidebar
+            let toc_btn = egui::Button::new("目录")
+                .min_size(egui::vec2(46.0, 24.0))
+                .selected(props.floating_toc_open);
+            if ui.add(toc_btn).clicked() {
+                actions.push(Action::ToggleFloatingToc);
             }
 
             ui.add_space(s.sm);
@@ -87,7 +86,7 @@ impl TopBar {
                 }
             });
 
-            // === Right section: search, bookmark, settings ===
+            // === Right section: toc, search, bookmark, settings ===
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // Status message (shown here only when status bar is hidden)
                 if !props.status_message.is_empty() {

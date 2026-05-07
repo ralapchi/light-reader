@@ -181,8 +181,15 @@ pub fn reduce(state: &mut AppState, action: Action) {
                 state.ui_state.show_settings_panel = false;
             }
         }
+        Action::ToggleFloatingToc => {
+            state.ui_state.show_floating_toc = !state.ui_state.show_floating_toc;
+        }
+        Action::SetReaderToolbarVisible(v) => {
+            state.ui_state.reader_toolbar_visible = v;
+        }
         Action::OpenLibraryHome => {
             state.ui_state.screen = ScreenKind::EmptyLibrary;
+            state.ui_state.show_floating_toc = false;
         }
         Action::LibraryBookSelected(book_id) => {
             state.library_view_state.selected_book_id = Some(book_id.clone());

@@ -5,15 +5,19 @@ use rfd::FileDialog;
 use crate::app::compat::CompatAdapter;
 use crate::app::Action;
 use crate::domain::enums::ScreenKind;
-use crate::ui::panels::left_sidebar::left_sidebar;
+use crate::ui::image_cache::ImageCache;
 use crate::ui::panels::library_page::library_page;
 use crate::ui::panels::reader_view::reader_view;
 use crate::ui::panels::search_panel::{search_panel, SearchPanelProps};
 use crate::ui::panels::settings_panel::{settings_panel, SettingsPanelProps};
 use crate::ui::panels::status_bar::status_bar;
 use crate::ui::panels::top_bar::{TopBar, TopBarProps};
-use crate::ui::widgets::{error_state, loading_state};
+use crate::ui::widgets::error_state;
 use crate::ui::{ThemeConfig, ThemeService};
+
+thread_local! {
+    static LOADING_IMG_CACHE: std::cell::RefCell<ImageCache> = std::cell::RefCell::new(ImageCache::new());
+}
 
 pub struct AppShell;
 
@@ -50,8 +54,20 @@ impl AppShell {
                 }
             }
             ScreenKind::LoadingBook => {
+                let state = shell.state();
+                let title = state.ui_state.loading_book_title.as_deref().unwrap_or("正在加载");
+                let author = state.ui_state.loading_book_author.as_deref();
+                let cover_key = state.ui_state.loading_book_cover_key.as_deref();
+                // Try to load cover for loading screen
+                let mut cover_tex = None;
+                if let Some(key) = cover_key {
+                    cover_tex = LOADING_IMG_CACHE.with(|c| c.borrow_mut().cover_texture(
+                        ctx, key, cover_key,
+                    ));
+                }
+                let _ = state;
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    loading_state(ui, "正在加载", "请稍候...", &config);
+                    book_loading_screen(ui, title, author, cover_tex.as_ref(), &config);
                 });
             }
             ScreenKind::Reader => {
@@ -169,7 +185,6 @@ impl AppShell {
                 .unwrap_or(&[]);
 
             let settings = &state.reader_settings;
-            let active_tab = &state.ui_state.left_panel_tab;
 
             let current_chapter_index = state
                 .reading_progress
@@ -179,33 +194,39 @@ impl AppShell {
 
             let mut actions: Vec<Action> = Vec::new();
 
-            // Left sidebar
-            if settings.show_toc && !state.ui_state.sidebar_collapsed {
-                let sidebar_actions = left_sidebar(
-                    ctx,
-                    active_tab,
-                    toc,
-                    &state.bookmarks,
-                    &state.recent_books,
-                    theme,
-                    settings.toc_width,
-                    current_chapter_index,
-                );
-                actions.extend(sidebar_actions);
+            // Hover toolbar: check mouse proximity to top edge
+            let mouse_y = ctx.input(|i| i.pointer.hover_pos().map(|p| p.y).unwrap_or(0.0));
+            let toolbar_should_show = mouse_y < 40.0 || state.ui_state.show_floating_toc
+                || state.ui_state.show_search_panel || state.ui_state.show_settings_panel;
+            if toolbar_should_show != state.ui_state.reader_toolbar_visible {
+                actions.push(Action::SetReaderToolbarVisible(toolbar_should_show));
+            }
+            let toolbar_visible = state.ui_state.reader_toolbar_visible || toolbar_should_show;
+
+            // Top bar (hover reveal, floating overlay — doesn't push content)
+            if toolbar_visible {
+                let top_bar_props = TopBarProps {
+                    chapter_index: current_chapter_index,
+                    total_chapters: chapters.len(),
+                    floating_toc_open: state.ui_state.show_floating_toc,
+                    status_message: if settings.show_status_bar { "" } else { &state.status_message },
+                };
+                let available = ctx.content_rect();
+                egui::Area::new("top_bar_overlay".into())
+                    .fixed_pos(egui::pos2(0.0, 0.0))
+                    .order(egui::Order::Middle)
+                    .show(ctx, |ui| {
+                        ui.set_max_width(available.width());
+                        let bar_actions = TopBar::show(ui, &top_bar_props, theme);
+                        actions.extend(bar_actions);
+                    });
             }
 
-            // Top bar
-            let top_bar_props = TopBarProps {
-                sidebar_collapsed: state.ui_state.sidebar_collapsed,
-                chapter_index: current_chapter_index,
-                total_chapters: chapters.len(),
-                // Show status message in top bar only when status bar is hidden
-                status_message: if settings.show_status_bar { "" } else { &state.status_message },
-            };
-            egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
-                let bar_actions = TopBar::show(ui, &top_bar_props, theme);
-                actions.extend(bar_actions);
-            });
+            // Floating TOC overlay
+            if state.ui_state.show_floating_toc {
+                let toc_actions = floating_toc_panel(ctx, toc, current_chapter_index, theme);
+                actions.extend(toc_actions);
+            }
 
             // Reader content
             let selected_search_result = state
@@ -289,6 +310,118 @@ impl AppShell {
             shell.dispatch(action);
         }
     }
+}
+
+/// Floating TOC overlay panel.
+fn floating_toc_panel(
+    ctx: &egui::Context,
+    toc: &[crate::domain::toc_item::TocItem],
+    current_chapter_index: usize,
+    theme: &ThemeConfig,
+) -> Vec<Action> {
+    let mut actions = Vec::new();
+    egui::Window::new("目录")
+        .collapsible(false)
+        .resizable(true)
+        .default_width(260.0)
+        .anchor(egui::Align2::LEFT_TOP, [16.0, 48.0])
+        .show(ctx, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for item in toc {
+                    render_floating_toc_item(ui, item, theme, &mut actions, 0, current_chapter_index);
+                }
+            });
+        });
+    actions
+}
+
+fn render_floating_toc_item(
+    ui: &mut egui::Ui,
+    item: &crate::domain::toc_item::TocItem,
+    theme: &ThemeConfig,
+    actions: &mut Vec<Action>,
+    depth: u8,
+    current_chapter_index: usize,
+) {
+    let indent = depth as f32 * 12.0;
+    let is_current = item.chapter_index == Some(current_chapter_index);
+    let label = if let Some(idx) = item.chapter_index {
+        format!("{}. {}", idx + 1, item.title)
+    } else {
+        item.title.clone()
+    };
+    let text = if is_current {
+        egui::RichText::new(label).strong().color(theme.colors.accent.to_color32())
+    } else {
+        egui::RichText::new(label)
+    };
+    ui.horizontal(|ui| {
+        ui.add_space(indent);
+        if ui.selectable_label(is_current, text).clicked() {
+            if let Some(idx) = item.chapter_index {
+                actions.push(Action::GoToChapter(idx));
+                actions.push(Action::ToggleFloatingToc); // close after jump
+            }
+        }
+    });
+    for child in &item.children {
+        render_floating_toc_item(ui, child, theme, actions, depth + 1, current_chapter_index);
+    }
+}
+
+/// Upgraded loading screen with book cover, title, author and spinner.
+fn book_loading_screen(
+    ui: &mut egui::Ui,
+    title: &str,
+    author: Option<&str>,
+    cover_texture: Option<&egui::TextureHandle>,
+    theme: &ThemeConfig,
+) {
+    let s = &theme.spacing;
+    ui.vertical_centered(|ui| {
+        ui.add_space(s.xl * 3.0);
+
+        // Cover area
+        let cover_size = egui::Vec2::new(160.0, 210.0);
+        let cover_rect = egui::Rect::from_min_size(ui.next_widget_position(), cover_size);
+        let (_r, _resp) = ui.allocate_exact_size(cover_size, egui::Sense::hover());
+        if ui.is_rect_visible(cover_rect) {
+            let painter = ui.painter_at(cover_rect);
+            if let Some(tex) = cover_texture {
+                painter.image(tex.id(), cover_rect,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE);
+            } else {
+                painter.rect_filled(cover_rect, egui::CornerRadius::same(6),
+                    theme.colors.panel_bg.to_color32());
+                painter.rect_stroke(cover_rect, egui::CornerRadius::same(6),
+                    egui::Stroke::new(1.0, theme.colors.border_subtle.to_color32()),
+                    egui::StrokeKind::Inside);
+            }
+        }
+
+        ui.add_space(s.lg);
+
+        // Title
+        ui.label(egui::RichText::new(title).size(theme.typography.body_size).strong());
+        ui.add_space(s.xxs);
+
+        // Author
+        if let Some(a) = author {
+            ui.label(egui::RichText::new(a).size(theme.typography.caption_size)
+                .color(theme.colors.text_secondary.to_color32()));
+        }
+
+        ui.add_space(s.lg);
+
+        // Spinner
+        ui.add(egui::Spinner::new().size(32.0));
+        ui.add_space(s.sm);
+        ui.label(egui::RichText::new("正在打开...").size(theme.typography.caption_size)
+            .color(theme.colors.text_muted.to_color32()));
+
+        ui.add_space(s.xl * 4.0);
+    });
 }
 
 #[cfg(test)]

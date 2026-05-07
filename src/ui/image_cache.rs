@@ -76,6 +76,7 @@ impl ImageCache {
     }
 
     /// Clear all cached textures (e.g., on memory pressure or book close).
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.textures.clear();
     }
