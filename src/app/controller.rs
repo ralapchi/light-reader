@@ -72,6 +72,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
         }
         Action::ThemeChanged(_)
         | Action::ReaderSettingChanged(_)
+        | Action::UpdateReaderSetting(_)
         | Action::RestoreDefaultSettings => {
             reducer::reduce(adapter.state_mut(), action);
             save_settings(adapter);
@@ -86,10 +87,21 @@ fn after_book_opened(adapter: &mut CompatAdapter) {
         Some(book) => book.id.clone(),
         None => return,
     };
+    let chapter_count = state.current_book.as_ref().map(|b| b.chapters.len()).unwrap_or(0);
 
     if let Some(progress) = storage::progress_store::load(&book_id) {
         adapter.state_mut().total_read_seconds_at_session_start = progress.total_read_seconds;
         adapter.state_mut().reading_progress = Some(progress);
+    } else {
+        // T13: 进度文件损坏，回退到章节开头并提示用户
+        if chapter_count > 0 {
+            let state = adapter.state_mut();
+            let is_initial_message = state.status_message_set_at.is_none();
+            if state.status_message.is_empty() || is_initial_message {
+                state.status_message = "上次阅读进度无法恢复，已从开头开始阅读".to_string();
+                state.status_message_set_at = Some(chrono::Utc::now().to_rfc3339());
+            }
+        }
     }
 
     let bookmarks = storage::bookmark_store::load(&book_id);

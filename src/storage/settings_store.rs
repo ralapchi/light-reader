@@ -49,14 +49,23 @@ pub fn load() -> SettingsFile {
     }
     match std::fs::read_to_string(&path) {
         Ok(data) => match serde_json::from_str::<SettingsFile>(&data) {
-            Ok(file) => file,
+            Ok(file) => {
+                // T12: 版本检查
+                if file.version != SETTINGS_VERSION {
+                    warn!(
+                        "设置文件版本不匹配: 期望 {}，实际 {}，尝试兼容读取",
+                        SETTINGS_VERSION, file.version
+                    );
+                }
+                file
+            }
             Err(e) => {
-                warn!("设置文件解析失败，使用默认设置: {}", e);
+                warn!("设置文件解析失败: {}，回退到默认设置", e);
                 SettingsFile::default()
             }
         },
         Err(e) => {
-            warn!("设置文件读取失败，使用默认设置: {}", e);
+            warn!("设置文件读取失败: {}，回退到默认设置", e);
             SettingsFile::default()
         }
     }

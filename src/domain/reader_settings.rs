@@ -22,6 +22,7 @@ pub struct ReaderSettings {
     pub open_last_book_on_startup: bool,
     pub restore_last_position: bool,
     pub window_padding: f32,
+    pub auto_page_turn: bool,
 }
 
 impl Default for ReaderSettings {
@@ -44,6 +45,7 @@ impl Default for ReaderSettings {
             open_last_book_on_startup: true,
             restore_last_position: true,
             window_padding: 8.0,
+            auto_page_turn: false,
         }
     }
 }

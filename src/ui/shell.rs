@@ -209,118 +209,137 @@ impl AppShell {
     }
 
     fn reader_layout(shell: &mut CompatAdapter, ctx: &egui::Context, theme: &ThemeConfig) {
-        let state = shell.state();
+        // Collect all panel actions inside a borrow scope to avoid cloning chapters/toc
+        let pending_actions = {
+            let state = shell.state();
 
-        let chapters = state
-            .current_book
-            .as_ref()
-            .map(|b| b.chapters.clone())
-            .unwrap_or_default();
-        let toc = state
-            .current_book
-            .as_ref()
-            .map(|b| b.toc.clone())
-            .unwrap_or_default();
-        let settings = &state.reader_settings;
-        let active_tab = &state.ui_state.left_panel_tab;
+            // Borrow (not clone) chapters and toc
+            let chapters = state
+                .current_book
+                .as_ref()
+                .map(|b| b.chapters.as_slice())
+                .unwrap_or(&[]);
+            let toc = state
+                .current_book
+                .as_ref()
+                .map(|b| b.toc.as_slice())
+                .unwrap_or(&[]);
 
-        let current_chapter_index = state
-            .reading_progress
-            .as_ref()
-            .map(|p| p.chapter_index)
-            .unwrap_or(0);
+            let settings = &state.reader_settings;
+            let active_tab = &state.ui_state.left_panel_tab;
 
-        let mut pending_actions: Vec<Action> = Vec::new();
-
-        // Left sidebar
-        if settings.show_toc && !state.ui_state.sidebar_collapsed {
-            let sidebar_actions = left_sidebar(
-                ctx,
-                active_tab,
-                &toc,
-                &state.bookmarks,
-                &state.recent_books,
-                theme,
-                settings.toc_width,
-                current_chapter_index,
-            );
-            pending_actions.extend(sidebar_actions);
-        }
-
-        // Top bar
-        let top_bar_props = TopBarProps {
-            sidebar_collapsed: state.ui_state.sidebar_collapsed,
-            chapter_index: current_chapter_index,
-            total_chapters: chapters.len(),
-        };
-        egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
-            let actions = TopBar::show(ui, &top_bar_props, theme);
-            pending_actions.extend(actions);
-        });
-
-        // Reader content
-        let selected_search_result = state
-            .search_state
-            .selected_result_index
-            .and_then(|idx| state.search_state.results.get(idx));
-        let search_keyword = state
-            .search_state
-            .current_query
-            .as_ref()
-            .map(|q| q.keyword.as_str());
-        let case_sensitive = state
-            .search_state
-            .current_query
-            .as_ref()
-            .map(|q| q.case_sensitive)
-            .unwrap_or(false);
-        let status_message = state.status_message.clone();
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let actions = reader_view(ui, &chapters, current_chapter_index, settings, theme, selected_search_result, search_keyword, case_sensitive, &status_message);
-            pending_actions.extend(actions);
-        });
-
-        // Status bar
-        if settings.show_status_bar {
-            let progress = state
+            let current_chapter_index = state
                 .reading_progress
                 .as_ref()
-                .map(|p| p.progress_percent)
-                .unwrap_or(0.0);
-            let content_len = chapters.len();
-            let chapter_pos = if content_len > 0 {
-                format!("{}/{}", current_chapter_index + 1, content_len)
-            } else {
-                String::new()
-            };
-            let char_count = chapters
-                .get(current_chapter_index)
-                .map(|c| c.char_count)
+                .map(|p| p.chapter_index)
                 .unwrap_or(0);
-            egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
-                status_bar(ui, progress, &chapter_pos, char_count, theme);
+
+            let mut actions: Vec<Action> = Vec::new();
+
+            // Left sidebar
+            if settings.show_toc && !state.ui_state.sidebar_collapsed {
+                let sidebar_actions = left_sidebar(
+                    ctx,
+                    active_tab,
+                    toc,
+                    &state.bookmarks,
+                    &state.recent_books,
+                    theme,
+                    settings.toc_width,
+                    current_chapter_index,
+                );
+                actions.extend(sidebar_actions);
+            }
+
+            // Top bar
+            let top_bar_props = TopBarProps {
+                sidebar_collapsed: state.ui_state.sidebar_collapsed,
+                chapter_index: current_chapter_index,
+                total_chapters: chapters.len(),
+                // Show status message in top bar only when status bar is hidden
+                status_message: if settings.show_status_bar { "" } else { &state.status_message },
+            };
+            egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
+                let bar_actions = TopBar::show(ui, &top_bar_props, theme);
+                actions.extend(bar_actions);
             });
-        }
 
-        // Search panel (overlay on right side)
-        if state.ui_state.show_search_panel {
-            let search_props = SearchPanelProps {
-                current_query: &state.search_state.current_query,
-                results: &state.search_state.results,
-                selected_result_index: state.search_state.selected_result_index,
-            };
-            let actions = search_panel(ctx, &search_props, theme);
-            pending_actions.extend(actions);
-        }
+            // Reader content
+            let selected_search_result = state
+                .search_state
+                .selected_result_index
+                .and_then(|idx| state.search_state.results.get(idx));
+            let search_keyword = state
+                .search_state
+                .current_query
+                .as_ref()
+                .map(|q| q.keyword.as_str());
+            let case_sensitive = state
+                .search_state
+                .current_query
+                .as_ref()
+                .map(|q| q.case_sensitive)
+                .unwrap_or(false);
+            let status_message: &str = &state.status_message;
 
-        // Settings panel (overlay on right side)
-        if state.ui_state.show_settings_panel {
-            let settings_props = SettingsPanelProps {
-                reader_settings: &state.reader_settings,
-            };
-            let actions = settings_panel(ctx, &settings_props, theme);
-            pending_actions.extend(actions);
-        }
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let reader_actions = reader_view(
+                    ui,
+                    chapters,
+                    current_chapter_index,
+                    settings,
+                    theme,
+                    selected_search_result,
+                    search_keyword,
+                    case_sensitive,
+                );
+                actions.extend(reader_actions);
+            });
+
+            // Status bar
+            if settings.show_status_bar {
+                let progress = state
+                    .reading_progress
+                    .as_ref()
+                    .map(|p| p.progress_percent)
+                    .unwrap_or(0.0);
+                let chapter_pos = if !chapters.is_empty() {
+                    format!("{}/{}", current_chapter_index + 1, chapters.len())
+                } else {
+                    String::new()
+                };
+                let char_count = chapters
+                    .get(current_chapter_index)
+                    .map(|c| c.char_count)
+                    .unwrap_or(0);
+
+                egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
+                    status_bar(ui, progress, &chapter_pos, char_count, status_message, theme);
+                });
+            }
+
+            // Search panel (overlay on right side)
+            if state.ui_state.show_search_panel {
+                let search_props = SearchPanelProps {
+                    current_query: &state.search_state.current_query,
+                    results: &state.search_state.results,
+                    selected_result_index: state.search_state.selected_result_index,
+                };
+                let search_actions = search_panel(ctx, &search_props, theme);
+                actions.extend(search_actions);
+            }
+
+            // Settings panel (overlay on right side)
+            if state.ui_state.show_settings_panel {
+                let settings_props = SettingsPanelProps {
+                    reader_settings: settings,
+                };
+                let settings_actions = settings_panel(ctx, &settings_props, theme);
+                actions.extend(settings_actions);
+            }
+
+            actions
+        }; // state borrow is released
 
         // Dispatch all collected actions
         for action in pending_actions {

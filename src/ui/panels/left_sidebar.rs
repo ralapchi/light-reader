@@ -139,7 +139,7 @@ pub fn left_sidebar(
     // Check if panel was resized and emit width change action
     let new_width = panel_response.response.rect.width();
     if (new_width - current_toc_width).abs() > 1.0 {
-        actions.push(Action::ReaderSettingChanged(
+        actions.push(Action::UpdateReaderSetting(
             ReaderSettingUpdate::SetTocWidth(new_width),
         ));
     }

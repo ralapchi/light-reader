@@ -5,10 +5,11 @@ use rfd::FileDialog;
 use crate::app::Action;
 use crate::ui::ThemeConfig;
 
-pub struct TopBarProps {
+pub struct TopBarProps<'a> {
     pub sidebar_collapsed: bool,
     pub chapter_index: usize,
     pub total_chapters: usize,
+    pub status_message: &'a str,
 }
 
 pub struct TopBar;
@@ -81,7 +82,14 @@ impl TopBar {
 
             // === Right section: search, bookmark, settings ===
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(s.sm);
+                // Status message (shown here only when status bar is hidden)
+                if !props.status_message.is_empty() {
+                    ui.label(
+                        egui::RichText::new(props.status_message)
+                            .size(theme.typography.caption_size),
+                    );
+                    ui.add_space(s.sm);
+                }
 
                 if ui.button("设置").clicked() {
                     actions.push(Action::ToggleSettingsPanel);

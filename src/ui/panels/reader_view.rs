@@ -25,7 +25,6 @@ pub fn reader_view(
     selected_search_result: Option<&SearchResult>,
     search_keyword: Option<&str>,
     case_sensitive: bool,
-    status_message: &str,
 ) -> Vec<Action> {
     let s = &theme.spacing;
     let max_width = settings.content_width;
@@ -216,43 +215,7 @@ pub fn reader_view(
         }
     });
 
-    // Render inline Toast if there's a status message
-    if !status_message.is_empty() {
-        render_toast(ui, status_message, theme);
-    }
-
     actions
-}
-
-fn render_toast(ui: &mut egui::Ui, message: &str, theme: &ThemeConfig) {
-    let toast_width = 280.0;
-    let toast_margin = 16.0;
-
-    egui::Area::new(egui::Id::new("reader_toast"))
-        .anchor(egui::Align2::RIGHT_BOTTOM, [-toast_margin, -toast_margin])
-        .show(ui.ctx(), |ui| {
-            egui::Frame::new()
-                .fill(theme.colors.panel_bg.to_color32())
-                .stroke(egui::Stroke::new(1.0, theme.colors.border_subtle.to_color32()))
-                .corner_radius(egui::CornerRadius::same(theme.radius.card as u8))
-                .inner_margin(egui::Margin::symmetric(16, 10))
-                .shadow(egui::epaint::Shadow {
-                    offset: [0, 2],
-                    blur: 8,
-                    spread: 0,
-                    color: egui::Color32::from_black_alpha(32),
-                })
-                .show(ui, |ui| {
-                    ui.set_max_width(toast_width);
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new(message)
-                                .size(theme.typography.body_size)
-                                .color(theme.colors.text_primary.to_color32()),
-                        );
-                    });
-                });
-        });
 }
 
 fn chapter_header(ui: &mut egui::Ui, title: &str, theme: &ThemeConfig) {

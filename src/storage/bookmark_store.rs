@@ -20,14 +20,23 @@ pub fn load(book_id: &str) -> Vec<Bookmark> {
     }
     match std::fs::read_to_string(&path) {
         Ok(data) => match serde_json::from_str::<BookmarksFile>(&data) {
-            Ok(file) => file.items,
+            Ok(file) => {
+                // T12: 版本检查
+                if file.version != BOOKMARKS_VERSION {
+                    warn!(
+                        "书签文件版本不匹配 (book_id={}): 期望 {}，实际 {}，尝试兼容读取",
+                        book_id, BOOKMARKS_VERSION, file.version
+                    );
+                }
+                file.items
+            }
             Err(e) => {
-                warn!("书签文件解析失败 (book_id={}): {}", book_id, e);
+                warn!("书签文件解析失败 (book_id={}): {}，返回空书签列表", book_id, e);
                 Vec::new()
             }
         },
         Err(e) => {
-            warn!("书签文件读取失败 (book_id={}): {}", book_id, e);
+            warn!("书签文件读取失败 (book_id={}): {}，返回空书签列表", book_id, e);
             Vec::new()
         }
     }

@@ -7,6 +7,7 @@ pub fn status_bar(
     progress: f32,
     chapter_pos: &str,
     char_count: usize,
+    status_message: &str,
     theme: &ThemeConfig,
 ) {
     let s = &theme.spacing;
@@ -22,6 +23,18 @@ pub fn status_bar(
             ui.separator();
             ui.add_space(s.lg);
             ui.label(format!("{} 字", char_count));
+        }
+
+        // Status message (right-aligned)
+        if !status_message.is_empty() {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(s.sm);
+                ui.label(
+                    egui::RichText::new(status_message)
+                        .color(theme.colors.text_secondary.to_color32()),
+                );
+                ui.add_space(s.sm);
+            });
         }
     });
 }

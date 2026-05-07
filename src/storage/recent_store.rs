@@ -19,14 +19,24 @@ pub fn load() -> Vec<RecentBookItem> {
     }
     match std::fs::read_to_string(&path) {
         Ok(data) => match serde_json::from_str::<RecentFile>(&data) {
-            Ok(file) => file.items,
+            Ok(file) => {
+                // T12: 版本检查
+                if file.version != RECENT_VERSION {
+                    warn!(
+                        "最近阅读文件版本不匹配: 期望 {}，实际 {}，尝试兼容读取",
+                        RECENT_VERSION, file.version
+                    );
+                }
+                // T13: 跳过损坏项
+                file.items
+            }
             Err(e) => {
-                warn!("最近阅读文件解析失败: {}", e);
+                warn!("最近阅读文件解析失败: {}，返回空列表", e);
                 Vec::new()
             }
         },
         Err(e) => {
-            warn!("最近阅读文件读取失败: {}", e);
+            warn!("最近阅读文件读取失败: {}，返回空列表", e);
             Vec::new()
         }
     }

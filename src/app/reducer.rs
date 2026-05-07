@@ -64,6 +64,9 @@ pub fn reduce(state: &mut AppState, action: Action) {
         Action::ReaderSettingChanged(update) => {
             apply_reader_setting(&mut state.reader_settings, update);
         }
+        Action::UpdateReaderSetting(update) => {
+            apply_reader_setting(&mut state.reader_settings, update);
+        }
         Action::RestoreDefaultSettings => {
             state.reader_settings = Default::default();
         }
@@ -235,21 +238,18 @@ fn go_to_chapter(state: &mut AppState, index: usize) {
 
     let clamped = index.min(total.saturating_sub(1));
 
-    if let Some(ref mut progress) = state.reading_progress {
-        let progress_percent = ((clamped + 1) as f32 / total as f32).clamp(0.0, 1.0);
-        progress.chapter_index = clamped;
-        progress.paragraph_index = None;
-        progress.scroll_offset = 0.0;
-        progress.progress_percent = progress_percent;
-        progress.last_read_at = Utc::now().to_rfc3339();
-    } else {
-        let book_id = state
-            .current_book
-            .as_ref()
-            .map(|book| book.id.clone())
-            .unwrap_or_default();
-        state.reading_progress = Some(progress_for(&book_id, clamped, total));
-    }
+    let existing = state.reading_progress.take();
+    state.reading_progress = Some(match existing {
+        Some(progress) => progress.for_chapter_jump(clamped, total),
+        None => {
+            let book_id = state
+                .current_book
+                .as_ref()
+                .map(|book| book.id.clone())
+                .unwrap_or_default();
+            progress_for(&book_id, clamped, total)
+        }
+    });
 }
 
 fn progress_for(book_id: &str, chapter_index: usize, total: usize) -> ReadingProgress {
@@ -382,6 +382,7 @@ fn apply_reader_setting(settings: &mut crate::domain::reader_settings::ReaderSet
         SetSmoothScroll(v) => settings.smooth_scroll = v,
         SetOpenLastBookOnStartup(v) => settings.open_last_book_on_startup = v,
         SetRestoreLastPosition(v) => settings.restore_last_position = v,
+        SetAutoPageTurn(v) => settings.auto_page_turn = v,
     }
 }
 

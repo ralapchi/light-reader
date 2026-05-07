@@ -518,6 +518,18 @@ impl EpubParser {
     /// # 返回值
     /// * `Vec<TocItem>` - 解析得到的目录树
     fn parse_nav_document(&self, content: &str, base_href: &str) -> Vec<TocItem> {
+        // 尝试严格匹配（要求 type/epub:type="toc"）
+        let items = self.parse_nav_with_filter(content, base_href, true);
+        if !items.is_empty() {
+            return items;
+        }
+        // T14 E-1: 回退模式 - 不限制 nav 类型属性
+        self.parse_nav_with_filter(content, base_href, false)
+    }
+
+    /// 解析 EPUB3 nav.xhtml 目录。
+    /// `strict_type`: 为 true 时仅匹配含 type/epub:type="toc" 的 nav 元素
+    fn parse_nav_with_filter(&self, content: &str, base_href: &str, strict_type: bool) -> Vec<TocItem> {
         let mut reader = Reader::from_str(content);
         reader.config_mut().trim_text(true);
 
@@ -537,17 +549,21 @@ impl EpubParser {
                     let qname = e.name();
                     let name = qname.as_ref();
                     if name.starts_with(&b"nav"[..]) {
-                        for attr in e.attributes() {
-                            if let Ok(attr) = attr {
-                                let attr_name = attr.key.as_ref();
-                                if attr_name.starts_with(&b"type"[..]) || attr_name.starts_with(&b"epub:type"[..]) {
-                                    if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
-                                        if value.contains("toc") {
-                                            in_nav = true;
+                        if strict_type {
+                            for attr in e.attributes() {
+                                if let Ok(attr) = attr {
+                                    let attr_name = attr.key.as_ref();
+                                    if attr_name.starts_with(&b"type"[..]) || attr_name.starts_with(&b"epub:type"[..]) {
+                                        if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
+                                            if value.contains("toc") {
+                                                in_nav = true;
+                                            }
                                         }
                                     }
                                 }
                             }
+                        } else {
+                            in_nav = true;
                         }
                     } else if in_nav && name.starts_with(&b"ol"[..]) {
                         in_ol = true;
@@ -572,6 +588,9 @@ impl EpubParser {
                     let name = qname.as_ref();
                     if name.starts_with(&b"nav"[..]) {
                         in_nav = false;
+                        if !strict_type && !items.is_empty() {
+                            // 非严格模式下找到第一个有意义 nav 即停止
+                        }
                     } else if in_nav && name.starts_with(&b"ol"[..]) {
                         in_ol = false;
                         depth = depth.saturating_sub(1);

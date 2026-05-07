@@ -19,14 +19,23 @@ pub fn load(book_id: &str) -> Option<ReadingProgress> {
     }
     match std::fs::read_to_string(&path) {
         Ok(data) => match serde_json::from_str::<ProgressFile>(&data) {
-            Ok(file) => Some(file.progress),
+            Ok(file) => {
+                // T12: 版本检查
+                if file.version != PROGRESS_VERSION {
+                    warn!(
+                        "进度文件版本不匹配 (book_id={}): 期望 {}，实际 {}，尝试兼容读取",
+                        book_id, PROGRESS_VERSION, file.version
+                    );
+                }
+                Some(file.progress)
+            }
             Err(e) => {
-                warn!("阅读进度文件解析失败 (book_id={}): {}", book_id, e);
+                warn!("阅读进度文件解析失败 (book_id={}): {}，回退到章节开头", book_id, e);
                 None
             }
         },
         Err(e) => {
-            warn!("阅读进度文件读取失败 (book_id={}): {}", book_id, e);
+            warn!("阅读进度文件读取失败 (book_id={}): {}，回退到章节开头", book_id, e);
             None
         }
     }

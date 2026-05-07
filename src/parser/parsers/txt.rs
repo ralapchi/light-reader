@@ -72,9 +72,13 @@ impl TxtParser {
                 // No number found after 第
             } else if rest.starts_with("章") || rest.starts_with("回")
                 || rest.starts_with("节") || rest.starts_with("卷")
+                || rest.starts_with("部分") || rest.starts_with("篇")
             {
                 // After marker, remaining should be short title or empty (not body text)
-                let after_marker = &rest["章".len()..];
+                let marker_len = if rest.starts_with("部分") { "部分".len() }
+                    else if rest.starts_with("篇") { "篇".len() }
+                    else { "章".len() };
+                let after_marker = &rest[marker_len..];
                 let after_trimmed = after_marker.trim();
                 if after_trimmed.is_empty() || after_trimmed.chars().count() <= 20 {
                     return Some(trimmed.to_string());
@@ -90,7 +94,7 @@ impl TxtParser {
             }
         }
 
-        // 英文章节模式：Chapter X, CHAPTER X, Part X, PART X
+        // 英文章节模式：Chapter X, CHAPTER X, Part X, PART X（含冒号标题）
         let upper = trimmed.to_uppercase();
         if upper.starts_with("CHAPTER ") || upper.starts_with("PART ") {
             return Some(trimmed.to_string());

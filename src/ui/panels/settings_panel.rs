@@ -119,7 +119,7 @@ fn appearance_section(
             .add(egui::Slider::new(&mut font_size, 10.0..=32.0).suffix(" px"))
             .changed()
         {
-            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetFontSize(font_size)));
+            actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetFontSize(font_size)));
         }
     });
 
@@ -143,7 +143,7 @@ fn appearance_section(
                 for (key, label) in font_options {
                     let is_selected = settings.font_family == key;
                     if ui.selectable_label(is_selected, label).clicked() && !is_selected {
-                        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetFontFamily(key.to_string())));
+                        actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetFontFamily(key.to_string())));
                     }
                 }
             });
@@ -174,7 +174,7 @@ fn typography_section(
             .add(egui::Slider::new(&mut line_height, 1.0..=3.0).step_by(0.1))
             .changed()
         {
-            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetLineHeight(line_height)));
+            actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetLineHeight(line_height)));
         }
     });
 
@@ -186,7 +186,7 @@ fn typography_section(
             .add(egui::Slider::new(&mut para_spacing, 0.0..=32.0).suffix(" px"))
             .changed()
         {
-            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetParagraphSpacing(para_spacing)));
+            actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetParagraphSpacing(para_spacing)));
         }
     });
 
@@ -198,7 +198,7 @@ fn typography_section(
             .add(egui::Slider::new(&mut content_width, 400.0..=1200.0).suffix(" px"))
             .changed()
         {
-            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetContentWidth(content_width)));
+            actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetContentWidth(content_width)));
         }
     });
 
@@ -210,7 +210,7 @@ fn typography_section(
             .add(egui::Slider::new(&mut side_margin, 0.0..=100.0).suffix(" px"))
             .changed()
         {
-            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetSideMargin(side_margin)));
+            actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetSideMargin(side_margin)));
         }
     });
 }
@@ -234,31 +234,37 @@ fn reading_behavior_section(
     // Show TOC sidebar
     let mut show_toc = settings.show_toc;
     if ui.checkbox(&mut show_toc, "显示目录侧栏").changed() {
-        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetShowToc(show_toc)));
+        actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetShowToc(show_toc)));
     }
 
     // Show status bar
     let mut show_status = settings.show_status_bar;
     if ui.checkbox(&mut show_status, "显示状态栏").changed() {
-        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetShowStatusBar(show_status)));
+        actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetShowStatusBar(show_status)));
     }
 
     // Show chapter progress
     let mut show_chapter_progress = settings.show_chapter_progress;
     if ui.checkbox(&mut show_chapter_progress, "显示章节进度").changed() {
-        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetShowChapterProgress(show_chapter_progress)));
+        actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetShowChapterProgress(show_chapter_progress)));
     }
 
     // Restore last position on startup
     let mut restore_last = settings.restore_last_position;
     if ui.checkbox(&mut restore_last, "启动时恢复上次阅读位置").changed() {
-        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetRestoreLastPosition(restore_last)));
+        actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetRestoreLastPosition(restore_last)));
     }
 
     // Open last book on startup
     let mut open_last = settings.open_last_book_on_startup;
     if ui.checkbox(&mut open_last, "启动时恢复最近阅读").changed() {
-        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetOpenLastBookOnStartup(open_last)));
+        actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetOpenLastBookOnStartup(open_last)));
+    }
+
+    // Auto page turn at chapter end
+    let mut auto_turn = settings.auto_page_turn;
+    if ui.checkbox(&mut auto_turn, "章节末尾自动翻页").changed() {
+        actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetAutoPageTurn(auto_turn)));
     }
 }
 
@@ -272,7 +278,7 @@ fn advanced_section(
     let t = &theme.typography;
 
     ui.label(
-        egui::RichText::new("高级")
+        egui::RichText::new("系统")
             .size(t.body_size)
             .strong(),
     );
@@ -281,13 +287,13 @@ fn advanced_section(
     // Auto save progress
     let mut auto_save = settings.auto_save_progress;
     if ui.checkbox(&mut auto_save, "自动保存进度").changed() {
-        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetAutoSaveProgress(auto_save)));
+        actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetAutoSaveProgress(auto_save)));
     }
 
     // Smooth scroll
     let mut smooth_scroll = settings.smooth_scroll;
     if ui.checkbox(&mut smooth_scroll, "平滑滚动").changed() {
-        actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetSmoothScroll(smooth_scroll)));
+        actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetSmoothScroll(smooth_scroll)));
     }
 
     // Sidebar width
@@ -298,7 +304,7 @@ fn advanced_section(
             .add(egui::Slider::new(&mut toc_width, 160.0..=480.0).suffix(" px"))
             .changed()
         {
-            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetTocWidth(toc_width)));
+            actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetTocWidth(toc_width)));
         }
     });
 
@@ -310,7 +316,7 @@ fn advanced_section(
             .add(egui::Slider::new(&mut window_padding, 0.0..=32.0).suffix(" px"))
             .changed()
         {
-            actions.push(Action::ReaderSettingChanged(ReaderSettingUpdate::SetWindowPadding(window_padding)));
+            actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetWindowPadding(window_padding)));
         }
     });
 

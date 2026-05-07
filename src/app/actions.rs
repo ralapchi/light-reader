@@ -23,6 +23,7 @@ pub enum ReaderSettingUpdate {
     SetSmoothScroll(bool),
     SetOpenLastBookOnStartup(bool),
     SetRestoreLastPosition(bool),
+    SetAutoPageTurn(bool),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -48,7 +49,9 @@ pub enum Action {
     ToggleSettingsPanel,
     ToggleSearchCaseSensitive,
     ThemeChanged(ThemeKind),
+    /// 优先使用 UpdateReaderSetting 替代
     ReaderSettingChanged(ReaderSettingUpdate),
+    UpdateReaderSetting(ReaderSettingUpdate),
     RestoreDefaultSettings,
     RecentBookSelected(String),
     RemoveRecentBook(String),

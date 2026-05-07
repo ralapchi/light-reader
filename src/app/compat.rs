@@ -297,7 +297,7 @@ fn infer_paragraph_kind(text: &str) -> ParagraphKind {
         return ParagraphKind::Separator;
     }
 
-    // Quote: lines starting with > or wrapped in quotation marks
+    // Quote: lines starting with > (including >> for nested quotes), or wrapped in quotation marks
     if text.starts_with('>') {
         return ParagraphKind::Quote;
     }
@@ -332,6 +332,17 @@ fn is_separator_line(text: &str) -> bool {
             return true;
         }
     }
+    // T14 E-3: pure dotted line (........)
+    if chars.len() >= 5 && chars.iter().all(|&c| c == '.') {
+        return true;
+    }
+    // T14 E-3: pure centered dashes (─ ─ ─ or · · ·)
+    let non_space: Vec<char> = chars.iter().copied().filter(|c| !c.is_whitespace()).collect();
+    if non_space.len() >= 3 {
+        if non_space.iter().all(|&c| c == '─' || c == '━' || c == '·' || c == '•') && non_space.windows(2).all(|w| w[0] == w[1]) {
+            return true;
+        }
+    }
     false
 }
 
@@ -354,8 +365,8 @@ fn is_title_line(text: &str, char_count: usize) -> bool {
     if char_count >= 50 {
         return false;
     }
-    // Chinese chapter: 第X章/回/节/卷
-    if text.starts_with('第') && (text.contains('章') || text.contains('回') || text.contains('节') || text.contains('卷')) {
+    // Chinese chapter: 第X章/回/节/卷/部分/篇
+    if text.starts_with('第') && (text.contains('章') || text.contains('回') || text.contains('节') || text.contains('卷') || text.contains("部分") || text.contains('篇')) {
         return true;
     }
     // English chapter/part
