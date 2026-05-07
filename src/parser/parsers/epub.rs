@@ -907,6 +907,26 @@ impl BookParser for EpubParser {
             }
         }
 
+        // Extract cover image: search manifest for cover references
+        let cover_image = {
+            let cover_href = manifest.iter().find_map(|(id, href)| {
+                let lower = format!("{}|{}", id.to_lowercase(), href.to_lowercase());
+                if lower.contains("cover") { Some(href.clone()) } else { None }
+            });
+            cover_href.and_then(|href| {
+                let cover_path = if opf_base_path.is_empty() {
+                    href
+                } else {
+                    format!("{}/{}", opf_base_path.trim_end_matches('/'), href)
+                };
+                archive.by_name(&cover_path).ok().and_then(|mut f| {
+                    let mut buf = Vec::new();
+                    std::io::Read::read_to_end(&mut f, &mut buf).ok()?;
+                    if buf.is_empty() { None } else { Some(buf) }
+                })
+            })
+        };
+
         Ok(ParseResult {
             content,
             chapter_titles,
@@ -914,6 +934,7 @@ impl BookParser for EpubParser {
             toc: toc_items,
             metadata,
             warnings,
+            cover_image,
         })
     }
 }

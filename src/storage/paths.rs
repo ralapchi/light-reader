@@ -33,3 +33,11 @@ pub fn progress_path(book_id: &str) -> PathBuf {
 pub fn bookmarks_path(book_id: &str) -> PathBuf {
     app_data_dir().join("bookmarks").join(format!("{}.json", book_id))
 }
+
+pub fn library_index_path() -> PathBuf {
+    app_data_dir().join("library_index.json")
+}
+
+pub fn cover_cache_path(book_id: &str) -> PathBuf {
+    app_data_dir().join("cache/covers").join(format!("{}.png", book_id))
+}

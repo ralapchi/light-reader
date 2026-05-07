@@ -23,6 +23,8 @@ pub struct ParseResult {
     pub metadata: Option<BookMetadata>,
     /// 解析过程中的警告信息
     pub warnings: Vec<String>,
+    /// 封面图片原始字节（若可提取）
+    pub cover_image: Option<Vec<u8>>,
 }
 
 /// 解析器 trait

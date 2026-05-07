@@ -1,5 +1,8 @@
-use eframe::egui;
+pub mod book_card;
+pub mod library_detail;
+pub use book_card::book_card;
 
+use eframe::egui;
 use crate::ui::ThemeConfig;
 
 /// 渲染带搜索关键词高亮的文本
@@ -63,6 +66,7 @@ pub fn render_highlighted_text(
     });
 }
 
+#[allow(dead_code)]
 pub fn empty_state_with_button(
     ui: &mut egui::Ui,
     title: &str,

@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use crate::domain::app_error::AppError;
 use crate::domain::book::Book;
 use crate::domain::bookmark::Bookmark;
+use crate::domain::library_item::LibraryIndex;
+use crate::domain::library_view_state::LibraryViewState;
 use crate::domain::reader_settings::ReaderSettings;
 use crate::domain::reading_progress::ReadingProgress;
 use crate::domain::recent_book_item::RecentBookItem;
@@ -18,6 +20,8 @@ pub struct AppState {
     pub bookmarks: Vec<Bookmark>,
     pub search_state: SearchState,
     pub ui_state: UiState,
+    pub library_index: LibraryIndex,
+    pub library_view_state: LibraryViewState,
     pub status_message: String,
     pub status_message_set_at: Option<String>,
     pub last_error: Option<AppError>,
@@ -37,6 +41,8 @@ impl Default for AppState {
             bookmarks: Vec::new(),
             search_state: SearchState::default(),
             ui_state: UiState::default(),
+            library_index: LibraryIndex::default(),
+            library_view_state: LibraryViewState::default(),
             status_message: "就绪".to_string(),
             status_message_set_at: None,
             last_error: None,

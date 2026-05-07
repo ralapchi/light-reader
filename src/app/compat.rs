@@ -152,7 +152,7 @@ impl CompatAdapter {
             toc,
             chapters: chapters.clone(),
             assets: BookAssets {
-                cover_image_bytes: None,
+                cover_image_bytes: result.cover_image,
                 cover_media_type: None,
                 has_images: false,
                 embedded_styles_detected: matches!(format, BookFormat::Epub),

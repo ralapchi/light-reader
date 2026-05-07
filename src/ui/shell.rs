@@ -1,18 +1,18 @@
 use chrono::Utc;
 use eframe::egui;
-use log::info;
 use rfd::FileDialog;
 
 use crate::app::compat::CompatAdapter;
 use crate::app::Action;
 use crate::domain::enums::ScreenKind;
 use crate::ui::panels::left_sidebar::left_sidebar;
+use crate::ui::panels::library_page::library_page;
 use crate::ui::panels::reader_view::reader_view;
 use crate::ui::panels::search_panel::{search_panel, SearchPanelProps};
 use crate::ui::panels::settings_panel::{settings_panel, SettingsPanelProps};
 use crate::ui::panels::status_bar::status_bar;
 use crate::ui::panels::top_bar::{TopBar, TopBarProps};
-use crate::ui::widgets::{empty_state_with_button, error_state, loading_state};
+use crate::ui::widgets::{error_state, loading_state};
 use crate::ui::{ThemeConfig, ThemeService};
 
 pub struct AppShell;
@@ -43,68 +43,11 @@ impl AppShell {
 
         match screen {
             ScreenKind::EmptyLibrary => {
-                let recent_books = shell.state().recent_books.clone();
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    if empty_state_with_button(
-                        ui,
-                        "Reader Demo",
-                        "打开 EPUB 或 TXT 文件开始阅读",
-                        "打开书籍",
-                        &config,
-                    ) {
-                        if let Some(path) = FileDialog::new()
-                            .add_filter("电子书", &["epub", "txt"])
-                            .add_filter("EPUB", &["epub"])
-                            .add_filter("文本文件", &["txt"])
-                            .pick_file()
-                        {
-                            let path_str = path.to_str().unwrap_or("").to_string();
-                            info!("打开文件: {}", path_str);
-                            shell.dispatch(Action::OpenBookSelected(path_str));
-                        }
-                    }
-
-                    // Show recent books if available
-                    if !recent_books.is_empty() {
-                        let s = &config.spacing;
-                        ui.add_space(s.lg);
-                        ui.separator();
-                        ui.add_space(s.md);
-
-                        ui.vertical_centered(|ui| {
-                            ui.label(
-                                egui::RichText::new("最近阅读")
-                                    .size(config.typography.body_size)
-                                    .strong()
-                                    .color(config.colors.text_secondary.to_color32()),
-                            );
-                            ui.add_space(s.sm);
-
-                            for item in recent_books.iter().take(5) {
-                                if item.is_missing {
-                                    continue;
-                                }
-                                let label = if let Some(author) = &item.author {
-                                    format!("{} - {}", item.title, author)
-                                } else {
-                                    item.title.clone()
-                                };
-                                let btn = ui.add(
-                                    egui::Button::new(
-                                        egui::RichText::new(&label)
-                                            .size(config.typography.body_size),
-                                    )
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .stroke(egui::Stroke::NONE),
-                                );
-                                if btn.clicked() {
-                                    shell.dispatch(Action::RecentBookSelected(item.book_id.clone()));
-                                }
-                                btn.on_hover_text(&item.source_path);
-                            }
-                        });
-                    }
-                });
+                let state = shell.state();
+                let actions = library_page(ctx, state, &config);
+                for action in actions {
+                    shell.dispatch(action);
+                }
             }
             ScreenKind::LoadingBook => {
                 egui::CentralPanel::default().show(ctx, |ui| {

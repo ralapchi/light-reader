@@ -39,6 +39,13 @@ impl TopBar {
 
             ui.add_space(s.sm);
 
+            // Book home button (navigate back to library)
+            if ui.button("书库").clicked() {
+                actions.push(Action::OpenLibraryHome);
+            }
+
+            ui.add_space(s.sm);
+
             if ui.button("打开书籍").clicked() {
                 info!("点击了打开书籍按钮");
                 if let Some(path) = FileDialog::new()

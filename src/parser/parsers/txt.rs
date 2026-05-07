@@ -199,6 +199,7 @@ impl BookParser for TxtParser {
             toc: None,
             metadata: None,
             warnings: Vec::new(),
+            cover_image: None,
         })
     }
 }

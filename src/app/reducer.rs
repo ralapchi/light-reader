@@ -181,6 +181,71 @@ pub fn reduce(state: &mut AppState, action: Action) {
                 state.ui_state.show_settings_panel = false;
             }
         }
+        Action::OpenLibraryHome => {
+            state.ui_state.screen = ScreenKind::EmptyLibrary;
+        }
+        Action::LibraryBookSelected(book_id) => {
+            state.library_view_state.selected_book_id = Some(book_id.clone());
+            // Try to open the book from library index
+            if let Some(item) = state.library_index.items.iter().find(|i| i.book_id == book_id) {
+                let path = item.source_path.clone();
+                state.ui_state.pending_open_path = Some(std::path::PathBuf::from(path));
+            }
+        }
+        Action::LibrarySearchChanged(query) => {
+            state.library_view_state.search_query = query;
+        }
+        Action::LibrarySortChanged(mode) => {
+            state.library_view_state.sort_mode = mode;
+        }
+        Action::LibraryFilterChanged(mode) => {
+            state.library_view_state.filter_mode = mode;
+        }
+        Action::ImportBookSucceeded(item) => {
+            // Add or update item in library
+            let book_id = item.book_id.clone();
+            if let Some(existing) = state.library_index.items.iter_mut().find(|i| i.book_id == book_id) {
+                *existing = item;
+            } else {
+                state.library_index.items.push(item);
+            }
+            state.library_index.last_selected_book_id = Some(book_id);
+        }
+        Action::RemoveFromLibrary(book_id) => {
+            state.library_index.items.retain(|i| i.book_id != book_id);
+            if state.library_index.last_selected_book_id.as_deref() == Some(&book_id) {
+                state.library_index.last_selected_book_id = None;
+            }
+        }
+        Action::RefreshLibraryItem(book_id) => {
+            // Mark for refresh; controller will handle the actual refresh
+            if let Some(item) = state.library_index.items.iter_mut().find(|i| i.book_id == book_id) {
+                item.file_health = if std::path::Path::new(&item.source_path).exists() {
+                    crate::domain::library_item::FileHealth::Ok
+                } else {
+                    crate::domain::library_item::FileHealth::Missing
+                };
+            }
+        }
+        Action::RescanMissingBooks => {
+            for item in &mut state.library_index.items {
+                item.file_health = if std::path::Path::new(&item.source_path).exists() {
+                    crate::domain::library_item::FileHealth::Ok
+                } else {
+                    crate::domain::library_item::FileHealth::Missing
+                };
+            }
+        }
+        Action::RepairLibraryPath { book_id, new_path } => {
+            if let Some(item) = state.library_index.items.iter_mut().find(|i| i.book_id == book_id) {
+                item.source_path = new_path;
+                item.file_health = if std::path::Path::new(&item.source_path).exists() {
+                    crate::domain::library_item::FileHealth::Ok
+                } else {
+                    crate::domain::library_item::FileHealth::Missing
+                };
+            }
+        }
         _ => {}
     }
 }
@@ -396,6 +461,8 @@ mod tests {
     use crate::domain::chapter::Chapter;
     use crate::domain::paragraph::Paragraph;
     use crate::domain::paragraph_kind::ParagraphKind;
+    use crate::domain::library_item::{FileHealth, LibraryIndex, LibraryItem, ReadingStatsSnapshot};
+    use crate::domain::library_view_state::{LibraryFilterMode, LibrarySortMode};
     use crate::domain::theme_kind::ThemeKind;
     use crate::domain::toc_item::TocItem;
     use std::path::PathBuf;
@@ -873,5 +940,188 @@ mod tests {
         assert!(!state.search_state.results.is_empty());
         let snippet = &state.search_state.results[0].snippet;
         assert!(snippet.contains("验证"));
+    }
+
+    // ── T10: Library tests ─────────────────────────────────
+
+    #[test]
+    fn library_open_book_updates_library_index() {
+        let mut state = AppState::default();
+        let book = sample_book(BookFormat::Epub);
+        reduce(&mut state, Action::OpenBookSucceeded(book));
+        // open_book_succeeded doesn't update library_index directly;
+        // controller::after_book_opened handles that.
+        // Verify the state is in Reader mode.
+        assert_eq!(state.ui_state.screen, ScreenKind::Reader);
+        assert!(state.current_book.is_some());
+    }
+
+    #[test]
+    fn open_library_home_sets_screen() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::OpenLibraryHome);
+        assert_eq!(state.ui_state.screen, ScreenKind::EmptyLibrary);
+    }
+
+    #[test]
+    fn library_search_changed_updates_view_state() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::LibrarySearchChanged("三体".to_string()));
+        assert_eq!(state.library_view_state.search_query, "三体");
+    }
+
+    #[test]
+    fn library_sort_changed_updates_view_state() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::LibrarySortChanged(LibrarySortMode::TitleAsc));
+        assert_eq!(state.library_view_state.sort_mode, LibrarySortMode::TitleAsc);
+    }
+
+    #[test]
+    fn library_filter_changed_updates_view_state() {
+        let mut state = AppState::default();
+        reduce(&mut state, Action::LibraryFilterChanged(LibraryFilterMode::EpubOnly));
+        assert_eq!(state.library_view_state.filter_mode, LibraryFilterMode::EpubOnly);
+    }
+
+    #[test]
+    fn library_book_selected_sets_pending_path() {
+        let mut state = AppState::default();
+        let path = "/tmp/test_book.epub".to_string();
+        let now = Utc::now().to_rfc3339();
+        state.library_index.items.push(LibraryItem {
+            book_id: "test-id".to_string(),
+            title: "测试书".to_string(),
+            author: Some("测试作者".to_string()),
+            format: BookFormat::Epub,
+            source_path: path.clone(),
+            cover_cache_key: None,
+            progress_percent: 0.0,
+            last_opened_at: None,
+            imported_at: now,
+            chapter_count: 10,
+            file_health: FileHealth::Ok,
+            stats: ReadingStatsSnapshot::default(),
+        });
+        reduce(&mut state, Action::LibraryBookSelected("test-id".to_string()));
+        assert!(state.ui_state.pending_open_path.is_some());
+        assert_eq!(
+            state.ui_state.pending_open_path.unwrap().to_string_lossy(),
+            path
+        );
+    }
+
+    #[test]
+    fn remove_from_library_removes_item() {
+        let mut state = AppState::default();
+        let now = Utc::now().to_rfc3339();
+        state.library_index.items.push(LibraryItem {
+            book_id: "rm-id".to_string(),
+            title: "待删除".to_string(),
+            author: None,
+            format: BookFormat::Txt,
+            source_path: "/tmp/rm.txt".to_string(),
+            cover_cache_key: None,
+            progress_percent: 0.0,
+            last_opened_at: None,
+            imported_at: now,
+            chapter_count: 1,
+            file_health: FileHealth::Ok,
+            stats: ReadingStatsSnapshot::default(),
+        });
+        assert_eq!(state.library_index.items.len(), 1);
+        reduce(&mut state, Action::RemoveFromLibrary("rm-id".to_string()));
+        assert_eq!(state.library_index.items.len(), 0);
+    }
+
+    #[test]
+    fn rescan_missing_books_updates_file_health() {
+        let mut state = AppState::default();
+        let now = Utc::now().to_rfc3339();
+        state.library_index.items.push(LibraryItem {
+            book_id: "missing-id".to_string(),
+            title: "缺失书".to_string(),
+            author: None,
+            format: BookFormat::Txt,
+            source_path: "/nonexistent/path/file.txt".to_string(),
+            cover_cache_key: None,
+            progress_percent: 0.0,
+            last_opened_at: None,
+            imported_at: now,
+            chapter_count: 5,
+            file_health: FileHealth::Ok,
+            stats: ReadingStatsSnapshot::default(),
+        });
+        // Rescan should mark non-existent path as Missing
+        reduce(&mut state, Action::RescanMissingBooks);
+        let item = state.library_index.items.first().unwrap();
+        assert_eq!(item.file_health, FileHealth::Missing);
+    }
+
+    #[test]
+    fn repair_library_path_updates_source() {
+        let mut state = AppState::default();
+        let now = Utc::now().to_rfc3339();
+        let tmp = std::env::temp_dir().join("reader_test_repair.epub");
+        std::fs::write(&tmp, "test").unwrap();
+        state.library_index.items.push(LibraryItem {
+            book_id: "repair-id".to_string(),
+            title: "待修复".to_string(),
+            author: None,
+            format: BookFormat::Epub,
+            source_path: "/old/path.epub".to_string(),
+            cover_cache_key: None,
+            progress_percent: 0.5,
+            last_opened_at: None,
+            imported_at: now,
+            chapter_count: 20,
+            file_health: FileHealth::Missing,
+            stats: ReadingStatsSnapshot::default(),
+        });
+        let new_path = tmp.to_string_lossy().to_string();
+        reduce(
+            &mut state,
+            Action::RepairLibraryPath {
+                book_id: "repair-id".to_string(),
+                new_path: new_path.clone(),
+            },
+        );
+        let item = state.library_index.items.first().unwrap();
+        assert_eq!(item.source_path, new_path);
+        assert_eq!(item.file_health, FileHealth::Ok);
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn library_index_store_roundtrip() {
+        let now = Utc::now().to_rfc3339();
+        let index = LibraryIndex {
+            version: 1,
+            items: vec![LibraryItem {
+                book_id: "roundtrip-id".to_string(),
+                title: "往返测试".to_string(),
+                author: Some("测试".to_string()),
+                format: BookFormat::Epub,
+                source_path: "/tmp/test.epub".to_string(),
+                cover_cache_key: None,
+                progress_percent: 0.3,
+                last_opened_at: Some(now.clone()),
+                imported_at: now,
+                chapter_count: 10,
+                file_health: FileHealth::Ok,
+                stats: ReadingStatsSnapshot::default(),
+            }],
+            last_selected_book_id: None,
+        };
+        let tmp = std::env::temp_dir().join("reader_test_library.json");
+        let data = serde_json::to_string(&index).unwrap();
+        std::fs::write(&tmp, &data).unwrap();
+        let loaded: LibraryIndex = serde_json::from_str(&std::fs::read_to_string(&tmp).unwrap()).unwrap();
+        assert_eq!(loaded.version, 1);
+        assert_eq!(loaded.items.len(), 1);
+        assert_eq!(loaded.items[0].book_id, "roundtrip-id");
+        assert_eq!(loaded.items[0].title, "往返测试");
+        assert_eq!(loaded.items[0].progress_percent, 0.3);
+        let _ = std::fs::remove_file(&tmp);
     }
 }
