@@ -1,3 +1,4 @@
+pub mod image_cache;
 pub mod shell;
 pub mod styles;
 pub mod theme;

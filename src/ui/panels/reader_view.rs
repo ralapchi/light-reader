@@ -7,6 +7,7 @@ use crate::domain::chapter::Chapter;
 use crate::domain::paragraph_kind::ParagraphKind;
 use crate::domain::reader_settings::ReaderSettings;
 use crate::domain::search_result::SearchResult;
+use crate::ui::image_cache::ImageCache;
 use crate::ui::ThemeConfig;
 use crate::ui::widgets::render_highlighted_text;
 
@@ -14,6 +15,7 @@ const SCROLL_OFFSET_THRESHOLD: f32 = 1.0;
 
 thread_local! {
     static LAST_SCROLL_OFFSET: Cell<f32> = const { Cell::new(0.0) };
+    static IMG_CACHE: std::cell::RefCell<ImageCache> = std::cell::RefCell::new(ImageCache::new());
 }
 
 pub fn reader_view(
@@ -66,9 +68,21 @@ pub fn reader_view(
                         // Chapter header
                         chapter_header(ui, &chapter.title, theme);
 
+                        // Render image blocks from blocks if present
+                        let img_blocks: Vec<&crate::domain::chapter_block::InlineImageBlock> = chapter.blocks.iter()
+                            .filter_map(|b| match b {
+                                crate::domain::chapter_block::ChapterBlock::Image(img) => Some(img),
+                                _ => None,
+                            })
+                            .collect();
+                        if !img_blocks.is_empty() {
+                            for img in &img_blocks {
+                                render_image_block(ui, img, settings.content_width, s.sm, theme);
+                            }
+                        }
+
                         for paragraph in &chapter.paragraphs {
                             let is_highlighted = highlight_para_index == Some(paragraph.index);
-
                             if is_highlighted && !scroll_to_highlight {
                                 scroll_to_highlight = true;
                             }
@@ -285,6 +299,55 @@ fn highlight_paragraph(ui: &mut egui::Ui, rect: egui::Rect, theme: &ThemeConfig)
         egui::CornerRadius::same(2),
         theme.colors.accent.to_color32(),
     );
+}
+
+/// Render an inline image block from EPUB content.
+fn render_image_block(
+    ui: &mut egui::Ui,
+    img: &crate::domain::chapter_block::InlineImageBlock,
+    max_width: f32,
+    spacing: f32,
+    theme: &ThemeConfig,
+) {
+    ui.add_space(spacing);
+    ui.vertical_centered(|ui| {
+        // Try to load the cached image
+        let mut found = false;
+        log::info!("渲染图片块: asset_id={}", img.asset_id);
+        if let Some(tex) = IMG_CACHE.with(|c| c.borrow_mut().image_texture(
+            ui.ctx(), "", &img.asset_id,
+        )) {
+            let tex_size = tex.size_vec2();
+            let scale = (max_width / tex_size.x).min(1.0);
+            let display_size = egui::Vec2::new(tex_size.x * scale, tex_size.y * scale);
+            ui.image(egui::load::SizedTexture::new(tex.id(), display_size));
+            found = true;
+        }
+        if !found {
+            // Placeholder for failed/missing images
+            let ph = egui::Rect::from_min_size(ui.next_widget_position(), egui::Vec2::new(max_width.min(200.0), 100.0));
+            let (_r, _resp) = ui.allocate_exact_size(egui::Vec2::new(max_width.min(200.0), 100.0), egui::Sense::hover());
+            let painter = ui.painter_at(ph);
+            painter.rect_filled(ph, egui::CornerRadius::same(4), theme.colors.border_subtle.to_color32());
+            painter.text(
+                ph.center(),
+                egui::Align2::CENTER_CENTER,
+                if let Some(ref alt) = img.alt_text { alt } else { "[图片加载失败]" },
+                egui::FontId::new(theme.typography.caption_size, egui::FontFamily::Proportional),
+                theme.colors.text_muted.to_color32(),
+            );
+        }
+        // Caption
+        if let Some(ref caption) = img.caption {
+            ui.add_space(spacing * 0.5);
+            ui.label(
+                egui::RichText::new(caption)
+                    .size(theme.typography.caption_size)
+                    .color(theme.colors.text_secondary.to_color32()),
+            );
+        }
+    });
+    ui.add_space(spacing);
 }
 
 /// Parse font family string to egui::FontFamily

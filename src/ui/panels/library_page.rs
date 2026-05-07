@@ -9,12 +9,14 @@ use crate::domain::library_item::{FileHealth, LibraryItem};
 use crate::domain::library_view_state::{LibraryFilterMode, LibrarySortMode, LibraryViewState};
 use std::cell::Cell;
 
+use crate::ui::image_cache::ImageCache;
 use crate::ui::widgets::book_card;
 use crate::ui::widgets::library_detail::library_detail_panel;
 use crate::ui::ThemeConfig;
 
 thread_local! {
     static SELECTED_DETAIL: Cell<Option<String>> = const { Cell::new(None) };
+    static COVER_CACHE: std::cell::RefCell<ImageCache> = std::cell::RefCell::new(ImageCache::new());
 }
 
 /// The main library home page.
@@ -170,7 +172,8 @@ pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) 
 
             ui.horizontal(|ui| {
                 for item in &continue_items {
-                    let card_responses = book_card::book_card(ui, item, theme);
+                    let cover_tex = COVER_CACHE.with(|c| c.borrow_mut().cover_texture(ctx, &item.book_id, item.cover_cache_key.as_deref()));
+                    let card_responses = book_card::book_card(ui, item, theme, cover_tex.as_ref());
                     for response in &card_responses {
                         if response.double_clicked() {
                             actions.push(Action::LibraryBookSelected(item.book_id.clone()));
@@ -220,7 +223,8 @@ pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) 
                 .max_col_width(180.0)
                 .show(ui, |ui| {
                     for (i, item) in filtered_items.iter().enumerate() {
-                        let card_responses = book_card::book_card(ui, item, theme);
+                        let cover_tex = COVER_CACHE.with(|c| c.borrow_mut().cover_texture(ctx, &item.book_id, item.cover_cache_key.as_deref()));
+                    let card_responses = book_card::book_card(ui, item, theme, cover_tex.as_ref());
                         for response in &card_responses {
                             if response.double_clicked() {
                                 actions.push(Action::LibraryBookSelected(item.book_id.clone()));

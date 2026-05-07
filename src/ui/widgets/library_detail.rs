@@ -2,8 +2,13 @@ use eframe::egui;
 
 use crate::app::Action;
 use crate::domain::library_item::LibraryItem;
+use crate::ui::image_cache::ImageCache;
 use crate::ui::widgets::book_card;
 use crate::ui::ThemeConfig;
+
+thread_local! {
+    static DETAIL_IMG_CACHE: std::cell::RefCell<ImageCache> = std::cell::RefCell::new(ImageCache::new());
+}
 
 /// Show a detail overlay for a selected library book.
 pub fn library_detail_panel(
@@ -26,26 +31,37 @@ pub fn library_detail_panel(
 
             // Cover + basic info
             ui.horizontal(|ui| {
-                // Mini cover
-                let mini_cover_rect = egui::Rect::from_min_size(
-                    ui.next_widget_position(),
-                    egui::Vec2::new(100.0, 130.0),
-                );
-                let (_rect, _resp) = ui.allocate_exact_size(egui::Vec2::new(100.0, 130.0), egui::Sense::hover());
+                // Mini cover (real or placeholder)
+                let mini_cover_size = egui::Vec2::new(100.0, 130.0);
+                let mini_cover_rect = egui::Rect::from_min_size(ui.next_widget_position(), mini_cover_size);
+                let (_rect, _resp) = ui.allocate_exact_size(mini_cover_size, egui::Sense::hover());
                 if ui.is_rect_visible(mini_cover_rect) {
                     let painter = ui.painter_at(mini_cover_rect);
-                    let cover_color = cover_base_color(item);
-                    painter.rect_filled(mini_cover_rect, egui::CornerRadius::same(4), cover_color);
-                    painter.rect_stroke(mini_cover_rect, egui::CornerRadius::same(4),
-                        egui::Stroke::new(1.0, colors.border_subtle.to_color32()), egui::StrokeKind::Inside);
-                    // Format label
-                    painter.text(
-                        mini_cover_rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        book_card::format_tag(&item.format),
-                        egui::FontId::new(typo.caption_size, egui::FontFamily::Proportional),
-                        egui::Color32::WHITE,
-                    );
+                    // Try real cover first
+                    let mut drew_real = false;
+                    if let Some(tex) = DETAIL_IMG_CACHE.with(|c| c.borrow_mut().cover_texture(
+                        ui.ctx(), &item.book_id, item.cover_cache_key.as_deref(),
+                    )) {
+                        painter.image(
+                            tex.id(), mini_cover_rect,
+                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                            egui::Color32::WHITE,
+                        );
+                        drew_real = true;
+                    }
+                    if !drew_real {
+                        let cover_color = cover_base_color(item);
+                        painter.rect_filled(mini_cover_rect, egui::CornerRadius::same(4), cover_color);
+                        painter.rect_stroke(mini_cover_rect, egui::CornerRadius::same(4),
+                            egui::Stroke::new(1.0, colors.border_subtle.to_color32()), egui::StrokeKind::Inside);
+                        painter.text(
+                            mini_cover_rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            book_card::format_tag(&item.format),
+                            egui::FontId::new(typo.caption_size, egui::FontFamily::Proportional),
+                            egui::Color32::WHITE,
+                        );
+                    }
                 }
 
                 ui.add_space(s.md);

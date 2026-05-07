@@ -777,6 +777,94 @@ impl EpubParser {
         }
         current
     }
+
+    /// Extract image src and alt from HTML content.
+    fn extract_html_images(&self, html: &str, _base_href: &str) -> Vec<(String, Option<String>)> {
+        let mut images = Vec::new();
+        let mut reader = Reader::from_str(html);
+        reader.config_mut().trim_text(true);
+        let mut buffer = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buffer) {
+                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                    let qname = e.name();
+                    let name = qname.as_ref();
+                    // Case-insensitive img match (also handles xhtml:img, svg:image)
+                    let is_img = {
+                        let lower = name.to_ascii_lowercase();
+                        lower.starts_with(&b"img"[..]) || lower.ends_with(&b":img"[..]) || lower.ends_with(&b"image"[..])
+                    };
+                    if is_img {
+                        let mut src = String::new();
+                        let mut alt = None;
+                        for attr in e.attributes() {
+                            if let Ok(attr) = attr {
+                                let an = attr.key.as_ref();
+                                let an_lower = an.to_ascii_lowercase();
+                                if an_lower.starts_with(&b"src"[..]) || an_lower.starts_with(&b"xlink:href"[..]) {
+                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                                        src = v.to_string();
+                                    }
+                                } else if an_lower.starts_with(&b"alt"[..]) {
+                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                                        if !v.trim().is_empty() { alt = Some(v.to_string()); }
+                                    }
+                                }
+                            }
+                        }
+                        if !src.is_empty() {
+                            log::info!("找到图片: src={}, alt={:?}", src, alt);
+                            images.push((src, alt));
+                        }
+                    }
+                }
+                Ok(Event::Eof) => break,
+                _ => {}
+            }
+            buffer.clear();
+        }
+        images
+    }
+}
+
+/// Resolve an EPUB-internal path, normalising `../` segments for flat zip lookups.
+fn resolve_epub_path(base_dir: &str, relative: &str) -> String {
+    let mut parts: Vec<&str> = if base_dir.is_empty() {
+        Vec::new()
+    } else {
+        base_dir.split('/').collect()
+    };
+    for seg in relative.split('/') {
+        match seg {
+            "" | "." => {}
+            ".." => { parts.pop(); }
+            _ => parts.push(seg),
+        }
+    }
+    parts.join("/")
+}
+
+/// Detect media type from href extension.
+fn href_media_type(href: &str) -> &'static str {
+    let lower = href.to_lowercase();
+    if lower.ends_with(".jpg") || lower.ends_with(".jpeg") { "image/jpeg" }
+    else if lower.ends_with(".png") { "image/png" }
+    else if lower.ends_with(".webp") { "image/webp" }
+    else if lower.ends_with(".gif") { "image/gif" }
+    else if lower.ends_with(".svg") { "image/svg+xml" }
+    else { "image/png" }
+}
+
+/// Map media type to file extension.
+fn mime_to_ext(mime: &str) -> &'static str {
+    match mime {
+        "image/jpeg" => "jpg",
+        "image/png" => "png",
+        "image/webp" => "webp",
+        "image/gif" => "gif",
+        "image/svg+xml" => "svg",
+        _ => "png",
+    }
 }
 
 impl BookParser for EpubParser {
@@ -871,18 +959,78 @@ impl BookParser for EpubParser {
         let mut content = Vec::new();
         let mut chapter_titles = Vec::new();
         let mut spine_hrefs = Vec::new();
+        let mut image_assets: Vec<crate::domain::book_assets::BookImageAsset> = Vec::new();
+        let mut chapter_image_blocks: Vec<Vec<(usize, crate::domain::chapter_block::InlineImageBlock)>> = Vec::new();
 
         for idref in &spine_ids {
             if let Some(href) = manifest.get(idref.as_str()) {
                 let full_path = self.get_full_path(&opf_base_path, href);
-                if let Ok(mut chapter_file) = archive.by_name(&full_path) {
-                    let mut html_content = String::new();
-                    chapter_file.read_to_string(&mut html_content).ok();
-
+                // Read HTML content (release borrow on archive before image extraction)
+                let html_content = {
+                    let mut content = String::new();
+                    if let Ok(mut f) = archive.by_name(&full_path) {
+                        f.read_to_string(&mut content).ok();
+                    }
+                    content
+                };
+                if !html_content.is_empty() {
                     let text_content = self.strip_html_tags(&html_content);
                     if !text_content.is_empty() {
+                        let chapter_idx = content.len();
                         content.push(text_content);
                         spine_hrefs.push(href.clone());
+
+                        // Collect image info from HTML
+                        let imgs = self.extract_html_images(&html_content, href);
+                        let mut img_blocks: Vec<(usize, crate::domain::chapter_block::InlineImageBlock)> = Vec::new();
+                        for (img_idx, (img_src, img_alt)) in imgs.into_iter().enumerate() {
+                            let asset_id = format!("{}-c{}-i{}",
+                                spine_hrefs.last().unwrap_or(&"unknown".to_string())
+                                    .replace('/', "-").replace('.', "-"),
+                                chapter_idx, img_idx);
+                            // Resolve img src relative to chapter's full path inside the EPUB zip
+                            let chapter_full = self.get_full_path(&opf_base_path, href);
+                            let chapter_dir = std::path::Path::new(&chapter_full)
+                                .parent()
+                                .map(|p| p.to_string_lossy().to_string())
+                                .unwrap_or_default();
+                            let img_full_path = resolve_epub_path(&chapter_dir, &img_src);
+                            let mime = href_media_type(&img_src);
+                            let mut cache_key: Option<String> = None;
+                            // Second borrow: read image from zip
+                            if let Ok(mut img_file) = archive.by_name(&img_full_path) {
+                                let mut buf = Vec::new();
+                                if std::io::Read::read_to_end(&mut img_file, &mut buf).is_ok() && !buf.is_empty() {
+                                    let ext = mime_to_ext(mime);
+                                    let key = format!("{}.{}", asset_id, ext);
+                                    let cache_path = crate::storage::paths::image_cache_path(&asset_id, ext);
+                                    let _ = std::fs::create_dir_all(cache_path.parent().unwrap());
+                                    if std::fs::write(&cache_path, &buf).is_ok() {
+                                        cache_key = Some(key);
+                                        log::info!("图片已缓存: {} ({} bytes)", cache_path.display(), buf.len());
+                                    }
+                                }
+                            } else {
+                                log::warn!("EPUB 图片未找到: {}", img_full_path);
+                            }
+                            image_assets.push(crate::domain::book_assets::BookImageAsset {
+                                asset_id: asset_id.clone(),
+                                source_href: img_src,
+                                media_type: Some(mime.to_string()),
+                                cache_key: cache_key.clone(),
+                                width_hint: None,
+                                height_hint: None,
+                                alt_text: img_alt,
+                            });
+                            img_blocks.push((img_idx, crate::domain::chapter_block::InlineImageBlock {
+                                index: img_idx,
+                                asset_id,
+                                alt_text: None,
+                                caption: None,
+                                source_href: None,
+                            }));
+                        }
+                        chapter_image_blocks.push(img_blocks);
 
                         // 优先使用 TOC 标题
                         let chapter_title = if let Some(toc_title) = toc_title_map.get(href.as_str()) {
@@ -907,24 +1055,27 @@ impl BookParser for EpubParser {
             }
         }
 
-        // Extract cover image: search manifest for cover references
-        let cover_image = {
-            let cover_href = manifest.iter().find_map(|(id, href)| {
+        // Extract cover image + media type
+        let (cover_image, cover_media_type) = {
+            let result = manifest.iter().find_map(|(id, href)| {
                 let lower = format!("{}|{}", id.to_lowercase(), href.to_lowercase());
                 if lower.contains("cover") { Some(href.clone()) } else { None }
-            });
-            cover_href.and_then(|href| {
+            }).and_then(|href| {
                 let cover_path = if opf_base_path.is_empty() {
-                    href
+                    href.clone()
                 } else {
                     format!("{}/{}", opf_base_path.trim_end_matches('/'), href)
                 };
-                archive.by_name(&cover_path).ok().and_then(|mut f| {
+                archive.by_name(&cover_path).ok().map(|mut f| {
                     let mut buf = Vec::new();
-                    std::io::Read::read_to_end(&mut f, &mut buf).ok()?;
-                    if buf.is_empty() { None } else { Some(buf) }
+                    let _ = std::io::Read::read_to_end(&mut f, &mut buf);
+                    (buf, href_media_type(&href))
                 })
-            })
+            });
+            match result {
+                Some((buf, mime)) if !buf.is_empty() => (Some(buf), Some(mime.to_string())),
+                _ => (None, None),
+            }
         };
 
         Ok(ParseResult {
@@ -935,6 +1086,9 @@ impl BookParser for EpubParser {
             metadata,
             warnings,
             cover_image,
+            cover_media_type,
+            image_assets,
+            chapter_image_blocks,
         })
     }
 }

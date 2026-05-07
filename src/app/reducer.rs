@@ -512,6 +512,7 @@ mod tests {
                     source_href: None,
                     anchor: None,
                     warnings: Vec::new(),
+                    blocks: Vec::new(),
                 },
                 Chapter {
                     id: "ch-2".to_string(),
@@ -531,6 +532,7 @@ mod tests {
                     source_href: None,
                     anchor: None,
                     warnings: Vec::new(),
+                    blocks: Vec::new(),
                 },
             ],
             assets: BookAssets {
@@ -538,6 +540,7 @@ mod tests {
                 cover_media_type: None,
                 has_images: false,
                 embedded_styles_detected: false,
+                image_assets: Vec::new(),
             },
             load_info: BookLoadInfo {
                 parser_name: "Test".to_string(),
@@ -928,6 +931,7 @@ mod tests {
             source_href: None,
             anchor: None,
             warnings: Vec::new(),
+            blocks: Vec::new(),
         }];
         reduce(&mut state, Action::OpenBookSucceeded(book));
         let query = crate::domain::search_query::SearchQuery {

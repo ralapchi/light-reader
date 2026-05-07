@@ -76,7 +76,12 @@ impl CompatAdapter {
                     .get(index)
                     .cloned()
                     .unwrap_or_else(|| format!("章节 {}", index + 1));
-                build_chapter(index, &title, text)
+                let img_blocks = result
+                    .chapter_image_blocks
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_default();
+                build_chapter(index, &title, text, &img_blocks)
             })
             .collect::<Vec<_>>();
 
@@ -153,9 +158,10 @@ impl CompatAdapter {
             chapters: chapters.clone(),
             assets: BookAssets {
                 cover_image_bytes: result.cover_image,
-                cover_media_type: None,
-                has_images: false,
+                cover_media_type: result.cover_media_type,
+                has_images: !result.image_assets.is_empty(),
                 embedded_styles_detected: matches!(format, BookFormat::Epub),
+                image_assets: result.image_assets,
             },
             load_info: BookLoadInfo {
                 parser_name: parser_name.to_string(),
@@ -214,7 +220,12 @@ impl CompatAdapter {
 /// EPUB 缩进标记前缀（由 strip_html_tags 注入）
 const INDENT_MARKER: &str = "\x01INDENT\x01";
 
-fn build_chapter(index: usize, title: &str, text: &str) -> Chapter {
+fn build_chapter(
+    index: usize,
+    title: &str,
+    text: &str,
+    img_blocks: &[(usize, crate::domain::chapter_block::InlineImageBlock)],
+) -> Chapter {
     let mut line_number = 0usize;
     let paragraphs = text
         .split("\n\n")
@@ -256,6 +267,25 @@ fn build_chapter(index: usize, title: &str, text: &str) -> Chapter {
         .collect::<Vec<_>>()
         .join("\n\n");
 
+    // Build blocks: interleave paragraphs with images
+    let mut blocks: Vec<crate::domain::chapter_block::ChapterBlock> = Vec::new();
+    for para in &paragraphs {
+        // Insert any images that should appear before this paragraph
+        // (simple strategy: images inserted at index 0 go before first paragraph)
+        if para.index == 0 {
+            for (_pos, img) in img_blocks {
+                blocks.push(crate::domain::chapter_block::ChapterBlock::Image(img.clone()));
+            }
+        }
+        blocks.push(crate::domain::chapter_block::ChapterBlock::Paragraph(para.clone()));
+    }
+    // If no paragraphs but we have images, still add them
+    if paragraphs.is_empty() {
+        for (_pos, img) in img_blocks {
+            blocks.push(crate::domain::chapter_block::ChapterBlock::Image(img.clone()));
+        }
+    }
+
     Chapter {
         id: format!("ch-{}", index),
         index,
@@ -265,6 +295,7 @@ fn build_chapter(index: usize, title: &str, text: &str) -> Chapter {
         char_count: content.chars().count(),
         content,
         paragraphs,
+        blocks,
         source_href: None,
         anchor: None,
         warnings: Vec::new(),

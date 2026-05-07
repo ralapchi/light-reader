@@ -7,6 +7,7 @@ pub mod book_load_info;
 pub mod book_metadata;
 pub mod bookmark;
 pub mod chapter;
+pub mod chapter_block;
 pub mod enums;
 pub mod library_item;
 pub mod library_view_state;

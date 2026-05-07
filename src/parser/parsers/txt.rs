@@ -200,6 +200,9 @@ impl BookParser for TxtParser {
             metadata: None,
             warnings: Vec::new(),
             cover_image: None,
+            cover_media_type: None,
+            image_assets: Vec::new(),
+            chapter_image_blocks: Vec::new(),
         })
     }
 }

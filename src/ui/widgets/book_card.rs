@@ -5,8 +5,14 @@ use crate::ui::ThemeConfig;
 
 /// A reusable book card widget with a realistic cover appearance.
 /// Renders cover with title, author, format label, and progress bar.
+/// `cover_texture` is an optional pre-loaded egui texture for the real cover.
 /// Returns click responses.
-pub fn book_card(ui: &mut egui::Ui, item: &LibraryItem, theme: &ThemeConfig) -> Vec<egui::Response> {
+pub fn book_card(
+    ui: &mut egui::Ui,
+    item: &LibraryItem,
+    theme: &ThemeConfig,
+    cover_texture: Option<&egui::TextureHandle>,
+) -> Vec<egui::Response> {
     let r = &theme.radius;
     let colors = &theme.colors;
     let typo = &theme.typography;
@@ -37,10 +43,21 @@ pub fn book_card(ui: &mut egui::Ui, item: &LibraryItem, theme: &ThemeConfig) -> 
         let cover_rect = egui::Rect::from_min_size(rect.min, Vec2::new(rect.width(), cover_height));
         let cover_rounding = CornerRadius { nw: r.card as u8, ne: r.card as u8, sw: 0, se: 0 };
 
-        // Cover background with gradient-like effect
+        if let Some(texture) = cover_texture {
+            // Render real cover image
+            painter.image(
+                texture.id(),
+                cover_rect,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+        }
+        // Fallback: color background with spine effect
         let cover_base = format_cover_color(&item.format);
         let cover_dark = cover_base.gamma_multiply(0.7);
-        painter.rect_filled(cover_rect, cover_rounding, cover_base);
+        if cover_texture.is_none() {
+            painter.rect_filled(cover_rect, cover_rounding, cover_base);
+        }
 
         // Book spine effect (left edge darker strip)
         let spine_rect = egui::Rect::from_min_size(cover_rect.min, Vec2::new(6.0, cover_rect.height()));

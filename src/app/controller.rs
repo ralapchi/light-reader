@@ -252,17 +252,30 @@ fn after_book_opened(adapter: &mut CompatAdapter) {
                 book.chapters.len(),
                 progress_pct,
                 book.assets.cover_image_bytes.clone(),
+                book.assets.cover_media_type.clone(),
+                book.assets.image_assets.clone(),
             )
         })
     };
 
-    if let Some((book_id, title, author, format, source_path, chapter_count, progress_pct, cover_bytes)) = library_info {
-        // Save cover to cache if available
+    if let Some((book_id, title, author, format, source_path, chapter_count, progress_pct, cover_bytes, cover_mime, image_assets)) = library_info {
+        // Save cover to cache with real extension
         let cover_key: Option<String> = cover_bytes.and_then(|bytes| {
-            let cache_path = storage::paths::cover_cache_path(&book_id);
+            let ext = media_type_to_ext(cover_mime.as_deref());
+            let cache_path = storage::paths::cover_cache_path(&book_id, ext);
+            let _ = std::fs::create_dir_all(cache_path.parent()?);
             std::fs::write(&cache_path, &bytes).ok()?;
-            Some(format!("{}.png", book_id))
+            Some(format!("{}.{}", book_id, ext))
         });
+
+        // Save image assets to cache
+        for img_asset in &image_assets {
+            if let Some(cache_key) = &img_asset.cache_key {
+                // The actual bytes were extracted during parsing and written by the parser
+                // Here we just need to ensure the cache keys are set on library items
+                let _ = cache_key;
+            }
+        }
 
         upsert_library_item(
             adapter, &book_id, title, author, format,
@@ -425,6 +438,17 @@ fn upsert_library_item(
                 ..Default::default()
             },
         });
+    }
+}
+
+fn media_type_to_ext(mime: Option<&str>) -> &'static str {
+    match mime {
+        Some("image/jpeg") => "jpg",
+        Some("image/png") => "png",
+        Some("image/webp") => "webp",
+        Some("image/gif") => "gif",
+        Some("image/svg+xml") => "svg",
+        _ => "png",
     }
 }
 
