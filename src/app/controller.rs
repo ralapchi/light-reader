@@ -1,12 +1,14 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use chrono::Utc;
 
 use crate::app::Action;
-use crate::app::compat::CompatAdapter;
+use crate::app::compat::{CompatAdapter, TtsThreadResult};
 use crate::app::reducer;
+use crate::tts::tts_provider::TtsProvider;
+use crate::tts::service::TtsService;
+use crate::tts::types::TtsRequest;
 use crate::domain::enums::ScreenKind;
 use crate::domain::library_item::{FileHealth, LibraryItem, ReadingStatsSnapshot};
 use crate::parser::ParserFactory;
@@ -219,6 +221,295 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
         | Action::RestoreDefaultSettings => {
             reducer::reduce(adapter.state_mut(), action);
             save_settings(adapter);
+        }
+
+        // ── TTS actions with side effects ────────────────────
+        Action::StartTts => {
+            let (book_id, chapter_index, paragraphs, config) = {
+                let state = adapter.state();
+                let ch_idx = state.reading_progress.as_ref().map(|p| p.chapter_index).unwrap_or(0);
+                let book_id = state.current_book.as_ref().map(|b| b.id.clone());
+                let paras = state.current_book.as_ref()
+                    .and_then(|b| b.chapters.get(ch_idx))
+                    .map(|ch| ch.paragraphs.clone())
+                    .unwrap_or_default();
+                (book_id, ch_idx, paras, state.tts_config.clone())
+            };
+
+            let book_id = match book_id {
+                Some(id) => id,
+                None => {
+                    reducer::reduce(adapter.state_mut(), Action::TtsSynthesisFailed("没有打开书籍".to_string()));
+                    return;
+                }
+            };
+
+            if paragraphs.is_empty() {
+                reducer::reduce(adapter.state_mut(), Action::TtsSynthesisFailed("当前章节没有内容".to_string()));
+                return;
+            }
+
+            reducer::reduce(adapter.state_mut(), Action::StartTts);
+
+            let segments = adapter.tts_service().segment_chapter(chapter_index, &paragraphs, &config);
+            if segments.is_empty() {
+                reducer::reduce(adapter.state_mut(), Action::TtsSynthesisFailed("章节分割结果为空".to_string()));
+                return;
+            }
+
+            reducer::reduce(adapter.state_mut(), Action::TtsSynthesisStarted);
+
+            let segment = segments[0].clone();
+            let paragraph_indices = segment.paragraph_indices.clone();
+            let request = TtsRequest {
+                book_id: book_id.clone(),
+                chapter_index,
+                segment_index: segment.segment_index,
+                paragraph_indices: paragraph_indices.clone(),
+                text: segment.text.clone(),
+                voice_id: config.voice_id.clone(),
+            };
+            let tx = adapter.tts_sender();
+            let cache = adapter.tts_cache_arc();
+            let voice_id = config.voice_id.clone().unwrap_or_else(|| "default_en".to_string());
+
+            // Synthesize segment 0 on background thread
+            let seg_req = request.clone();
+            let seg_cfg = config.clone();
+            let seg_vid = voice_id.clone();
+            let seg_cache = Arc::clone(&cache);
+            let seg_tx = tx.clone();
+            std::thread::spawn(move || {
+                match TtsService::synthesize_blocking(&seg_req, &seg_cfg, &seg_vid, &seg_cache) {
+                    Ok(resp) => {
+                        seg_tx.send(TtsThreadResult::SynthesisCompleted(
+                            resp.audio_bytes, resp.media_type, seg_req.paragraph_indices,
+                        )).ok();
+                    }
+                    Err(e) => {
+                        seg_tx.send(TtsThreadResult::SynthesisFailed(format!("{}", e))).ok();
+                    }
+                }
+            });
+
+            // Pre-fetch segment 1 in background (if it exists)
+            if segments.len() > 1 {
+                let next = segments[1].clone();
+                let next_req = TtsRequest {
+                    book_id: book_id.clone(),
+                    chapter_index,
+                    segment_index: next.segment_index,
+                    paragraph_indices: next.paragraph_indices,
+                    text: next.text,
+                    voice_id: config.voice_id.clone(),
+                };
+                let next_cfg = config;
+                let next_vid = voice_id;
+                let next_cache = Arc::clone(&cache);
+                std::thread::spawn(move || {
+                    let _ = TtsService::synthesize_blocking(&next_req, &next_cfg, &next_vid, &next_cache);
+                });
+            }
+        }
+        Action::PauseTts => {
+            reducer::reduce(adapter.state_mut(), Action::PauseTts);
+            adapter.tts_service().pause_playback();
+        }
+        Action::ResumeTts => {
+            reducer::reduce(adapter.state_mut(), Action::ResumeTts);
+            adapter.tts_service().resume_playback();
+        }
+        Action::StopTts => {
+            adapter.tts_service().stop_playback();
+            reducer::reduce(adapter.state_mut(), Action::StopTts);
+        }
+        Action::PlayNextSegment => {
+            let (ch_idx, curr_seg, paragraphs, config) = {
+                let state = adapter.state();
+                let ch_idx = state.tts_state.current_chapter_index.unwrap_or(0);
+                let curr = state.playback_state.current_segment_index.unwrap_or(0);
+                let paras = state.current_book.as_ref()
+                    .and_then(|b| b.chapters.get(ch_idx))
+                    .map(|ch| ch.paragraphs.clone())
+                    .unwrap_or_default();
+                (ch_idx, curr, paras, state.tts_config.clone())
+            };
+
+            if paragraphs.is_empty() { return; }
+
+            let segments = adapter.tts_service().segment_chapter(ch_idx, &paragraphs, &config);
+            let next_seg = curr_seg + 1;
+            if next_seg >= segments.len() { return; }
+
+            reducer::reduce(adapter.state_mut(), Action::PlayNextSegment);
+
+            let segment = segments[next_seg].clone();
+            let paragraph_indices = segment.paragraph_indices.clone();
+            let voice_id = config.voice_id.clone().unwrap_or_else(|| "default_en".to_string());
+            let cache = adapter.tts_cache_arc();
+            let cache_path = cache.segment_path("xiaomi", "", ch_idx, segment.segment_index, &voice_id, "pcm16");
+
+            // Check cache first
+            if cache.exists(&cache_path) {
+                if let Ok(audio_bytes) = cache.read(&cache_path) {
+                    adapter.tts_service().stop_playback();
+                    match adapter.tts_service().play_audio(audio_bytes, "audio/pcm16") {
+                        Ok(()) => {
+                            reducer::reduce(adapter.state_mut(), Action::PlaybackStarted);
+                        }
+                        Err(e) => {
+                            reducer::reduce(adapter.state_mut(), Action::TtsSynthesisFailed(e));
+                        }
+                    }
+                    return;
+                }
+            }
+
+            // Cache miss: spawn synthesis thread
+            let request = TtsRequest {
+                book_id: String::new(),
+                chapter_index: ch_idx,
+                segment_index: segment.segment_index,
+                paragraph_indices: paragraph_indices.clone(),
+                text: segment.text.clone(),
+                voice_id: config.voice_id.clone(),
+            };
+
+            adapter.tts_service().stop_playback();
+            reducer::reduce(adapter.state_mut(), Action::TtsSynthesisStarted);
+            let tx = adapter.tts_sender();
+
+            std::thread::spawn(move || {
+                match TtsService::synthesize_blocking(&request, &config, &voice_id, &cache) {
+                    Ok(resp) => {
+                        tx.send(TtsThreadResult::SynthesisCompleted(
+                            resp.audio_bytes, resp.media_type, paragraph_indices,
+                        )).ok();
+                    }
+                    Err(e) => {
+                        tx.send(TtsThreadResult::SynthesisFailed(format!("{}", e))).ok();
+                    }
+                }
+            });
+        }
+        Action::PlayPrevSegment => {
+            let (ch_idx, curr_seg, paragraphs, config) = {
+                let state = adapter.state();
+                let ch_idx = state.tts_state.current_chapter_index.unwrap_or(0);
+                let curr = state.playback_state.current_segment_index.unwrap_or(0);
+                let paras = state.current_book.as_ref()
+                    .and_then(|b| b.chapters.get(ch_idx))
+                    .map(|ch| ch.paragraphs.clone())
+                    .unwrap_or_default();
+                (ch_idx, curr, paras, state.tts_config.clone())
+            };
+
+            if paragraphs.is_empty() || curr_seg == 0 { return; }
+
+            let segments = adapter.tts_service().segment_chapter(ch_idx, &paragraphs, &config);
+            let prev_seg = curr_seg - 1;
+
+            reducer::reduce(adapter.state_mut(), Action::PlayPrevSegment);
+
+            let segment = segments[prev_seg].clone();
+            let paragraph_indices = segment.paragraph_indices.clone();
+            let voice_id = config.voice_id.clone().unwrap_or_else(|| "default_en".to_string());
+            let cache = adapter.tts_cache_arc();
+            let cache_path = cache.segment_path("xiaomi", "", ch_idx, segment.segment_index, &voice_id, "pcm16");
+
+            // Check cache first
+            if cache.exists(&cache_path) {
+                if let Ok(audio_bytes) = cache.read(&cache_path) {
+                    adapter.tts_service().stop_playback();
+                    match adapter.tts_service().play_audio(audio_bytes, "audio/pcm16") {
+                        Ok(()) => {
+                            reducer::reduce(adapter.state_mut(), Action::PlaybackStarted);
+                        }
+                        Err(e) => {
+                            reducer::reduce(adapter.state_mut(), Action::TtsSynthesisFailed(e));
+                        }
+                    }
+                    return;
+                }
+            }
+
+            // Cache miss: spawn synthesis thread
+            let request = TtsRequest {
+                book_id: String::new(),
+                chapter_index: ch_idx,
+                segment_index: segment.segment_index,
+                paragraph_indices: paragraph_indices.clone(),
+                text: segment.text.clone(),
+                voice_id: config.voice_id.clone(),
+            };
+
+            adapter.tts_service().stop_playback();
+            reducer::reduce(adapter.state_mut(), Action::TtsSynthesisStarted);
+            let tx = adapter.tts_sender();
+
+            std::thread::spawn(move || {
+                match TtsService::synthesize_blocking(&request, &config, &voice_id, &cache) {
+                    Ok(resp) => {
+                        tx.send(TtsThreadResult::SynthesisCompleted(
+                            resp.audio_bytes, resp.media_type, paragraph_indices,
+                        )).ok();
+                    }
+                    Err(e) => {
+                        tx.send(TtsThreadResult::SynthesisFailed(format!("{}", e))).ok();
+                    }
+                }
+            });
+        }
+        Action::TtsTestConnection => {
+            let config = adapter.state().tts_config.clone();
+            let tx = adapter.tts_sender();
+            std::thread::spawn(move || {
+                let provider = crate::tts::xiaomi_provider::XiaomiTtsProvider::new();
+                let result = provider
+                    .test_connection(&config)
+                    .map_err(|e| e.to_string());
+                tx.send(TtsThreadResult::TestConnectionResult(result)).ok();
+            });
+        }
+        Action::TtsTestVoice => {
+            let config = adapter.state().tts_config.clone();
+            let voice_id = config.voice_id.clone().unwrap_or_else(|| "default_en".to_string());
+            let request = TtsRequest {
+                book_id: "__test__".to_string(),
+                chapter_index: 0,
+                segment_index: 0,
+                paragraph_indices: vec![0],
+                text: "欢迎使用语音朗读功能，这是一段测试语音。".to_string(),
+                voice_id: config.voice_id.clone(),
+            };
+            let tx = adapter.tts_sender();
+            let cache = adapter.tts_cache_arc();
+            std::thread::spawn(move || {
+                match TtsService::synthesize_blocking(&request, &config, &voice_id, &cache) {
+                    Ok(resp) => {
+                        tx.send(TtsThreadResult::TestVoiceAudio(resp.audio_bytes, resp.media_type)).ok();
+                    }
+                    Err(e) => {
+                        tx.send(TtsThreadResult::SynthesisFailed(format!("{}", e))).ok();
+                    }
+                }
+            });
+        }
+        Action::TtsClearCache => {
+            if let Err(e) = adapter.tts_service().clear_cache() {
+                log::warn!("TTS 缓存清理失败: {}", e);
+            }
+            let state = adapter.state_mut();
+            state.status_message = "TTS 缓存已清理".to_string();
+            state.status_message_set_at = Some(chrono::Utc::now().to_rfc3339());
+        }
+        Action::TtsClearBookCache(book_id) => {
+            if let Err(e) = adapter.tts_service().clear_book_cache(&book_id) {
+                log::warn!("TTS 缓存清理失败: {}", e);
+            }
+            let state = adapter.state_mut();
+            state.status_message = "当前书籍 TTS 缓存已清理".to_string();
+            state.status_message_set_at = Some(chrono::Utc::now().to_rfc3339());
         }
         other => reducer::reduce(adapter.state_mut(), other),
     }
@@ -467,16 +758,6 @@ fn media_type_to_ext(mime: Option<&str>) -> &'static str {
     }
 }
 
-fn stable_book_id(path: &str) -> String {
-    let normalized = std::fs::canonicalize(path)
-        .ok()
-        .and_then(|resolved| resolved.to_str().map(ToOwned::to_owned))
-        .unwrap_or_else(|| path.to_string());
-    let mut hasher = DefaultHasher::new();
-    normalized.hash(&mut hasher);
-    format!("book-{:016x}", hasher.finish())
-}
-
 fn import_single_book(path: &str, now: &str) -> Result<LibraryItem, crate::domain::app_error::AppError> {
     let format = if path.ends_with(".epub") {
         crate::domain::book_format::BookFormat::Epub
@@ -516,7 +797,7 @@ fn import_single_book(path: &str, now: &str) -> Result<LibraryItem, crate::domai
         .unwrap_or(file_stem);
     let author = result.metadata.and_then(|m| m.author);
     let chapter_count = result.content.len();
-    let book_id = stable_book_id(path);
+    let book_id = crate::domain::book::stable_book_id(path);
     let file_exists = std::path::Path::new(path).exists();
 
     Ok(LibraryItem {

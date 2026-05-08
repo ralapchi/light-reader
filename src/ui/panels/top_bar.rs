@@ -30,7 +30,7 @@ impl TopBar {
 
             // Floating TOC toggle — replaces old sidebar
             let toc_btn = egui::Button::new("目录")
-                .min_size(egui::vec2(46.0, 24.0))
+                .min_size(egui::vec2(s.xl, s.lg))
                 .selected(props.floating_toc_open);
             if ui.add(toc_btn).clicked() {
                 actions.push(Action::ToggleFloatingToc);

@@ -9,7 +9,9 @@ use crate::domain::reader_settings::ReaderSettings;
 use crate::domain::reading_progress::ReadingProgress;
 use crate::domain::recent_book_item::RecentBookItem;
 use crate::domain::search_state::SearchState;
+use crate::domain::tts_state::{PlaybackState, TtsState};
 use crate::domain::ui_state::UiState;
+use crate::tts::config::TtsConfig;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppState {
@@ -29,6 +31,9 @@ pub struct AppState {
     pub window_pos: Option<(f32, f32)>,
     pub session_started_at: Option<String>,
     pub total_read_seconds_at_session_start: u64,
+    pub tts_state: TtsState,
+    pub playback_state: PlaybackState,
+    pub tts_config: TtsConfig,
 }
 
 impl Default for AppState {
@@ -50,6 +55,9 @@ impl Default for AppState {
             window_pos: None,
             session_started_at: None,
             total_read_seconds_at_session_start: 0,
+            tts_state: TtsState::default(),
+            playback_state: PlaybackState::default(),
+            tts_config: TtsConfig::default(),
         }
     }
 }

@@ -5,19 +5,16 @@ use rfd::FileDialog;
 use crate::app::compat::CompatAdapter;
 use crate::app::Action;
 use crate::domain::enums::ScreenKind;
-use crate::ui::image_cache::ImageCache;
+use crate::ui::image_cache::IMG_CACHE;
 use crate::ui::panels::library_page::library_page;
 use crate::ui::panels::reader_view::reader_view;
 use crate::ui::panels::search_panel::{search_panel, SearchPanelProps};
 use crate::ui::panels::settings_panel::{settings_panel, SettingsPanelProps};
 use crate::ui::panels::status_bar::status_bar;
 use crate::ui::panels::top_bar::{TopBar, TopBarProps};
+use crate::ui::panels::tts_player_bar::{tts_player_bar, TtsPlayerBarProps};
 use crate::ui::widgets::error_state;
 use crate::ui::{ThemeConfig, ThemeService};
-
-thread_local! {
-    static LOADING_IMG_CACHE: std::cell::RefCell<ImageCache> = std::cell::RefCell::new(ImageCache::new());
-}
 
 pub struct AppShell;
 
@@ -61,7 +58,7 @@ impl AppShell {
                 // Try to load cover for loading screen
                 let mut cover_tex = None;
                 if let Some(key) = cover_key {
-                    cover_tex = LOADING_IMG_CACHE.with(|c| c.borrow_mut().cover_texture(
+                    cover_tex = IMG_CACHE.with(|c| c.borrow_mut().cover_texture(
                         ctx, key, cover_key,
                     ));
                 }
@@ -196,7 +193,7 @@ impl AppShell {
 
             // Hover toolbar: check mouse proximity to top edge
             let mouse_y = ctx.input(|i| i.pointer.hover_pos().map(|p| p.y).unwrap_or(0.0));
-            let toolbar_should_show = mouse_y < 40.0 || state.ui_state.show_floating_toc
+            let toolbar_should_show = mouse_y < theme.panel.top_bar_height || state.ui_state.show_floating_toc
                 || state.ui_state.show_search_panel || state.ui_state.show_settings_panel;
             if toolbar_should_show != state.ui_state.reader_toolbar_visible {
                 actions.push(Action::SetReaderToolbarVisible(toolbar_should_show));
@@ -245,6 +242,8 @@ impl AppShell {
                 .map(|q| q.case_sensitive)
                 .unwrap_or(false);
             let status_message: &str = &state.status_message;
+            let highlighted_paragraph_indices =
+                &state.playback_state.current_paragraph_indices;
 
             egui::CentralPanel::default().show(ctx, |ui| {
                 let reader_actions = reader_view(
@@ -256,6 +255,7 @@ impl AppShell {
                     selected_search_result,
                     search_keyword,
                     case_sensitive,
+                    highlighted_paragraph_indices,
                 );
                 actions.extend(reader_actions);
             });
@@ -297,9 +297,24 @@ impl AppShell {
             if state.ui_state.show_settings_panel {
                 let settings_props = SettingsPanelProps {
                     reader_settings: settings,
+                    tts_config: &state.tts_config,
+                    tts_state: &state.tts_state,
                 };
                 let settings_actions = settings_panel(ctx, &settings_props, theme);
                 actions.extend(settings_actions);
+            }
+
+            // TTS player bar (bottom panel)
+            if state.tts_config.enabled {
+                let tts_props = TtsPlayerBarProps {
+                    tts_state: &state.tts_state,
+                    playback_state: &state.playback_state,
+                    chapter_count: chapters.len(),
+                };
+                egui::TopBottomPanel::bottom("tts_player_bar").show(ctx, |ui| {
+                    let player_actions = tts_player_bar(ui, &tts_props, theme);
+                    actions.extend(player_actions);
+                });
             }
 
             actions
@@ -379,7 +394,7 @@ fn book_loading_screen(
 ) {
     let s = &theme.spacing;
     ui.vertical_centered(|ui| {
-        ui.add_space(s.xl * 3.0);
+        ui.add_space(s.chapter_end_spacer);
 
         // Cover area
         let cover_size = egui::Vec2::new(160.0, 210.0);
@@ -420,7 +435,7 @@ fn book_loading_screen(
         ui.label(egui::RichText::new("正在打开...").size(theme.typography.caption_size)
             .color(theme.colors.text_muted.to_color32()));
 
-        ui.add_space(s.xl * 4.0);
+        ui.add_space(s.loading_screen_spacer);
     });
 }
 

@@ -7,7 +7,7 @@ use crate::domain::chapter::Chapter;
 use crate::domain::paragraph_kind::ParagraphKind;
 use crate::domain::reader_settings::ReaderSettings;
 use crate::domain::search_result::SearchResult;
-use crate::ui::image_cache::ImageCache;
+use crate::ui::image_cache::IMG_CACHE;
 use crate::ui::ThemeConfig;
 use crate::ui::theme::ThemeSpacing;
 use crate::ui::widgets::render_highlighted_text;
@@ -16,9 +16,10 @@ const SCROLL_OFFSET_THRESHOLD: f32 = 1.0;
 
 thread_local! {
     static LAST_SCROLL_OFFSET: Cell<f32> = const { Cell::new(0.0) };
-    static IMG_CACHE: std::cell::RefCell<ImageCache> = std::cell::RefCell::new(ImageCache::new());
 }
 
+/// Argument for reader_view function.
+/// Use &[] to disable TTS highlighting.
 pub fn reader_view(
     ui: &mut egui::Ui,
     chapters: &[Chapter],
@@ -28,6 +29,7 @@ pub fn reader_view(
     selected_search_result: Option<&SearchResult>,
     search_keyword: Option<&str>,
     case_sensitive: bool,
+    highlighted_paragraph_indices: &[usize],
 ) -> Vec<Action> {
     let s = &theme.spacing;
     let max_width = settings.content_width;
@@ -67,7 +69,7 @@ pub fn reader_view(
                         let font_family = parse_font_family(&settings.font_family);
 
                         // Chapter header
-                        chapter_header(ui, &chapter.title, theme);
+                        chapter_header(ui, &chapter.title, font_size, theme);
 
                         // Render content blocks in order (E-1: images interleaved with paragraphs)
                         if !chapter.blocks.is_empty() {
@@ -75,11 +77,12 @@ pub fn reader_view(
                                 match block {
                                     crate::domain::chapter_block::ChapterBlock::Paragraph(paragraph) => {
                                         let is_highlighted = highlight_para_index == Some(paragraph.index);
+                                        let is_tts_highlighted = highlighted_paragraph_indices.contains(&paragraph.index);
                                         if is_highlighted && !scroll_to_highlight {
                                             scroll_to_highlight = true;
                                         }
                                         render_paragraph_block(
-                                            ui, paragraph, is_highlighted, font_size, &font_family,
+                                            ui, paragraph, is_highlighted, is_tts_highlighted, font_size, &font_family,
                                             line_height, settings, theme, case_sensitive, search_keyword, s,
                                         );
                                     }
@@ -97,11 +100,12 @@ pub fn reader_view(
                             // Fallback to paragraphs-only rendering
                             for paragraph in &chapter.paragraphs {
                                 let is_highlighted = highlight_para_index == Some(paragraph.index);
+                                let is_tts_highlighted = highlighted_paragraph_indices.contains(&paragraph.index);
                                 if is_highlighted && !scroll_to_highlight {
                                     scroll_to_highlight = true;
                                 }
                                 render_paragraph_block(
-                                    ui, paragraph, is_highlighted, font_size, &font_family,
+                                    ui, paragraph, is_highlighted, is_tts_highlighted, font_size, &font_family,
                                     line_height, settings, theme, case_sensitive, search_keyword, s,
                                 );
                             }
@@ -153,15 +157,14 @@ pub fn reader_view(
     actions
 }
 
-fn chapter_header(ui: &mut egui::Ui, title: &str, theme: &ThemeConfig) {
+fn chapter_header(ui: &mut egui::Ui, title: &str, font_size: f32, theme: &ThemeConfig) {
     let s = &theme.spacing;
-    let t = &theme.typography;
 
     ui.add_space(s.lg);
     ui.vertical_centered(|ui| {
         ui.label(
             egui::RichText::new(title)
-                .size(t.title_size)
+                .size(font_size * 1.4)
                 .strong()
                 .color(theme.colors.text_primary.to_color32()),
         );
@@ -173,7 +176,7 @@ fn chapter_header(ui: &mut egui::Ui, title: &str, theme: &ThemeConfig) {
 
 fn chapter_end_spacer(ui: &mut egui::Ui, theme: &ThemeConfig, next_chapter_clicked: &Cell<bool>) {
     let s = &theme.spacing;
-    ui.add_space(s.xl * 3.0);
+    ui.add_space(s.chapter_end_spacer);
     ui.vertical_centered(|ui| {
         ui.label(
             egui::RichText::new("--- 章节结束 ---")
@@ -185,12 +188,12 @@ fn chapter_end_spacer(ui: &mut egui::Ui, theme: &ThemeConfig, next_chapter_click
             next_chapter_clicked.set(true);
         }
     });
-    ui.add_space(s.xl * 2.0);
+    ui.add_space(s.chapter_title_bottom);
 }
 
 fn empty_chapter(ui: &mut egui::Ui, theme: &ThemeConfig) {
     let s = &theme.spacing;
-    ui.add_space(s.xl * 4.0);
+    ui.add_space(s.loading_screen_spacer);
     ui.vertical_centered(|ui| {
         ui.label(
             egui::RichText::new("无内容")
@@ -207,7 +210,7 @@ fn highlight_paragraph(ui: &mut egui::Ui, rect: egui::Rect, theme: &ThemeConfig)
     painter.rect_filled(
         rect,
         egui::CornerRadius::same(4),
-        theme.colors.accent.to_color32().gamma_multiply(0.15),
+        theme.colors.accent.to_color32().gamma_multiply(theme.spacing.highlight_alpha),
     );
 
     // Left accent bar
@@ -227,6 +230,7 @@ fn render_paragraph_block(
     ui: &mut egui::Ui,
     paragraph: &crate::domain::paragraph::Paragraph,
     is_highlighted: bool,
+    is_tts_highlighted: bool,
     font_size: f32,
     font_family: &egui::FontFamily,
     line_height: Option<f32>,
@@ -238,7 +242,7 @@ fn render_paragraph_block(
 ) {
     match paragraph.kind {
         ParagraphKind::Title => {
-            let title_font_id = egui::FontId::new(font_size * 1.5, font_family.clone());
+            let title_font_id = egui::FontId::new(font_size * 1.15, font_family.clone());
             let resp = ui.vertical_centered(|ui| {
                 ui.add_space(s.lg);
                 ui.label(
@@ -249,7 +253,7 @@ fn render_paragraph_block(
                 );
                 ui.add_space(s.sm);
             }).response;
-            if is_highlighted {
+            if is_highlighted || is_tts_highlighted {
                 highlight_paragraph(ui, resp.rect, theme);
             }
         }
@@ -264,7 +268,7 @@ fn render_paragraph_block(
                 );
                 ui.add_space(s.xs);
             }).response;
-            if is_highlighted {
+            if is_highlighted || is_tts_highlighted {
                 highlight_paragraph(ui, resp.rect, theme);
             }
         }
@@ -279,7 +283,7 @@ fn render_paragraph_block(
                     .color(theme.colors.text_secondary.to_color32())
                     .line_height(line_height),
             );
-            if is_highlighted {
+            if is_highlighted || is_tts_highlighted {
                 highlight_paragraph(ui, resp.rect, theme);
             }
             ui.add_space(s.sm);
@@ -315,7 +319,7 @@ fn render_paragraph_block(
                     );
                 }
             }).response;
-            if is_highlighted {
+            if is_highlighted || is_tts_highlighted {
                 highlight_paragraph(ui, resp.rect, theme);
             }
             ui.add_space(settings.paragraph_spacing);

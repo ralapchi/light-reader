@@ -1,6 +1,7 @@
 pub mod app_error;
 pub mod app_state;
 pub mod book;
+pub mod tts_state;
 pub mod book_assets;
 pub mod book_format;
 pub mod book_load_info;
@@ -8,6 +9,7 @@ pub mod book_metadata;
 pub mod bookmark;
 pub mod chapter;
 pub mod chapter_block;
+pub mod chapter_builder;
 pub mod enums;
 pub mod library_item;
 pub mod library_view_state;
@@ -45,4 +47,9 @@ pub mod error_codes {
     pub const PROGRESS_SAVE_FAILED: &str = "PROGRESS_SAVE_FAILED";
     pub const BOOKMARK_SAVE_FAILED: &str = "BOOKMARK_SAVE_FAILED";
     pub const RECENT_SAVE_FAILED: &str = "RECENT_SAVE_FAILED";
+    pub const TTS_NETWORK_ERROR: &str = "TTS_NETWORK_ERROR";
+    pub const TTS_AUTH_ERROR: &str = "TTS_AUTH_ERROR";
+    pub const TTS_INVALID_CONFIG: &str = "TTS_INVALID_CONFIG";
+    pub const TTS_PROVIDER_ERROR: &str = "TTS_PROVIDER_ERROR";
+    pub const TTS_CACHE_ERROR: &str = "TTS_CACHE_ERROR";
 }

@@ -16,6 +16,7 @@ pub fn ensure_dirs() -> std::io::Result<()> {
     std::fs::create_dir_all(base.join("bookmarks"))?;
     std::fs::create_dir_all(base.join("cache/covers"))?;
     std::fs::create_dir_all(base.join("cache/images"))?;
+    std::fs::create_dir_all(base.join("cache/tts"))?;
     Ok(())
 }
 
@@ -45,4 +46,8 @@ pub fn cover_cache_path(book_id: &str, ext: &str) -> PathBuf {
 
 pub fn image_cache_path(asset_id: &str, ext: &str) -> PathBuf {
     app_data_dir().join("cache/images").join(format!("{}.{}", asset_id, ext))
+}
+
+pub fn tts_cache_dir() -> PathBuf {
+    app_data_dir().join("cache/tts")
 }

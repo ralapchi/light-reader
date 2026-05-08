@@ -101,6 +101,14 @@ pub struct ThemeSpacing {
     pub reader_top_padding: f32,
     pub paragraph_gap: f32,
     pub panel_gap: f32,
+    /// Vertical space after chapter title before first paragraph.
+    pub chapter_title_bottom: f32,
+    /// Vertical space at the end of a chapter (before next chapter).
+    pub chapter_end_spacer: f32,
+    /// Vertical padding for the loading/book-cover screen.
+    pub loading_screen_spacer: f32,
+    /// Opacity multiplier for paragraph highlight background (search/TTS).
+    pub highlight_alpha: f32,
 }
 
 // ── ThemeTypography (8 fields, SPEC 8.14) ──────────────
@@ -134,6 +142,8 @@ pub struct ThemeShadow {
     pub panel_blur: f32,
     pub panel_alpha: f32,
     pub floating_blur: f32,
+    pub card_shadow_alpha: u8,
+    pub badge_bg_alpha: u8,
 }
 
 // ── ThemePanel (6 fields, SPEC 8.17, all f32) ──────────
@@ -300,6 +310,10 @@ fn default_spacing() -> ThemeSpacing {
         reader_top_padding: 20.0,
         paragraph_gap: 16.0,
         panel_gap: 8.0,
+        chapter_title_bottom: 48.0,
+        chapter_end_spacer: 72.0,
+        loading_screen_spacer: 96.0,
+        highlight_alpha: 0.15,
     }
 }
 
@@ -330,6 +344,8 @@ fn default_shadow() -> ThemeShadow {
         panel_blur: 8.0,
         panel_alpha: 0.12,
         floating_blur: 12.0,
+        card_shadow_alpha: 40,
+        badge_bg_alpha: 120,
     }
 }
 

@@ -2,13 +2,9 @@ use eframe::egui;
 
 use crate::app::Action;
 use crate::domain::library_item::LibraryItem;
-use crate::ui::image_cache::ImageCache;
+use crate::ui::image_cache::IMG_CACHE;
 use crate::ui::widgets::book_card;
 use crate::ui::ThemeConfig;
-
-thread_local! {
-    static DETAIL_IMG_CACHE: std::cell::RefCell<ImageCache> = std::cell::RefCell::new(ImageCache::new());
-}
 
 /// Show a detail overlay for a selected library book.
 pub fn library_detail_panel(
@@ -39,7 +35,7 @@ pub fn library_detail_panel(
                     let painter = ui.painter_at(mini_cover_rect);
                     // Try real cover first
                     let mut drew_real = false;
-                    if let Some(tex) = DETAIL_IMG_CACHE.with(|c| c.borrow_mut().cover_texture(
+                    if let Some(tex) = IMG_CACHE.with(|c| c.borrow_mut().cover_texture(
                         ui.ctx(), &item.book_id, item.cover_cache_key.as_deref(),
                     )) {
                         painter.image(
@@ -50,7 +46,7 @@ pub fn library_detail_panel(
                         drew_real = true;
                     }
                     if !drew_real {
-                        let cover_color = cover_base_color(item);
+                        let cover_color = book_card::format_cover_color(&item.format);
                         painter.rect_filled(mini_cover_rect, egui::CornerRadius::same(4), cover_color);
                         painter.rect_stroke(mini_cover_rect, egui::CornerRadius::same(4),
                             egui::Stroke::new(1.0, colors.border_subtle.to_color32()), egui::StrokeKind::Inside);
@@ -164,14 +160,5 @@ fn format_seconds(total_seconds: u64) -> String {
         format!("{}小时{}分", hours, minutes)
     } else {
         format!("{}分钟", minutes)
-    }
-}
-
-fn cover_base_color(item: &LibraryItem) -> egui::Color32 {
-    match item.format {
-        crate::domain::book_format::BookFormat::Epub => egui::Color32::from_rgb(60, 100, 160),
-        crate::domain::book_format::BookFormat::Txt => egui::Color32::from_rgb(80, 140, 80),
-        crate::domain::book_format::BookFormat::ReservedPdf => egui::Color32::from_rgb(170, 70, 70),
-        crate::domain::book_format::BookFormat::ReservedMobi => egui::Color32::from_rgb(100, 75, 150),
     }
 }

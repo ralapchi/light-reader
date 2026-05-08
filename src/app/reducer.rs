@@ -7,6 +7,7 @@ use crate::domain::book_format::BookFormat;
 use crate::domain::enums::ScreenKind;
 use crate::domain::reading_progress::ReadingProgress;
 use crate::domain::recent_book_item::RecentBookItem;
+use crate::tts::types::PlaybackStatus;
 
 pub fn reduce(state: &mut AppState, action: Action) {
     match action {
@@ -252,6 +253,103 @@ pub fn reduce(state: &mut AppState, action: Action) {
                     crate::domain::library_item::FileHealth::Missing
                 };
             }
+        }
+
+        // ── TTS actions ──────────────────────────────────────
+        Action::TtsConfigSaved(config) => {
+            state.tts_config = config.clone();
+            state.tts_state.enabled = config.enabled;
+        }
+        Action::TtsProviderSelected(kind) => {
+            state.tts_state.provider = Some(kind);
+        }
+        Action::TtsVoiceSelected(voice_id) => {
+            state.tts_config.voice_id = Some(voice_id);
+        }
+        Action::TtsTestSucceeded => {
+            state.tts_state.last_test_at = Some(Utc::now().to_rfc3339());
+            state.tts_state.last_error = None;
+        }
+        Action::TtsTestFailed(msg) => {
+            state.tts_state.last_error = Some(msg);
+        }
+        Action::StartTts => {
+            state.playback_state = crate::domain::tts_state::PlaybackState::default();
+            state.tts_state.is_generating = true;
+            state.tts_state.last_error = None;
+            if let Some(ref book) = state.current_book {
+                state.tts_state.current_book_id = Some(book.id.clone());
+                state.tts_state.current_chapter_index =
+                    state.reading_progress.as_ref().map(|p| p.chapter_index);
+                state.tts_state.current_segment_index = Some(0);
+                state.playback_state.current_book_id = Some(book.id.clone());
+                state.playback_state.current_chapter_index =
+                    state.reading_progress.as_ref().map(|p| p.chapter_index);
+                state.playback_state.current_segment_index = Some(0);
+            }
+        }
+        Action::PauseTts => {
+            state.playback_state.status = PlaybackStatus::Paused;
+        }
+        Action::ResumeTts => {
+            state.playback_state.status = PlaybackStatus::Playing;
+        }
+        Action::StopTts => {
+            state.playback_state = crate::domain::tts_state::PlaybackState::default();
+            state.tts_state.current_book_id = None;
+            state.tts_state.current_chapter_index = None;
+            state.tts_state.current_segment_index = None;
+            state.tts_state.is_generating = false;
+        }
+        Action::PlayNextSegment => {
+            if let Some(ref mut seg_idx) = state.playback_state.current_segment_index {
+                *seg_idx = seg_idx.saturating_add(1);
+                state.tts_state.current_segment_index = state.playback_state.current_segment_index;
+                state.playback_state.status = PlaybackStatus::Buffering;
+            }
+        }
+        Action::PlayPrevSegment => {
+            if let Some(ref mut seg_idx) = state.playback_state.current_segment_index {
+                *seg_idx = seg_idx.saturating_sub(1);
+                state.tts_state.current_segment_index = state.playback_state.current_segment_index;
+                state.playback_state.status = PlaybackStatus::Buffering;
+            }
+        }
+        Action::TtsSynthesisStarted => {
+            state.tts_state.is_generating = true;
+        }
+        Action::TtsSynthesisSucceeded(_) => {
+            state.tts_state.is_generating = false;
+        }
+        Action::TtsSynthesisFailed(msg) => {
+            state.tts_state.is_generating = false;
+            state.tts_state.last_error = Some(msg);
+        }
+        Action::PlaybackStarted => {
+            state.playback_state.status = PlaybackStatus::Playing;
+        }
+        Action::PlaybackPaused => {
+            state.playback_state.status = PlaybackStatus::Paused;
+        }
+        Action::PlaybackStopped => {
+            state.playback_state.status = PlaybackStatus::Idle;
+        }
+        Action::PlaybackProgressUpdated(progress, duration) => {
+            state.playback_state.progress_ms = Some(progress);
+            state.playback_state.duration_ms = Some(duration);
+        }
+        Action::PlaybackSegmentFinished => {
+            if let Some(ref mut seg_idx) = state.playback_state.current_segment_index {
+                *seg_idx = seg_idx.saturating_add(1);
+                state.tts_state.current_segment_index = state.playback_state.current_segment_index;
+            }
+        }
+        Action::PlaybackAllFinished => {
+            state.playback_state.status = PlaybackStatus::Finished;
+            state.tts_state.is_generating = false;
+        }
+        Action::TtsClearCache | Action::TtsClearBookCache(_) => {
+            // Controller handles the side effects; no state change needed
         }
         _ => {}
     }

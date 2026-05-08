@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::reader_settings::ReaderSettings;
 use crate::storage::paths;
+use crate::tts::config::TtsConfig;
 
 const SETTINGS_VERSION: u32 = 1;
 
@@ -13,6 +14,9 @@ pub struct SettingsFile {
     pub window_size: Option<(f32, f32)>,
     pub window_pos: Option<(f32, f32)>,
     pub last_opened_book_id: Option<String>,
+    /// TTS configuration (BYOK). TRANSITIONAL: API key stored as plaintext.
+    /// Migrate to OS keychain in a future iteration.
+    pub tts_config: Option<TtsConfig>,
 }
 
 impl Default for SettingsFile {
@@ -23,6 +27,7 @@ impl Default for SettingsFile {
             window_size: None,
             window_pos: None,
             last_opened_book_id: None,
+            tts_config: None,
         }
     }
 }
@@ -38,6 +43,7 @@ impl SettingsFile {
             window_size: None,
             window_pos: None,
             last_opened_book_id,
+            tts_config: None,
         }
     }
 }

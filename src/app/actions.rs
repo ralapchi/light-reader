@@ -7,6 +7,8 @@ use crate::domain::library_item::LibraryItem;
 use crate::domain::library_view_state::{LibraryFilterMode, LibrarySortMode};
 use crate::domain::search_query::SearchQuery;
 use crate::domain::theme_kind::ThemeKind;
+use crate::tts::config::TtsConfig;
+use crate::tts::types::TtsProviderKind;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ReaderSettingUpdate {
@@ -79,4 +81,30 @@ pub enum Action {
     RefreshLibraryItem(String),
     RescanMissingBooks,
     RepairLibraryPath { book_id: String, new_path: String },
+
+    // TTS actions
+    TtsConfigSaved(TtsConfig),
+    TtsProviderSelected(TtsProviderKind),
+    TtsVoiceSelected(String),
+    TtsTestConnection,
+    TtsTestVoice,
+    TtsTestSucceeded,
+    TtsTestFailed(String),
+    StartTts,
+    PauseTts,
+    ResumeTts,
+    StopTts,
+    PlayNextSegment,
+    PlayPrevSegment,
+    TtsSynthesisStarted,
+    TtsSynthesisSucceeded(String),
+    TtsSynthesisFailed(String),
+    PlaybackStarted,
+    PlaybackPaused,
+    PlaybackStopped,
+    PlaybackProgressUpdated(u64, u64),
+    PlaybackSegmentFinished,
+    PlaybackAllFinished,
+    TtsClearCache,
+    TtsClearBookCache(String),
 }

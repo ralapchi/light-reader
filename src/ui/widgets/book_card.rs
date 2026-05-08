@@ -16,6 +16,7 @@ pub fn book_card(
     let r = &theme.radius;
     let colors = &theme.colors;
     let typo = &theme.typography;
+    let shadow = &theme.shadow;
 
     let is_missing = item.file_health != FileHealth::Ok;
 
@@ -30,7 +31,7 @@ pub fn book_card(
         painter.rect_filled(
             shadow_rect,
             CornerRadius::same(r.card as u8 + 2),
-            egui::Color32::from_black_alpha(40),
+            egui::Color32::from_black_alpha(shadow.card_shadow_alpha),
         );
 
         // Card background
@@ -102,7 +103,7 @@ pub fn book_card(
         let badge_size = Vec2::new(36.0, 18.0);
         let badge_pos = egui::pos2(cover_rect.right() - badge_size.x - 4.0, cover_rect.top() + 4.0);
         let badge_rect = egui::Rect::from_min_size(badge_pos, badge_size);
-        painter.rect_filled(badge_rect, CornerRadius::same(3), egui::Color32::from_black_alpha(120));
+        painter.rect_filled(badge_rect, CornerRadius::same(3), egui::Color32::from_black_alpha(shadow.badge_bg_alpha));
         painter.text(
             badge_rect.center(),
             egui::Align2::CENTER_CENTER,
@@ -197,7 +198,7 @@ fn truncate_title(title: &str, max_chars: usize) -> String {
     }
 }
 
-fn format_cover_color(format: &BookFormat) -> egui::Color32 {
+pub(crate) fn format_cover_color(format: &BookFormat) -> egui::Color32 {
     match format {
         BookFormat::Epub => egui::Color32::from_rgb(60, 100, 160),
         BookFormat::Txt => egui::Color32::from_rgb(80, 140, 80),

@@ -87,6 +87,9 @@ impl eframe::App for ReaderApp {
         }
         self.was_focused = focused;
 
+        // Poll TTS thread results before rendering
+        self.adapter.poll_tts_results();
+
         AppShell::update(&mut self.adapter, ctx, frame);
     }
 

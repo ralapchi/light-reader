@@ -1,0 +1,4 @@
+# Ensure the cc crate can find the system C compiler,
+# regardless of the shell/IDE environment that launched cargo.
+[env]
+CC = "/usr/bin/cc"

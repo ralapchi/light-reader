@@ -1,3 +1,5 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -19,4 +21,15 @@ pub struct Book {
     pub chapters: Vec<Chapter>,
     pub assets: BookAssets,
     pub load_info: BookLoadInfo,
+}
+
+/// Generate a stable identifier from a file path using canonicalized path hashing.
+pub fn stable_book_id(path: &str) -> String {
+    let normalized = std::fs::canonicalize(path)
+        .ok()
+        .and_then(|resolved| resolved.to_str().map(ToOwned::to_owned))
+        .unwrap_or_else(|| path.to_string());
+    let mut hasher = DefaultHasher::new();
+    normalized.hash(&mut hasher);
+    format!("book-{:016x}", hasher.finish())
 }

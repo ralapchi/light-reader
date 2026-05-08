@@ -4,6 +4,11 @@ use log::warn;
 
 use crate::storage;
 
+// Global image texture cache — one instance shared across all UI panels.
+thread_local! {
+    pub static IMG_CACHE: std::cell::RefCell<ImageCache> = std::cell::RefCell::new(ImageCache::new());
+}
+
 /// Manages decoded egui textures for cover and content images.
 /// Loads from disk cache, decodes on first access, caches texture handles.
 pub struct ImageCache {

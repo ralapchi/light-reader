@@ -9,6 +9,8 @@ use crate::ui::ThemeConfig;
 /// Lightweight read-only props for SettingsPanel, derived from AppState.
 pub struct SettingsPanelProps<'a> {
     pub reader_settings: &'a ReaderSettings,
+    pub tts_config: &'a crate::tts::config::TtsConfig,
+    pub tts_state: &'a crate::domain::tts_state::TtsState,
 }
 
 pub fn settings_panel(
@@ -19,6 +21,8 @@ pub fn settings_panel(
     let s = &theme.spacing;
     let t = &theme.typography;
     let settings = props.reader_settings;
+    let tts_config = props.tts_config;
+    let tts_state = props.tts_state;
     let mut actions = Vec::new();
 
     egui::SidePanel::right("settings_panel")
@@ -63,6 +67,12 @@ pub fn settings_panel(
 
                     // 阅读行为：目录、状态栏、章节进度、启动恢复
                     reading_behavior_section(ui, settings, theme, &mut actions);
+                    ui.add_space(s.md);
+                    ui.separator();
+                    ui.add_space(s.md);
+
+                    // 听书：TTS 配置
+                    tts_section(ui, tts_config, tts_state, theme, &mut actions);
                     ui.add_space(s.md);
                     ui.separator();
                     ui.add_space(s.md);
@@ -319,5 +329,102 @@ fn advanced_section(
     // Restore defaults
     if ui.button("恢复默认设置").clicked() {
         actions.push(Action::RestoreDefaultSettings);
+    }
+}
+
+fn tts_section(
+    ui: &mut egui::Ui,
+    tts_config: &crate::tts::config::TtsConfig,
+    tts_state: &crate::domain::tts_state::TtsState,
+    theme: &ThemeConfig,
+    actions: &mut Vec<Action>,
+) {
+    let s = &theme.spacing;
+    let t = &theme.typography;
+
+    ui.label(egui::RichText::new("听书").size(t.body_size).strong());
+    ui.add_space(s.xs);
+
+    // Enabled toggle
+    let mut enabled = tts_config.enabled;
+    if ui.checkbox(&mut enabled, "启用听书").changed() {
+        let mut new_config = tts_config.clone();
+        new_config.enabled = enabled;
+        actions.push(Action::TtsConfigSaved(new_config));
+    }
+
+    // API Key
+    let mut api_key = tts_config.api_key.clone().unwrap_or_default();
+    ui.horizontal(|ui| {
+        ui.label("API Key");
+        if ui.add(egui::TextEdit::singleline(&mut api_key).password(true)).changed() {
+            let mut new_config = tts_config.clone();
+            new_config.api_key = if api_key.is_empty() { None } else { Some(api_key) };
+            actions.push(Action::TtsConfigSaved(new_config));
+        }
+    });
+    ui.label(egui::RichText::new("密钥仅保存在本地").size(t.caption_size).color(theme.colors.text_muted.to_color32()));
+
+    // Base URL
+    let mut base_url = tts_config.base_url.clone().unwrap_or_default();
+    ui.horizontal(|ui| {
+        ui.label("Base URL");
+        if ui.add(egui::TextEdit::singleline(&mut base_url).hint_text("https://api.xiaomimimo.com/v1")).changed() {
+            let mut new_config = tts_config.clone();
+            new_config.base_url = if base_url.is_empty() { None } else { Some(base_url) };
+            actions.push(Action::TtsConfigSaved(new_config));
+        }
+    });
+
+    // Model
+    let mut model = tts_config.model.clone().unwrap_or_default();
+    ui.horizontal(|ui| {
+        ui.label("Model");
+        if ui.add(egui::TextEdit::singleline(&mut model).hint_text("mimo-v2-tts")).changed() {
+            let mut new_config = tts_config.clone();
+            new_config.model = if model.is_empty() { None } else { Some(model) };
+            actions.push(Action::TtsConfigSaved(new_config));
+        }
+    });
+
+    // Voice selection
+    ui.horizontal(|ui| {
+        ui.label("音色");
+        let voices: &[(&str, &str)] = &[
+            ("default_en", "Default (English)"),
+            ("default_zh", "默认女声 (中文)"),
+            ("default_male", "默认男声"),
+            ("gentle_female", "温柔女声"),
+        ];
+        let current_voice = tts_config.voice_id.as_deref().unwrap_or("default_en");
+        let current_label = voices.iter().find(|(id, _)| *id == current_voice).map(|(_, l)| *l).unwrap_or(current_voice);
+        egui::ComboBox::from_id_salt("tts_voice").selected_text(current_label).show_ui(ui, |ui| {
+            for (id, label) in voices {
+                if ui.selectable_label(current_voice == *id, *label).clicked() && current_voice != *id {
+                    let mut new_config = tts_config.clone();
+                    new_config.voice_id = Some(id.to_string());
+                    actions.push(Action::TtsConfigSaved(new_config));
+                }
+            }
+        });
+    });
+
+    ui.add_space(s.sm);
+
+    // Action buttons
+    ui.horizontal(|ui| {
+        if ui.button("测试连接").clicked() { actions.push(Action::TtsTestConnection); }
+        if ui.button("测试语音").clicked() { actions.push(Action::TtsTestVoice); }
+    });
+    ui.horizontal(|ui| {
+        if ui.button("清空缓存").clicked() { actions.push(Action::TtsClearCache); }
+    });
+
+    // Feedback
+    if let Some(ref err) = tts_state.last_error {
+        ui.label(egui::RichText::new(err).color(theme.colors.danger.to_color32()).size(t.caption_size));
+    }
+    if let Some(ref last_test) = tts_state.last_test_at {
+        ui.label(egui::RichText::new(format!("上次测试: {}", last_test)).color(theme.colors.text_muted.to_color32()).size(t.caption_size));
     }
 }

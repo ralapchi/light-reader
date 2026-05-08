@@ -9,14 +9,13 @@ use crate::domain::library_item::{FileHealth, LibraryItem};
 use crate::domain::library_view_state::{LibraryFilterMode, LibrarySortMode, LibraryViewState};
 use std::cell::Cell;
 
-use crate::ui::image_cache::ImageCache;
+use crate::ui::image_cache::IMG_CACHE;
 use crate::ui::widgets::book_card;
 use crate::ui::widgets::library_detail::library_detail_panel;
 use crate::ui::ThemeConfig;
 
 thread_local! {
     static SELECTED_DETAIL: Cell<Option<String>> = const { Cell::new(None) };
-    static COVER_CACHE: std::cell::RefCell<ImageCache> = std::cell::RefCell::new(ImageCache::new());
 }
 
 /// The main library home page.
@@ -34,7 +33,7 @@ pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) 
         ui.horizontal(|ui| {
             // Import button
             if ui.button(
-                egui::RichText::new("\u{2795} 导入书籍")
+                egui::RichText::new("+ 导入书籍")
                     .size(typo.body_size)
             ).clicked() {
                 info!("点击了导入书籍按钮");
@@ -54,7 +53,7 @@ pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) 
 
             // Open book button
             if ui.button(
-                egui::RichText::new("\u{1F4D6} 打开书籍")
+                egui::RichText::new("打开书籍")
                     .size(typo.body_size)
             ).clicked() {
                 info!("点击了打开书籍按钮");
@@ -75,7 +74,7 @@ pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) 
             let mut search_query = state.library_view_state.search_query.clone();
             let search_response = ui.add(
                 egui::TextEdit::singleline(&mut search_query)
-                    .hint_text("\u{1F50D} 搜索书库...")
+                    .hint_text("搜索书库...")
                     .desired_width(200.0),
             );
             if search_response.changed() {
@@ -152,7 +151,7 @@ pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) 
         // ── Continue Reading section ─────────────────────────
         if has_progress_items {
             ui.label(
-                egui::RichText::new("\u{1F3F7} 继续阅读")
+                egui::RichText::new("继续阅读")
                     .size(typo.section_title_size)
                     .color(colors.text_primary.to_color32())
                     .strong(),
@@ -172,7 +171,7 @@ pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) 
 
             ui.horizontal(|ui| {
                 for item in &continue_items {
-                    let cover_tex = COVER_CACHE.with(|c| c.borrow_mut().cover_texture(ctx, &item.book_id, item.cover_cache_key.as_deref()));
+                    let cover_tex = IMG_CACHE.with(|c| c.borrow_mut().cover_texture(ctx, &item.book_id, item.cover_cache_key.as_deref()));
                     let card_responses = book_card::book_card(ui, item, theme, cover_tex.as_ref());
                     for response in &card_responses {
                         if response.double_clicked() {
@@ -193,7 +192,7 @@ pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) 
         // ── All Books section ────────────────────────────────
         ui.label(
             egui::RichText::new(format!(
-                "\u{1F4DA} 全部书籍 ({})",
+                "全部书籍 ({})",
                 filtered_items.len()
             ))
             .size(typo.section_title_size)
@@ -223,7 +222,7 @@ pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) 
                 .max_col_width(180.0)
                 .show(ui, |ui| {
                     for (i, item) in filtered_items.iter().enumerate() {
-                        let cover_tex = COVER_CACHE.with(|c| c.borrow_mut().cover_texture(ctx, &item.book_id, item.cover_cache_key.as_deref()));
+                        let cover_tex = IMG_CACHE.with(|c| c.borrow_mut().cover_texture(ctx, &item.book_id, item.cover_cache_key.as_deref()));
                     let card_responses = book_card::book_card(ui, item, theme, cover_tex.as_ref());
                         for response in &card_responses {
                             if response.double_clicked() {
@@ -249,7 +248,7 @@ pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) 
             ui.horizontal(|ui| {
                 ui.colored_label(
                     colors.warning.to_color32(),
-                    format!("\u{26A0} {} 本书的文件缺失或异常", missing_count),
+                    format!("{} 本书的文件缺失或异常", missing_count),
                 );
                 ui.add_space(s.md);
                 if ui.button("扫描缺失文件").clicked() {

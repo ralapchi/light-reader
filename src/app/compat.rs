@@ -1,10 +1,10 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use std::sync::mpsc;
 
 use chrono::Utc;
 use log::{info, warn};
 
 use crate::app::Action;
+use crate::app::reducer;
 use crate::domain::app_error::{AppError, AppResult};
 use crate::domain::app_state::AppState;
 use crate::domain::book::Book;
@@ -12,16 +12,27 @@ use crate::domain::book_assets::BookAssets;
 use crate::domain::book_format::BookFormat;
 use crate::domain::book_load_info::BookLoadInfo;
 use crate::domain::book_metadata::BookMetadata;
-use crate::domain::chapter::Chapter;
 use crate::domain::error_codes;
-use crate::domain::paragraph::Paragraph;
-use crate::domain::paragraph_kind::ParagraphKind;
+use crate::domain::chapter_builder::*;
 use crate::domain::toc_item::TocItem;
 use crate::parser::ParserFactory;
 use crate::storage;
+use crate::tts::service::TtsService;
+use crate::tts::types::PlaybackStatus;
+
+/// Internal result passed from background TTS threads to the main thread.
+pub enum TtsThreadResult {
+    SynthesisCompleted(Vec<u8>, String, Vec<usize>),
+    SynthesisFailed(String),
+    TestConnectionResult(Result<(), String>),
+    TestVoiceAudio(Vec<u8>, String),
+}
 
 pub struct CompatAdapter {
     state: AppState,
+    tts_service: TtsService,
+    tts_tx: mpsc::Sender<TtsThreadResult>,
+    tts_rx: mpsc::Receiver<TtsThreadResult>,
 }
 
 impl CompatAdapter {
@@ -35,12 +46,89 @@ impl CompatAdapter {
         state.reader_settings = settings_file.reader_settings;
         state.recent_books = recent_books;
 
+        // Restore persisted TTS config
+        if let Some(mut tts_config) = settings_file.tts_config {
+            // Migration: clear old invalid voice IDs carried over from earlier iterations
+            if let Some(ref vid) = tts_config.voice_id {
+                if vid.starts_with("xiaomi") || vid.starts_with("xiaomi_") {
+                    log::info!("TTS: clearing stale voice_id '{}', will use default", vid);
+                    tts_config.voice_id = None;
+                }
+            }
+            state.tts_config = tts_config;
+        }
+
         // Mark missing files in recent books
         for item in &mut state.recent_books {
             item.is_missing = !std::path::Path::new(&item.source_path).exists();
         }
 
-        Self { state }
+        let mut tts_service = TtsService::new(storage::paths::tts_cache_dir());
+        tts_service.register_provider(Box::new(
+            crate::tts::xiaomi_provider::XiaomiTtsProvider::new(),
+        ));
+
+        let (tx, rx) = mpsc::channel();
+
+        Self { state, tts_service, tts_tx: tx, tts_rx: rx }
+    }
+
+    pub fn tts_service(&self) -> &TtsService {
+        &self.tts_service
+    }
+
+    /// Cloneable handle to the TTS file cache for background threads.
+    pub fn tts_cache_arc(&self) -> std::sync::Arc<crate::tts::cache::TtsCache> {
+        self.tts_service.cache_arc()
+    }
+
+    /// Cloneable sender for background TTS threads.
+    pub fn tts_sender(&self) -> mpsc::Sender<TtsThreadResult> {
+        self.tts_tx.clone()
+    }
+
+    /// Poll completed TTS thread results and dispatch corresponding actions.
+    /// Called once per frame from ReaderApp::update().
+    pub fn poll_tts_results(&mut self) {
+        while let Ok(result) = self.tts_rx.try_recv() {
+            match result {
+                TtsThreadResult::SynthesisCompleted(audio_bytes, media_type, paragraph_indices) => {
+                    self.state.playback_state.current_paragraph_indices = paragraph_indices;
+                    match self.tts_service.play_audio(audio_bytes, &media_type) {
+                        Ok(()) => {
+                            reducer::reduce(&mut self.state, Action::TtsSynthesisSucceeded("".to_string()));
+                            reducer::reduce(&mut self.state, Action::PlaybackStarted);
+                        }
+                        Err(e) => reducer::reduce(&mut self.state, Action::TtsSynthesisFailed(e)),
+                    }
+                }
+                TtsThreadResult::SynthesisFailed(err) => {
+                    reducer::reduce(&mut self.state, Action::TtsSynthesisFailed(err));
+                }
+                TtsThreadResult::TestConnectionResult(Ok(())) => {
+                    reducer::reduce(&mut self.state, Action::TtsTestSucceeded);
+                }
+                TtsThreadResult::TestConnectionResult(Err(e)) => {
+                    reducer::reduce(&mut self.state, Action::TtsTestFailed(e));
+                }
+                TtsThreadResult::TestVoiceAudio(audio_bytes, media_type) => {
+                    match self.tts_service.play_audio(audio_bytes, &media_type) {
+                        Ok(()) => {
+                            self.state.status_message = "测试语音播放中".to_string();
+                            self.state.status_message_set_at = Some(Utc::now().to_rfc3339());
+                        }
+                        Err(e) => reducer::reduce(&mut self.state, Action::TtsTestFailed(e)),
+                    }
+                }
+            }
+        }
+
+        // Auto-advance: when a segment finishes playing, go to the next one
+        if self.state.playback_state.status == PlaybackStatus::Playing
+            && self.tts_service.is_playback_done()
+        {
+            self.dispatch(Action::PlayNextSegment);
+        }
     }
 
     pub(crate) fn try_load_book(&self, path: &str) -> AppResult<Book> {
@@ -150,7 +238,7 @@ impl CompatAdapter {
         });
 
         Ok(Book {
-            id: stable_book_id(path),
+            id: crate::domain::book::stable_book_id(path),
             source_path,
             format: format.clone(),
             metadata,
@@ -195,6 +283,7 @@ impl CompatAdapter {
         );
         settings_file.window_size = state.window_size;
         settings_file.window_pos = state.window_pos;
+        settings_file.tts_config = Some(state.tts_config.clone());
         if let Err(e) = storage::settings_store::save(&settings_file) {
             warn!("保存设置失败: {}", e);
         }
@@ -217,292 +306,11 @@ impl CompatAdapter {
     }
 }
 
-/// EPUB 缩进标记前缀（由 strip_html_tags 注入）
-const INDENT_MARKER: &str = "\x01INDENT\x01";
-
-fn build_chapter(
-    index: usize,
-    title: &str,
-    text: &str,
-    img_blocks: &[(usize, crate::domain::chapter_block::InlineImageBlock)],
-) -> Chapter {
-    let mut line_number = 0usize;
-    let paragraphs = text
-        .split("\n\n")
-        .enumerate()
-        .filter_map(|(paragraph_index, raw)| {
-            line_number += 1;
-            let trimmed = raw.trim();
-            if trimmed.is_empty() {
-                return None;
-            }
-
-            // 检测 EPUB 缩进标记
-            let (indent_level, clean_text) = if trimmed.starts_with(INDENT_MARKER) {
-                (1u8, &trimmed[INDENT_MARKER.len()..])
-            } else {
-                // 检测 TXT 行首缩进：全角空格、半角空格、Tab
-                let indent = detect_indent(trimmed);
-                (indent, trimmed)
-            };
-
-            let clean_text = clean_text.trim();
-            if clean_text.is_empty() {
-                return None;
-            }
-
-            Some(Paragraph {
-                index: paragraph_index,
-                text: clean_text.to_string(),
-                kind: infer_paragraph_kind(clean_text),
-                indent_level,
-                source_line_hint: Some(line_number),
-            })
-        })
-        .collect::<Vec<_>>();
-
-    let content = paragraphs
-        .iter()
-        .map(|paragraph| paragraph.text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n\n");
-
-    // Build blocks: interleave paragraphs with images
-    let mut blocks: Vec<crate::domain::chapter_block::ChapterBlock> = Vec::new();
-    for para in &paragraphs {
-        // Insert any images that should appear before this paragraph
-        // (simple strategy: images inserted at index 0 go before first paragraph)
-        if para.index == 0 {
-            for (_pos, img) in img_blocks {
-                blocks.push(crate::domain::chapter_block::ChapterBlock::Image(img.clone()));
-            }
-        }
-        blocks.push(crate::domain::chapter_block::ChapterBlock::Paragraph(para.clone()));
-    }
-    // If no paragraphs but we have images, still add them
-    if paragraphs.is_empty() {
-        for (_pos, img) in img_blocks {
-            blocks.push(crate::domain::chapter_block::ChapterBlock::Image(img.clone()));
-        }
-    }
-
-    Chapter {
-        id: format!("ch-{}", index),
-        index,
-        title: title.to_string(),
-        raw_title: Some(title.to_string()),
-        word_count: content.split_whitespace().count(),
-        char_count: content.chars().count(),
-        content,
-        paragraphs,
-        blocks,
-        source_href: None,
-        anchor: None,
-        warnings: Vec::new(),
-    }
-}
-
-/// 检测段落行首缩进级别
-/// 全角空格（\u{3000}）、半角空格、Tab 均算作缩进
-fn detect_indent(text: &str) -> u8 {
-    let mut indent: u8 = 0;
-    for ch in text.chars() {
-        match ch {
-            '\u{3000}' => indent += 1, // 全角空格
-            ' ' => indent += 1,
-            '\t' => indent += 1,
-            _ => break,
-        }
-        if indent >= 4 {
-            break;
-        }
-    }
-    indent.min(4)
-}
-
-fn infer_paragraph_kind(text: &str) -> ParagraphKind {
-    let char_count = text.chars().count();
-
-    // Separator: pure symbol lines like ***, ---, ＊＊＊, * * *, ————
-    if is_separator_line(text) {
-        return ParagraphKind::Separator;
-    }
-
-    // Quote: lines starting with > (including >> for nested quotes), or wrapped in quotation marks
-    if text.starts_with('>') {
-        return ParagraphKind::Quote;
-    }
-    if is_quote_wrapped(text) {
-        return ParagraphKind::Quote;
-    }
-
-    // Title: 第X章, Chapter X, Part X, and special Chinese chapter words
-    if is_title_line(text, char_count) {
-        return ParagraphKind::Title;
-    }
-
-    // Subtitle: short text (<30 chars) that looks like a section header
-    if char_count < 30 && char_count >= 2 && is_subtitle_like(text) {
-        return ParagraphKind::Subtitle;
-    }
-
-    ParagraphKind::Body
-}
-
-fn is_separator_line(text: &str) -> bool {
-    let separators = ["***", "---", "＊＊＊", "* * *", "————", "====", "~~~~", "___"];
-    let trimmed = text.trim();
-    if separators.contains(&trimmed) {
-        return true;
-    }
-    // Repeated single symbol (3+ times)
-    let chars: Vec<char> = trimmed.chars().collect();
-    if chars.len() >= 3 && chars.iter().all(|&c| c == chars[0]) {
-        let c = chars[0];
-        if c == '*' || c == '-' || c == '—' || c == '＊' || c == '~' || c == '=' || c == '_' {
-            return true;
-        }
-    }
-    // T14 E-3: pure dotted line (........)
-    if chars.len() >= 5 && chars.iter().all(|&c| c == '.') {
-        return true;
-    }
-    // T14 E-3: pure centered dashes (─ ─ ─ or · · ·)
-    let non_space: Vec<char> = chars.iter().copied().filter(|c| !c.is_whitespace()).collect();
-    if non_space.len() >= 3 {
-        if non_space.iter().all(|&c| c == '─' || c == '━' || c == '·' || c == '•') && non_space.windows(2).all(|w| w[0] == w[1]) {
-            return true;
-        }
-    }
-    false
-}
-
-fn is_quote_wrapped(text: &str) -> bool {
-    let pairs = [('「', '」'), ('『', '』'), ('"', '"'), ('\'', '\'')];
-    let trimmed = text.trim();
-    for (open, close) in pairs {
-        if trimmed.starts_with(open) && trimmed.ends_with(close) && trimmed.len() > 2 {
-            return true;
-        }
-    }
-    // 《》 book title marks wrapping the entire text
-    if trimmed.starts_with('《') && trimmed.ends_with('》') && trimmed.len() > 2 {
-        return true;
-    }
-    false
-}
-
-fn is_title_line(text: &str, char_count: usize) -> bool {
-    if char_count >= 50 {
-        return false;
-    }
-    // Chinese chapter: 第X章/回/节/卷/部分/篇
-    if text.starts_with('第') && (text.contains('章') || text.contains('回') || text.contains('节') || text.contains('卷') || text.contains("部分") || text.contains('篇')) {
-        return true;
-    }
-    // English chapter/part
-    let upper = text.to_uppercase();
-    if upper.starts_with("CHAPTER ") || upper.starts_with("PART ") {
-        return true;
-    }
-    // Special Chinese chapter words
-    let special = ["序章", "终章", "番外", "楔子", "尾声", "引子", "后记", "前言", "序言"];
-    for word in special {
-        if text.starts_with(word) {
-            return true;
-        }
-    }
-    false
-}
-
-fn is_subtitle_like(text: &str) -> bool {
-    let trimmed = text.trim();
-    // Chinese number + separator: 一、xxx; 1. xxx
-    if let Some(first) = trimmed.chars().next() {
-        if first.is_ascii_digit() {
-            let rest = trimmed.trim_start_matches(|c: char| c.is_ascii_digit());
-            if rest.starts_with('.') || rest.starts_with('、') {
-                return true;
-            }
-        }
-    }
-    // Chinese number prefix + separator (single and multi-digit)
-    let cn_numbers = [
-        "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
-        "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
-        "三十", "四十", "五十", "六十", "七十", "八十", "九十",
-    ];
-    for num in cn_numbers {
-        if trimmed.starts_with(num) {
-            let rest = &trimmed[num.len()..];
-            if rest.starts_with('、') || rest.starts_with('，') || rest.starts_with(',') {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-fn stable_book_id(path: &str) -> String {
-    let normalized = std::fs::canonicalize(path)
-        .ok()
-        .and_then(|resolved| resolved.to_str().map(ToOwned::to_owned))
-        .unwrap_or_else(|| path.to_string());
-
-    let mut hasher = DefaultHasher::new();
-    normalized.hash(&mut hasher);
-    format!("book-{:016x}", hasher.finish())
-}
-
-/// Strip fragment (#...) from href, returning just the file path part.
-fn strip_href_fragment(href: &str) -> &str {
-    href.split('#').next().unwrap_or(href)
-}
-
-/// Extract the filename component from a path (e.g. "OEBPS/ch1.xhtml" → "ch1.xhtml").
-fn href_filename(href: &str) -> &str {
-    strip_href_fragment(href)
-        .rsplit('/')
-        .next()
-        .unwrap_or(strip_href_fragment(href))
-}
-
-/// Build a mapping from href filename to spine chapter index.
-fn build_href_index(spine_hrefs: &[String]) -> std::collections::HashMap<String, usize> {
-    let mut map = std::collections::HashMap::new();
-    for (index, href) in spine_hrefs.iter().enumerate() {
-        let key = href_filename(href).to_string();
-        map.entry(key).or_insert(index);
-    }
-    map
-}
-
-/// Recursively set chapter_index on TocItems using the href→spine_index mapping.
-fn map_toc_chapter_indices(
-    items: Vec<TocItem>,
-    href_to_index: &std::collections::HashMap<String, usize>,
-) -> Vec<TocItem> {
-    items
-        .into_iter()
-        .map(|mut item| {
-            if item.chapter_index.is_none() {
-                if let Some(ref href) = item.href {
-                    let key = href_filename(href).to_string();
-                    if let Some(&idx) = href_to_index.get(&key) {
-                        item.chapter_index = Some(idx);
-                    }
-                }
-            }
-            item.children = map_toc_chapter_indices(item.children, href_to_index);
-            item
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::enums::ScreenKind;
+    use crate::domain::paragraph_kind::ParagraphKind;
     use std::fs;
     use std::io::Write;
     use std::time::{SystemTime, UNIX_EPOCH};
