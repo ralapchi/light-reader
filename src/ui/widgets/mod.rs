@@ -66,39 +66,6 @@ pub fn render_highlighted_text(
     });
 }
 
-#[allow(dead_code)]
-pub fn empty_state_with_button(
-    ui: &mut egui::Ui,
-    title: &str,
-    description: &str,
-    button_text: &str,
-    theme: &ThemeConfig,
-) -> bool {
-    let s = &theme.spacing;
-    ui.vertical_centered(|ui| {
-        ui.add_space(s.xl * 4.0);
-        ui.heading(title);
-        ui.add_space(s.sm);
-        ui.label(description);
-        ui.add_space(s.lg);
-        ui.button(button_text).clicked()
-    })
-    .inner
-}
-
-#[allow(dead_code)]
-pub fn loading_state(ui: &mut egui::Ui, title: &str, description: &str, theme: &ThemeConfig) {
-    let s = &theme.spacing;
-    ui.vertical_centered(|ui| {
-        ui.add_space(s.xl * 4.0);
-        ui.heading(title);
-        ui.add_space(s.sm);
-        ui.label(description);
-        ui.add_space(s.sm);
-        ui.add(egui::Spinner::new());
-    });
-}
-
 pub fn error_state(
     ui: &mut egui::Ui,
     title: &str,

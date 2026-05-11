@@ -6,9 +6,12 @@ use chrono::Utc;
 use crate::app::Action;
 use crate::app::compat::{CompatAdapter, TtsThreadResult};
 use crate::app::reducer;
-use crate::tts::tts_provider::TtsProvider;
 use crate::tts::service::TtsService;
 use crate::tts::types::TtsRequest;
+
+fn tts_voice_id(config: &crate::tts::config::TtsConfig) -> String {
+    config.voice_id.clone().unwrap_or_else(|| "default_en".to_string())
+}
 use crate::domain::enums::ScreenKind;
 use crate::domain::library_item::{FileHealth, LibraryItem, ReadingStatsSnapshot};
 use crate::parser::ParserFactory;
@@ -271,7 +274,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
             };
             let tx = adapter.tts_sender();
             let cache = adapter.tts_cache_arc();
-            let voice_id = config.voice_id.clone().unwrap_or_else(|| "default_en".to_string());
+            let voice_id = tts_voice_id(&config);
 
             // Synthesize segment 0 on background thread
             let seg_req = request.clone();
@@ -345,7 +348,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
 
             let segment = segments[next_seg].clone();
             let paragraph_indices = segment.paragraph_indices.clone();
-            let voice_id = config.voice_id.clone().unwrap_or_else(|| "default_en".to_string());
+            let voice_id = tts_voice_id(&config);
             let cache = adapter.tts_cache_arc();
             let cache_path = cache.segment_path("xiaomi", "", ch_idx, segment.segment_index, &voice_id, "pcm16");
 
@@ -413,7 +416,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
 
             let segment = segments[prev_seg].clone();
             let paragraph_indices = segment.paragraph_indices.clone();
-            let voice_id = config.voice_id.clone().unwrap_or_else(|| "default_en".to_string());
+            let voice_id = tts_voice_id(&config);
             let cache = adapter.tts_cache_arc();
             let cache_path = cache.segment_path("xiaomi", "", ch_idx, segment.segment_index, &voice_id, "pcm16");
 
@@ -453,41 +456,6 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
                         tx.send(TtsThreadResult::SynthesisCompleted(
                             resp.audio_bytes, resp.media_type, paragraph_indices,
                         )).ok();
-                    }
-                    Err(e) => {
-                        tx.send(TtsThreadResult::SynthesisFailed(format!("{}", e))).ok();
-                    }
-                }
-            });
-        }
-        Action::TtsTestConnection => {
-            let config = adapter.state().tts_config.clone();
-            let tx = adapter.tts_sender();
-            std::thread::spawn(move || {
-                let provider = crate::tts::xiaomi_provider::XiaomiTtsProvider::new();
-                let result = provider
-                    .test_connection(&config)
-                    .map_err(|e| e.to_string());
-                tx.send(TtsThreadResult::TestConnectionResult(result)).ok();
-            });
-        }
-        Action::TtsTestVoice => {
-            let config = adapter.state().tts_config.clone();
-            let voice_id = config.voice_id.clone().unwrap_or_else(|| "default_en".to_string());
-            let request = TtsRequest {
-                book_id: "__test__".to_string(),
-                chapter_index: 0,
-                segment_index: 0,
-                paragraph_indices: vec![0],
-                text: "欢迎使用语音朗读功能，这是一段测试语音。".to_string(),
-                voice_id: config.voice_id.clone(),
-            };
-            let tx = adapter.tts_sender();
-            let cache = adapter.tts_cache_arc();
-            std::thread::spawn(move || {
-                match TtsService::synthesize_blocking(&request, &config, &voice_id, &cache) {
-                    Ok(resp) => {
-                        tx.send(TtsThreadResult::TestVoiceAudio(resp.audio_bytes, resp.media_type)).ok();
                     }
                     Err(e) => {
                         tx.send(TtsThreadResult::SynthesisFailed(format!("{}", e))).ok();

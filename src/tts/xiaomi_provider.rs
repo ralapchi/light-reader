@@ -153,7 +153,7 @@ impl TtsProvider for XiaomiTtsProvider {
 
     fn test_connection(&self, config: &TtsConfig) -> Result<(), TtsError> {
         let request = TtsRequest {
-            book_id: "__test__".to_string(),
+            book_id: String::new(),
             chapter_index: 0,
             segment_index: 0,
             paragraph_indices: vec![0],

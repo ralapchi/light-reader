@@ -339,7 +339,7 @@ fn render_image_block(
     ui.vertical_centered(|ui| {
         // Try to load the cached image
         let mut found = false;
-        log::info!("渲染图片块: asset_id={}", img.asset_id);
+        log::debug!("渲染图片块: asset_id={}", img.asset_id);
         if let Some(tex) = IMG_CACHE.with(|c| c.borrow_mut().image_texture(
             ui.ctx(), "", &img.asset_id,
         )) {

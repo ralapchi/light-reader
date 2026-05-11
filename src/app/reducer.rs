@@ -266,13 +266,6 @@ pub fn reduce(state: &mut AppState, action: Action) {
         Action::TtsVoiceSelected(voice_id) => {
             state.tts_config.voice_id = Some(voice_id);
         }
-        Action::TtsTestSucceeded => {
-            state.tts_state.last_test_at = Some(Utc::now().to_rfc3339());
-            state.tts_state.last_error = None;
-        }
-        Action::TtsTestFailed(msg) => {
-            state.tts_state.last_error = Some(msg);
-        }
         Action::StartTts => {
             state.playback_state = crate::domain::tts_state::PlaybackState::default();
             state.tts_state.is_generating = true;

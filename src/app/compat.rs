@@ -24,8 +24,6 @@ use crate::tts::types::PlaybackStatus;
 pub enum TtsThreadResult {
     SynthesisCompleted(Vec<u8>, String, Vec<usize>),
     SynthesisFailed(String),
-    TestConnectionResult(Result<(), String>),
-    TestVoiceAudio(Vec<u8>, String),
 }
 
 pub struct CompatAdapter {
@@ -104,21 +102,6 @@ impl CompatAdapter {
                 }
                 TtsThreadResult::SynthesisFailed(err) => {
                     reducer::reduce(&mut self.state, Action::TtsSynthesisFailed(err));
-                }
-                TtsThreadResult::TestConnectionResult(Ok(())) => {
-                    reducer::reduce(&mut self.state, Action::TtsTestSucceeded);
-                }
-                TtsThreadResult::TestConnectionResult(Err(e)) => {
-                    reducer::reduce(&mut self.state, Action::TtsTestFailed(e));
-                }
-                TtsThreadResult::TestVoiceAudio(audio_bytes, media_type) => {
-                    match self.tts_service.play_audio(audio_bytes, &media_type) {
-                        Ok(()) => {
-                            self.state.status_message = "测试语音播放中".to_string();
-                            self.state.status_message_set_at = Some(Utc::now().to_rfc3339());
-                        }
-                        Err(e) => reducer::reduce(&mut self.state, Action::TtsTestFailed(e)),
-                    }
                 }
             }
         }

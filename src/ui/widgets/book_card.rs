@@ -20,7 +20,7 @@ pub fn book_card(
 
     let is_missing = item.file_health != FileHealth::Ok;
 
-    let desired_size = Vec2::new(140.0, 200.0);
+    let desired_size = Vec2::new(140.0, 180.0);
     let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
 
     if ui.is_rect_visible(rect) {
@@ -39,13 +39,24 @@ pub fn book_card(
         let card_rounding = CornerRadius::same(r.card as u8);
         painter.rect_filled(rect, card_rounding, card_bg);
 
-        // Cover area (top ~70%)
-        let cover_height = 130.0;
-        let cover_rect = egui::Rect::from_min_size(rect.min, Vec2::new(rect.width(), cover_height));
+        // Cover area — preserve aspect ratio from the real texture
+        let card_w = rect.width();
+        let cover_height = if let Some(tex) = cover_texture {
+            let tex_size = tex.size();
+            let tex_w = tex_size[0] as f32;
+            let tex_h = tex_size[1] as f32;
+            if tex_w > 0.0 && tex_h > 0.0 {
+                (card_w * tex_h / tex_w).min(160.0)
+            } else {
+                140.0
+            }
+        } else {
+            140.0
+        };
+        let cover_rect = egui::Rect::from_min_size(rect.min, Vec2::new(card_w, cover_height));
         let cover_rounding = CornerRadius { nw: r.card as u8, ne: r.card as u8, sw: 0, se: 0 };
 
         if let Some(texture) = cover_texture {
-            // Render real cover image
             painter.image(
                 texture.id(),
                 cover_rect,
@@ -75,29 +86,6 @@ pub fn book_card(
         );
         painter.rect_filled(accent_line, CornerRadius::same(1), colors.accent.to_color32());
 
-        // Title on cover (centered, multi-line)
-        let title_text = truncate_title(&item.title, 16);
-        let title_font = egui::FontId::new(typo.body_size - 1.0, egui::FontFamily::Proportional);
-        painter.text(
-            egui::pos2(cover_rect.center().x, cover_rect.top() + 40.0),
-            egui::Align2::CENTER_TOP,
-            &title_text,
-            title_font,
-            egui::Color32::WHITE,
-        );
-
-        // Author on cover
-        if let Some(ref author) = item.author {
-            let author_short = truncate_title(author, 12);
-            painter.text(
-                egui::pos2(cover_rect.center().x, cover_rect.top() + 60.0 + typo.body_size),
-                egui::Align2::CENTER_TOP,
-                &author_short,
-                egui::FontId::new(typo.caption_size - 1.0, egui::FontFamily::Proportional),
-                egui::Color32::from_white_alpha(200),
-            );
-        }
-
         // Format badge
         let badge_text = format_tag(&item.format);
         let badge_size = Vec2::new(36.0, 18.0);
@@ -124,51 +112,37 @@ pub fn book_card(
             );
         }
 
-        // Bottom info area
-        let info_x = rect.left() + 8.0;
-        let mut info_y = cover_rect.bottom() + 6.0;
-
-        // Book title (below cover, strong)
-        let display_title = truncate_title(&item.title, 14);
-        painter.text(
-            egui::pos2(info_x, info_y),
-            egui::Align2::LEFT_TOP,
-            &display_title,
-            egui::FontId::new(typo.caption_size, egui::FontFamily::Proportional),
-            if is_missing { colors.text_muted.to_color32() } else { colors.text_primary.to_color32() },
-        );
-        info_y += typo.caption_size + 2.0;
-
-        // Chapter count & progress
-        let sub_info = format!("{}章 · {:.0}%", item.chapter_count, item.progress_percent * 100.0);
-        painter.text(
-            egui::pos2(info_x, info_y),
-            egui::Align2::LEFT_TOP,
-            &sub_info,
-            egui::FontId::new(typo.caption_size - 2.0, egui::FontFamily::Proportional),
-            colors.text_secondary.to_color32(),
-        );
-        info_y += typo.caption_size - 1.0;
-
-        // Mini progress bar
-        if item.chapter_count > 0 {
-            let bar_width = rect.width() - 16.0;
-            let bar_height = 3.0;
-            let bar_y = info_y + 4.0;
-            let progress_filled = item.progress_percent.clamp(0.0, 1.0);
-
-            painter.rect_filled(
-                egui::Rect::from_min_size(egui::pos2(info_x, bar_y), Vec2::new(bar_width, bar_height)),
-                CornerRadius::same(2),
-                colors.border_subtle.to_color32(),
+        // Progress percentage overlaid on cover bottom
+        let pct = (item.progress_percent * 100.0) as u32;
+        if pct > 0 && pct < 100 {
+            let pct_text = format!("{}%", pct);
+            let font_id = egui::FontId::new(typo.caption_size - 1.0, egui::FontFamily::Proportional);
+            let galley = ui.ctx().fonts_mut(|f| f.layout_no_wrap(pct_text.clone(), font_id.clone(), egui::Color32::WHITE));
+            let text_w = galley.rect.width();
+            let text_h = galley.rect.height();
+            let pad = 4.0;
+            let bg_rect = egui::Rect::from_min_size(
+                egui::pos2(cover_rect.right() - text_w - pad * 2.0 - 4.0, cover_rect.bottom() - text_h - pad * 2.0 - 2.0),
+                Vec2::new(text_w + pad * 2.0, text_h + pad * 2.0),
             );
-            if progress_filled > 0.0 {
-                painter.rect_filled(
-                    egui::Rect::from_min_size(egui::pos2(info_x, bar_y), Vec2::new(bar_width * progress_filled, bar_height)),
-                    CornerRadius::same(2),
-                    colors.accent.to_color32(),
-                );
-            }
+            painter.rect_filled(bg_rect, CornerRadius::same(4), egui::Color32::from_black_alpha(140));
+            painter.text(
+                bg_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                &pct_text,
+                font_id,
+                egui::Color32::WHITE,
+            );
+        } else if pct >= 100 {
+            let font_id = egui::FontId::new(typo.caption_size - 1.0, egui::FontFamily::Proportional);
+            let galley = ui.ctx().fonts_mut(|f| f.layout_no_wrap("✓".to_string(), font_id.clone(), egui::Color32::WHITE));
+            let sz = galley.rect.width().max(galley.rect.height()) + 6.0;
+            let bg_rect = egui::Rect::from_min_size(
+                egui::pos2(cover_rect.right() - sz - 4.0, cover_rect.bottom() - sz - 2.0),
+                Vec2::new(sz, sz),
+            );
+            painter.rect_filled(bg_rect, CornerRadius::same(4), colors.accent.to_color32().gamma_multiply(0.7));
+            painter.text(bg_rect.center(), egui::Align2::CENTER_CENTER, "✓", font_id, egui::Color32::WHITE);
         }
 
         // Hover highlight
@@ -189,21 +163,12 @@ pub fn book_card(
     responses
 }
 
-fn truncate_title(title: &str, max_chars: usize) -> String {
-    let count = title.chars().count();
-    if count <= max_chars {
-        title.to_string()
-    } else {
-        title.chars().take(max_chars - 1).chain(std::iter::once('…')).collect()
-    }
-}
-
 pub(crate) fn format_cover_color(format: &BookFormat) -> egui::Color32 {
     match format {
-        BookFormat::Epub => egui::Color32::from_rgb(60, 100, 160),
-        BookFormat::Txt => egui::Color32::from_rgb(80, 140, 80),
-        BookFormat::ReservedPdf => egui::Color32::from_rgb(170, 70, 70),
-        BookFormat::ReservedMobi => egui::Color32::from_rgb(100, 75, 150),
+        BookFormat::Epub => egui::Color32::from_rgb(204, 120, 92),   // coral
+        BookFormat::Txt => egui::Color32::from_rgb(93, 168, 150),    // accent-teal
+        BookFormat::ReservedPdf => egui::Color32::from_rgb(198, 69, 69),
+        BookFormat::ReservedMobi => egui::Color32::from_rgb(232, 165, 90), // amber
     }
 }
 

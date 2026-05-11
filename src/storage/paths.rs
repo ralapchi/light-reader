@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 const APP_DIR_NAME: &str = "reader-demo";
 
-fn app_data_dir() -> PathBuf {
+pub(crate) fn app_data_dir() -> PathBuf {
     dirs::data_dir()
         .or_else(|| dirs::home_dir().map(|h| h.join(".local/share")))
         .unwrap_or_else(|| PathBuf::from("."))

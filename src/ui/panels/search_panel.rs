@@ -38,14 +38,23 @@ pub fn search_panel(
         .map(|q| q.case_sensitive)
         .unwrap_or(false);
 
-    egui::SidePanel::right("search_panel")
-        .default_width(320.0)
-        .min_width(260.0)
-        .max_width(480.0)
-        .show(ctx, |ui| {
-            ui.add_space(s.sm);
+    let viewport = ctx.input(|i| i.viewport().inner_rect.unwrap_or(egui::Rect::ZERO));
+    let win_w = 320.0;
+    let win_x = viewport.right() - win_w - 8.0;
+    let win_y = viewport.top() + 40.0;
+    let win_h = (viewport.height() - 80.0).max(200.0);
 
-            // Header with close button
+    egui::Window::new("搜索")
+        .collapsible(false)
+        .resizable(true)
+        .default_width(win_w)
+        .min_width(260.0)
+        .fixed_pos(egui::pos2(win_x, win_y))
+        .fixed_size(egui::vec2(win_w, win_h))
+        .title_bar(false)
+        .scroll([false, true])
+        .show(ctx, |ui| {
+            // Header
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("搜索").size(t.section_title_size).strong());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

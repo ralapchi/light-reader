@@ -176,24 +176,24 @@ impl ThemeConfig {
         Self {
             name: "light".to_string(),
             colors: ThemeColors {
-                window_bg: ColorValue::from_rgb(245, 242, 237),
-                panel_bg: ColorValue::from_rgb(237, 233, 227),
-                panel_bg_muted: ColorValue::from_rgb(229, 224, 216),
-                reader_bg: ColorValue::from_rgb(255, 255, 255),
-                text_primary: ColorValue::from_rgb(26, 26, 26),
-                text_secondary: ColorValue::from_rgb(120, 120, 120),
-                text_muted: ColorValue::from_rgb(160, 160, 160),
-                accent: ColorValue::from_rgb(59, 130, 246),
-                accent_hover: ColorValue::from_rgb(37, 99, 235),
-                accent_pressed: ColorValue::from_rgb(29, 78, 216),
-                border_subtle: ColorValue::from_rgb(224, 224, 224),
-                border_strong: ColorValue::from_rgb(59, 130, 246),
-                selection_bg: ColorValue::from_rgb(219, 234, 254),
-                selection_text: ColorValue::from_rgb(26, 26, 26),
-                success: ColorValue::from_rgb(16, 185, 129),
-                warning: ColorValue::from_rgb(245, 158, 11),
-                danger: ColorValue::from_rgb(239, 68, 68),
-                focus_ring: ColorValue::from_rgba(59, 130, 246, 120),
+                window_bg: ColorValue::from_rgb(250, 249, 245),       // canvas
+                panel_bg: ColorValue::from_rgb(239, 233, 222),        // surface-card
+                panel_bg_muted: ColorValue::from_rgb(245, 240, 232),  // surface-soft
+                reader_bg: ColorValue::from_rgb(250, 249, 245),       // canvas
+                text_primary: ColorValue::from_rgb(20, 20, 19),       // ink
+                text_secondary: ColorValue::from_rgb(61, 61, 58),     // body
+                text_muted: ColorValue::from_rgb(108, 106, 100),      // muted
+                accent: ColorValue::from_rgb(204, 120, 92),           // primary / coral #cc785c
+                accent_hover: ColorValue::from_rgb(169, 88, 62),      // primary-active #a9583e
+                accent_pressed: ColorValue::from_rgb(169, 88, 62),    // primary-active
+                border_subtle: ColorValue::from_rgb(230, 223, 216),   // hairline
+                border_strong: ColorValue::from_rgb(204, 120, 92),    // coral
+                selection_bg: ColorValue::from_rgb(232, 224, 210),    // surface-cream-strong
+                selection_text: ColorValue::from_rgb(20, 20, 19),     // ink
+                success: ColorValue::from_rgb(93, 184, 114),
+                warning: ColorValue::from_rgb(212, 160, 23),
+                danger: ColorValue::from_rgb(198, 69, 69),
+                focus_ring: ColorValue::from_rgba(204, 120, 92, 80),  // coral at low alpha
             },
             spacing: default_spacing(),
             typography: default_typography(),
@@ -207,24 +207,24 @@ impl ThemeConfig {
         Self {
             name: "dark".to_string(),
             colors: ThemeColors {
-                window_bg: ColorValue::from_rgb(26, 26, 46),
-                panel_bg: ColorValue::from_rgb(22, 33, 62),
-                panel_bg_muted: ColorValue::from_rgb(30, 41, 72),
-                reader_bg: ColorValue::from_rgb(15, 15, 35),
-                text_primary: ColorValue::from_rgb(224, 224, 224),
-                text_secondary: ColorValue::from_rgb(140, 140, 160),
-                text_muted: ColorValue::from_rgb(107, 107, 128),
-                accent: ColorValue::from_rgb(79, 195, 247),
-                accent_hover: ColorValue::from_rgb(41, 182, 246),
-                accent_pressed: ColorValue::from_rgb(3, 155, 229),
-                border_subtle: ColorValue::from_rgb(55, 65, 81),
-                border_strong: ColorValue::from_rgb(79, 195, 247),
-                selection_bg: ColorValue::from_rgb(30, 58, 95),
-                selection_text: ColorValue::from_rgb(224, 224, 224),
-                success: ColorValue::from_rgb(52, 211, 153),
-                warning: ColorValue::from_rgb(251, 191, 36),
-                danger: ColorValue::from_rgb(248, 113, 113),
-                focus_ring: ColorValue::from_rgba(79, 195, 247, 120),
+                window_bg: ColorValue::from_rgb(24, 23, 21),          // surface-dark
+                panel_bg: ColorValue::from_rgb(37, 35, 32),          // surface-dark-elevated
+                panel_bg_muted: ColorValue::from_rgb(31, 30, 27),    // surface-dark-soft
+                reader_bg: ColorValue::from_rgb(24, 23, 21),         // surface-dark
+                text_primary: ColorValue::from_rgb(250, 249, 245),   // on-dark / cream-tinted white
+                text_secondary: ColorValue::from_rgb(160, 157, 150), // on-dark-soft
+                text_muted: ColorValue::from_rgb(108, 106, 100),
+                accent: ColorValue::from_rgb(204, 120, 92),          // coral stays warm
+                accent_hover: ColorValue::from_rgb(169, 88, 62),
+                accent_pressed: ColorValue::from_rgb(169, 88, 62),
+                border_subtle: ColorValue::from_rgb(55, 52, 48),
+                border_strong: ColorValue::from_rgb(204, 120, 92),
+                selection_bg: ColorValue::from_rgb(204, 120, 92),
+                selection_text: ColorValue::from_rgb(24, 23, 21),
+                success: ColorValue::from_rgb(93, 184, 114),
+                warning: ColorValue::from_rgb(212, 160, 23),
+                danger: ColorValue::from_rgb(198, 69, 69),
+                focus_ring: ColorValue::from_rgba(204, 120, 92, 80),
             },
             spacing: default_spacing(),
             typography: default_typography(),
@@ -238,24 +238,24 @@ impl ThemeConfig {
         Self {
             name: "sepia".to_string(),
             colors: ThemeColors {
-                window_bg: ColorValue::from_rgb(245, 236, 215),
-                panel_bg: ColorValue::from_rgb(235, 219, 179),
-                panel_bg_muted: ColorValue::from_rgb(225, 206, 160),
-                reader_bg: ColorValue::from_rgb(250, 242, 225),
-                text_primary: ColorValue::from_rgb(74, 55, 40),
-                text_secondary: ColorValue::from_rgb(140, 115, 90),
-                text_muted: ColorValue::from_rgb(168, 152, 128),
-                accent: ColorValue::from_rgb(160, 82, 45),
-                accent_hover: ColorValue::from_rgb(139, 69, 19),
-                accent_pressed: ColorValue::from_rgb(107, 52, 16),
-                border_subtle: ColorValue::from_rgb(200, 180, 150),
-                border_strong: ColorValue::from_rgb(160, 120, 70),
-                selection_bg: ColorValue::from_rgb(210, 196, 168),
-                selection_text: ColorValue::from_rgb(74, 55, 40),
-                success: ColorValue::from_rgb(107, 142, 35),
-                warning: ColorValue::from_rgb(205, 133, 63),
-                danger: ColorValue::from_rgb(178, 34, 34),
-                focus_ring: ColorValue::from_rgba(160, 82, 45, 120),
+                window_bg: ColorValue::from_rgb(245, 240, 232),  // surface-soft warm
+                panel_bg: ColorValue::from_rgb(239, 233, 222),   // surface-card warm
+                panel_bg_muted: ColorValue::from_rgb(232, 224, 210), // surface-cream-strong
+                reader_bg: ColorValue::from_rgb(250, 247, 240),  // slightly whiter for reading
+                text_primary: ColorValue::from_rgb(37, 37, 35),  // body-strong
+                text_secondary: ColorValue::from_rgb(108, 106, 100), // muted
+                text_muted: ColorValue::from_rgb(142, 139, 130), // muted-soft
+                accent: ColorValue::from_rgb(169, 88, 62),       // deeper coral for sepia
+                accent_hover: ColorValue::from_rgb(142, 70, 48),
+                accent_pressed: ColorValue::from_rgb(120, 58, 40),
+                border_subtle: ColorValue::from_rgb(224, 215, 200),
+                border_strong: ColorValue::from_rgb(169, 88, 62),
+                selection_bg: ColorValue::from_rgb(224, 215, 200),
+                selection_text: ColorValue::from_rgb(37, 37, 35),
+                success: ColorValue::from_rgb(93, 184, 114),
+                warning: ColorValue::from_rgb(212, 160, 23),
+                danger: ColorValue::from_rgb(198, 69, 69),
+                focus_ring: ColorValue::from_rgba(169, 88, 62, 80),
             },
             spacing: default_spacing(),
             typography: default_typography(),
@@ -269,24 +269,24 @@ impl ThemeConfig {
         Self {
             name: "paper".to_string(),
             colors: ThemeColors {
-                window_bg: ColorValue::from_rgb(248, 249, 250),
-                panel_bg: ColorValue::from_rgb(233, 236, 239),
-                panel_bg_muted: ColorValue::from_rgb(222, 226, 230),
-                reader_bg: ColorValue::from_rgb(255, 255, 255),
-                text_primary: ColorValue::from_rgb(52, 58, 64),
-                text_secondary: ColorValue::from_rgb(134, 142, 150),
-                text_muted: ColorValue::from_rgb(173, 181, 189),
-                accent: ColorValue::from_rgb(108, 117, 125),
+                window_bg: ColorValue::from_rgb(250, 249, 245),  // canvas
+                panel_bg: ColorValue::from_rgb(245, 240, 232),   // surface-soft
+                panel_bg_muted: ColorValue::from_rgb(239, 233, 222), // surface-card
+                reader_bg: ColorValue::from_rgb(255, 255, 255),  // pure white for print-like
+                text_primary: ColorValue::from_rgb(20, 20, 19),  // ink
+                text_secondary: ColorValue::from_rgb(61, 61, 58), // body
+                text_muted: ColorValue::from_rgb(108, 106, 100), // muted
+                accent: ColorValue::from_rgb(108, 117, 125),     // neutral gray
                 accent_hover: ColorValue::from_rgb(90, 98, 104),
                 accent_pressed: ColorValue::from_rgb(73, 80, 87),
-                border_subtle: ColorValue::from_rgb(222, 226, 230),
+                border_subtle: ColorValue::from_rgb(230, 223, 216), // hairline
                 border_strong: ColorValue::from_rgb(108, 117, 125),
-                selection_bg: ColorValue::from_rgb(206, 212, 218),
-                selection_text: ColorValue::from_rgb(52, 58, 64),
-                success: ColorValue::from_rgb(108, 140, 108),
-                warning: ColorValue::from_rgb(184, 160, 96),
-                danger: ColorValue::from_rgb(160, 96, 96),
-                focus_ring: ColorValue::from_rgba(108, 117, 125, 120),
+                selection_bg: ColorValue::from_rgb(232, 224, 210),  // cream-strong
+                selection_text: ColorValue::from_rgb(20, 20, 19),
+                success: ColorValue::from_rgb(93, 184, 114),
+                warning: ColorValue::from_rgb(212, 160, 23),
+                danger: ColorValue::from_rgb(198, 69, 69),
+                focus_ring: ColorValue::from_rgba(108, 117, 125, 80),
             },
             spacing: default_spacing(),
             typography: default_typography(),
@@ -301,17 +301,17 @@ impl ThemeConfig {
 
 fn default_spacing() -> ThemeSpacing {
     ThemeSpacing {
-        xxs: 2.0,
-        xs: 4.0,
-        sm: 8.0,
-        md: 12.0,
-        lg: 16.0,
-        xl: 24.0,
-        reader_top_padding: 20.0,
-        paragraph_gap: 16.0,
-        panel_gap: 8.0,
-        chapter_title_bottom: 48.0,
-        chapter_end_spacer: 72.0,
+        xxs: 4.0,
+        xs: 8.0,
+        sm: 12.0,
+        md: 16.0,
+        lg: 24.0,
+        xl: 32.0,
+        reader_top_padding: 24.0,
+        paragraph_gap: 20.0,
+        panel_gap: 12.0,
+        chapter_title_bottom: 56.0,
+        chapter_end_spacer: 80.0,
         loading_screen_spacer: 96.0,
         highlight_alpha: 0.15,
     }
@@ -320,22 +320,22 @@ fn default_spacing() -> ThemeSpacing {
 fn default_typography() -> ThemeTypography {
     ThemeTypography {
         font_family_ui: "sans-serif".to_string(),
-        font_family_reader: "sans-serif".to_string(),
+        font_family_reader: "serif".to_string(),
         title_size: 28.0,
         section_title_size: 22.0,
         body_size: 16.0,
-        caption_size: 12.0,
+        caption_size: 13.0,
         toolbar_size: 14.0,
-        line_height: 1.6,
+        line_height: 1.55,
     }
 }
 
 fn default_radius() -> ThemeRadius {
     ThemeRadius {
-        button: 6.0,
-        panel: 8.0,
-        card: 4.0,
-        input: 4.0,
+        button: 8.0,
+        panel: 12.0,
+        card: 12.0,
+        input: 8.0,
     }
 }
 

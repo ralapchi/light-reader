@@ -6,6 +6,14 @@ use crate::domain::reader_settings::ReaderSettings;
 use crate::domain::theme_kind::ThemeKind;
 use crate::ui::ThemeConfig;
 
+/// Fixed minimum width for setting labels so sliders/pickers align across rows.
+const LABEL_W: f32 = 90.0;
+
+/// Render a label with uniform min width for alignment.
+fn label(ui: &mut egui::Ui, text: &str) {
+    ui.add_sized(egui::vec2(LABEL_W, ui.spacing().interact_size.y), egui::Label::new(text));
+}
+
 /// Lightweight read-only props for SettingsPanel, derived from AppState.
 pub struct SettingsPanelProps<'a> {
     pub reader_settings: &'a ReaderSettings,
@@ -25,14 +33,23 @@ pub fn settings_panel(
     let tts_state = props.tts_state;
     let mut actions = Vec::new();
 
-    egui::SidePanel::right("settings_panel")
-        .default_width(320.0)
-        .min_width(260.0)
-        .max_width(480.0)
-        .show(ctx, |ui| {
-            ui.add_space(s.sm);
+    let viewport = ctx.input(|i| i.viewport().inner_rect.unwrap_or(egui::Rect::ZERO));
+    let win_w = 320.0;
+    let win_x = viewport.right() - win_w - 8.0;
+    let win_y = viewport.top() + 40.0;
+    let win_h = (viewport.height() - 80.0).max(200.0);
 
-            // Header with close button
+    egui::Window::new("设置")
+        .collapsible(false)
+        .resizable(true)
+        .default_width(win_w)
+        .min_width(260.0)
+        .fixed_pos(egui::pos2(win_x, win_y))
+        .fixed_size(egui::vec2(win_w, win_h))
+        .title_bar(false)
+        .scroll([false, true])
+        .show(ctx, |ui| {
+            // Header
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("设置")
@@ -40,19 +57,12 @@ pub fn settings_panel(
                         .strong(),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("关闭").clicked() {
+                    if ui.button("✕").clicked() {
                         actions.push(Action::ToggleSettingsPanel);
                     }
                 });
             });
-
-            ui.add_space(s.xs);
             ui.separator();
-            ui.add_space(s.sm);
-
-            egui::ScrollArea::vertical()
-                .id_salt("settings_scroll")
-                .show(ui, |ui| {
                     // 外观：主题、字体、字号
                     appearance_section(ui, settings, theme, &mut actions);
                     ui.add_space(s.md);
@@ -81,7 +91,6 @@ pub fn settings_panel(
                     advanced_section(ui, settings, theme, &mut actions);
 
                     ui.add_space(s.lg);
-                });
         });
 
     actions
@@ -105,7 +114,7 @@ fn appearance_section(
 
     // Theme
     ui.horizontal(|ui| {
-        ui.label("主题");
+        label(ui, "主题");
         let themes = [
             ("浅色", ThemeKind::Light),
             ("深色", ThemeKind::Dark),
@@ -124,11 +133,8 @@ fn appearance_section(
     // Font size
     let mut font_size = settings.font_size;
     ui.horizontal(|ui| {
-        ui.label("字号");
-        if ui
-            .add(egui::Slider::new(&mut font_size, 10.0..=32.0).suffix(" px"))
-            .changed()
-        {
+        label(ui, "字号");
+        if ui.add(egui::Slider::new(&mut font_size, 10.0..=32.0).suffix(" px").fixed_decimals(0)).changed() {
             actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetFontSize(font_size)));
         }
     });
@@ -146,7 +152,7 @@ fn appearance_section(
         .unwrap_or(&settings.font_family);
 
     ui.horizontal(|ui| {
-        ui.label("字体");
+        label(ui, "字体");
         egui::ComboBox::from_id_salt("font_family_select")
             .selected_text(current_font_label)
             .show_ui(ui, |ui| {
@@ -179,11 +185,8 @@ fn typography_section(
     // Line height
     let mut line_height = settings.line_height;
     ui.horizontal(|ui| {
-        ui.label("行距");
-        if ui
-            .add(egui::Slider::new(&mut line_height, 1.0..=3.0).step_by(0.1))
-            .changed()
-        {
+        label(ui, "行距");
+        if ui.add(egui::Slider::new(&mut line_height, 1.0..=3.0).step_by(0.1)).changed() {
             actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetLineHeight(line_height)));
         }
     });
@@ -191,11 +194,8 @@ fn typography_section(
     // Paragraph spacing
     let mut para_spacing = settings.paragraph_spacing;
     ui.horizontal(|ui| {
-        ui.label("段间距");
-        if ui
-            .add(egui::Slider::new(&mut para_spacing, 0.0..=32.0).suffix(" px"))
-            .changed()
-        {
+        label(ui, "段间距");
+        if ui.add(egui::Slider::new(&mut para_spacing, 0.0..=32.0).suffix(" px").fixed_decimals(0)).changed() {
             actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetParagraphSpacing(para_spacing)));
         }
     });
@@ -203,11 +203,8 @@ fn typography_section(
     // Content width
     let mut content_width = settings.content_width;
     ui.horizontal(|ui| {
-        ui.label("正文宽度");
-        if ui
-            .add(egui::Slider::new(&mut content_width, 400.0..=1200.0).suffix(" px"))
-            .changed()
-        {
+        label(ui, "正文宽度");
+        if ui.add(egui::Slider::new(&mut content_width, 400.0..=1200.0).suffix(" px").fixed_decimals(0)).changed() {
             actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetContentWidth(content_width)));
         }
     });
@@ -215,11 +212,8 @@ fn typography_section(
     // Side margin
     let mut side_margin = settings.side_margin;
     ui.horizontal(|ui| {
-        ui.label("侧边距");
-        if ui
-            .add(egui::Slider::new(&mut side_margin, 0.0..=100.0).suffix(" px"))
-            .changed()
-        {
+        label(ui, "侧边距");
+        if ui.add(egui::Slider::new(&mut side_margin, 0.0..=100.0).suffix(" px").fixed_decimals(0)).changed() {
             actions.push(Action::UpdateReaderSetting(ReaderSettingUpdate::SetSideMargin(side_margin)));
         }
     });
@@ -303,7 +297,7 @@ fn advanced_section(
     // Sidebar width
     let mut toc_width = settings.toc_width;
     ui.horizontal(|ui| {
-        ui.label("侧栏宽度");
+        label(ui, "侧栏宽度");
         if ui
             .add(egui::Slider::new(&mut toc_width, 160.0..=480.0).suffix(" px"))
             .changed()
@@ -315,7 +309,7 @@ fn advanced_section(
     // Window padding
     let mut window_padding = settings.window_padding;
     ui.horizontal(|ui| {
-        ui.label("主区域内边距");
+        label(ui, "主区域内边距");
         if ui
             .add(egui::Slider::new(&mut window_padding, 0.0..=32.0).suffix(" px"))
             .changed()
@@ -356,7 +350,7 @@ fn tts_section(
     // API Key
     let mut api_key = tts_config.api_key.clone().unwrap_or_default();
     ui.horizontal(|ui| {
-        ui.label("API Key");
+        label(ui, "API Key");
         if ui.add(egui::TextEdit::singleline(&mut api_key).password(true)).changed() {
             let mut new_config = tts_config.clone();
             new_config.api_key = if api_key.is_empty() { None } else { Some(api_key) };
@@ -368,7 +362,7 @@ fn tts_section(
     // Base URL
     let mut base_url = tts_config.base_url.clone().unwrap_or_default();
     ui.horizontal(|ui| {
-        ui.label("Base URL");
+        label(ui, "Base URL");
         if ui.add(egui::TextEdit::singleline(&mut base_url).hint_text("https://api.xiaomimimo.com/v1")).changed() {
             let mut new_config = tts_config.clone();
             new_config.base_url = if base_url.is_empty() { None } else { Some(base_url) };
@@ -379,7 +373,7 @@ fn tts_section(
     // Model
     let mut model = tts_config.model.clone().unwrap_or_default();
     ui.horizontal(|ui| {
-        ui.label("Model");
+        label(ui, "Model");
         if ui.add(egui::TextEdit::singleline(&mut model).hint_text("mimo-v2-tts")).changed() {
             let mut new_config = tts_config.clone();
             new_config.model = if model.is_empty() { None } else { Some(model) };
@@ -389,7 +383,7 @@ fn tts_section(
 
     // Voice selection
     ui.horizontal(|ui| {
-        ui.label("音色");
+        label(ui, "音色");
         let voices: &[(&str, &str)] = &[
             ("default_en", "Default (English)"),
             ("default_zh", "默认女声 (中文)"),
@@ -409,22 +403,14 @@ fn tts_section(
         });
     });
 
+    // Cache management
     ui.add_space(s.sm);
-
-    // Action buttons
-    ui.horizontal(|ui| {
-        if ui.button("测试连接").clicked() { actions.push(Action::TtsTestConnection); }
-        if ui.button("测试语音").clicked() { actions.push(Action::TtsTestVoice); }
-    });
     ui.horizontal(|ui| {
         if ui.button("清空缓存").clicked() { actions.push(Action::TtsClearCache); }
     });
 
-    // Feedback
+    // Error feedback
     if let Some(ref err) = tts_state.last_error {
         ui.label(egui::RichText::new(err).color(theme.colors.danger.to_color32()).size(t.caption_size));
-    }
-    if let Some(ref last_test) = tts_state.last_test_at {
-        ui.label(egui::RichText::new(format!("上次测试: {}", last_test)).color(theme.colors.text_muted.to_color32()).size(t.caption_size));
     }
 }
