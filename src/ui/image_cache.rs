@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use eframe::egui;
-use log::warn;
+use log::{debug, warn};
 
 use crate::storage;
 
@@ -42,7 +42,9 @@ impl ImageCache {
                         return Some(handle);
                     }
                     Err(e) => {
-                        warn!("封面解码失败 (book_id={}, ext={}): {}", book_id, ext, e);
+                        debug!("封面解码失败，回退到占位符 (book_id={}, ext={}): {}", book_id, ext, e);
+                        // Delete corrupted file so it can be re-extracted on next import
+                        let _ = std::fs::remove_file(&path);
                     }
                 }
             }
@@ -88,12 +90,27 @@ impl ImageCache {
 }
 
 /// Load image bytes from disk and decode into an egui texture.
+/// Tries format auto-detection first, then falls back to guessing common formats.
 fn load_texture_from_path(
     ctx: &egui::Context,
     path: &std::path::Path,
 ) -> Result<egui::TextureHandle, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("read: {}", e))?;
-    let image = image::load_from_memory(&bytes).map_err(|e| format!("decode: {}", e))?;
+    if bytes.is_empty() {
+        return Err("empty file".to_string());
+    }
+    // Try auto-detect first
+    let image = match image::load_from_memory(&bytes) {
+        Ok(img) => img,
+        Err(_) => {
+            // Fallback: try guessing by file extension header magic
+            // Some cover files are saved with wrong extension but valid image data
+            image::guess_format(&bytes)
+                .ok()
+                .and_then(|fmt| image::load_from_memory_with_format(&bytes, fmt).ok())
+                .ok_or_else(|| "decode: unsupported or corrupted image".to_string())?
+        }
+    };
     let rgba = image.to_rgba8();
     let size = [rgba.width() as usize, rgba.height() as usize];
     let color_image = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());

@@ -198,7 +198,13 @@ impl AppShell {
             if toolbar_should_show != state.ui_state.reader_toolbar_visible {
                 actions.push(Action::SetReaderToolbarVisible(toolbar_should_show));
             }
-            let toolbar_visible = state.ui_state.reader_toolbar_visible || toolbar_should_show;
+
+            // Smooth fade animation for toolbar
+            let toolbar_alpha = ctx.animate_bool(
+                egui::Id::new("reader_toolbar_fade"),
+                toolbar_should_show,
+            );
+            let toolbar_visible = toolbar_alpha > 0.01;
 
             // Top bar (hover reveal, floating overlay — doesn't push content)
             if toolbar_visible {
@@ -213,6 +219,7 @@ impl AppShell {
                     .fixed_pos(egui::pos2(0.0, 0.0))
                     .order(egui::Order::Middle)
                     .show(ctx, |ui| {
+                        ui.set_opacity(toolbar_alpha);
                         ui.set_max_width(available.width());
                         let bar_actions = TopBar::show(ui, &top_bar_props, theme);
                         actions.extend(bar_actions);
@@ -366,16 +373,47 @@ fn render_floating_toc_item(
         item.title.clone()
     };
     let text = if is_current {
-        egui::RichText::new(label).strong().color(theme.colors.accent.to_color32())
+        egui::RichText::new(&label).strong().color(theme.colors.sidebar_selected_text.to_color32())
     } else {
-        egui::RichText::new(label)
+        egui::RichText::new(&label)
     };
+
     ui.horizontal(|ui| {
         ui.add_space(indent);
-        if ui.selectable_label(is_current, text).clicked() {
-            if let Some(idx) = item.chapter_index {
-                actions.push(Action::GoToChapter(idx));
-                actions.push(Action::ToggleFloatingToc); // close after jump
+        if is_current {
+            // Capsule-selected state for current chapter
+            let desired = egui::vec2(ui.available_width(), 28.0);
+            let (rect, resp) = ui.allocate_exact_size(desired, egui::Sense::click());
+            if ui.is_rect_visible(rect) {
+                let painter = ui.painter_at(rect);
+                // Capsule background
+                painter.rect_filled(
+                    rect,
+                    egui::CornerRadius::same(14),
+                    theme.colors.sidebar_selected_bg.to_color32(),
+                );
+                // Text centered vertically, left-padded
+                let text_pos = egui::pos2(rect.left() + 10.0, rect.center().y);
+                painter.text(
+                    text_pos,
+                    egui::Align2::LEFT_CENTER,
+                    &label,
+                    egui::FontId::new(theme.typography.body_size, egui::FontFamily::Proportional),
+                    theme.colors.sidebar_selected_text.to_color32(),
+                );
+            }
+            if resp.clicked() {
+                if let Some(idx) = item.chapter_index {
+                    actions.push(Action::GoToChapter(idx));
+                    actions.push(Action::ToggleFloatingToc);
+                }
+            }
+        } else {
+            if ui.selectable_label(false, text).clicked() {
+                if let Some(idx) = item.chapter_index {
+                    actions.push(Action::GoToChapter(idx));
+                    actions.push(Action::ToggleFloatingToc);
+                }
             }
         }
     });
@@ -415,11 +453,11 @@ fn book_loading_screen(
             }
         }
 
-        ui.add_space(s.lg);
+        ui.add_space(s.xl);
 
         // Title
-        ui.label(egui::RichText::new(title).size(theme.typography.body_size).strong());
-        ui.add_space(s.xxs);
+        ui.label(egui::RichText::new(title).size(theme.typography.title_size).strong());
+        ui.add_space(s.xs);
 
         // Author
         if let Some(a) = author {
@@ -427,10 +465,26 @@ fn book_loading_screen(
                 .color(theme.colors.text_secondary.to_color32()));
         }
 
-        ui.add_space(s.lg);
+        ui.add_space(s.xl);
 
-        // Spinner
-        ui.add(egui::Spinner::new().size(32.0));
+        // Spinner with pulse animation
+        let spinner_size = 32.0;
+        let time = ui.input(|i| i.time);
+        let pulse_alpha = ((time * 2.5).sin() as f32 * 0.5 + 0.5) * 0.12;
+        let spinner_pos = ui.next_widget_position();
+        let pulse_rect = egui::Rect::from_center_size(
+            egui::pos2(spinner_pos.x + spinner_size * 0.5, spinner_pos.y + spinner_size * 0.5),
+            egui::Vec2::splat(spinner_size + 16.0),
+        );
+        let (_sr, _sresp) = ui.allocate_exact_size(egui::Vec2::splat(spinner_size), egui::Sense::hover());
+        if ui.is_rect_visible(pulse_rect) {
+            ui.painter_at(pulse_rect).rect_filled(
+                pulse_rect,
+                egui::CornerRadius::same(16),
+                theme.colors.accent.to_color32().gamma_multiply(pulse_alpha),
+            );
+        }
+        ui.add(egui::Spinner::new().size(spinner_size));
         ui.add_space(s.sm);
         ui.label(egui::RichText::new("正在打开...").size(theme.typography.caption_size)
             .color(theme.colors.text_muted.to_color32()));

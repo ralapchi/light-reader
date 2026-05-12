@@ -86,6 +86,10 @@ pub struct ThemeColors {
     pub warning: ColorValue,
     pub danger: ColorValue,
     pub focus_ring: ColorValue,
+    pub sidebar_bg: ColorValue,
+    pub sidebar_selected_bg: ColorValue,
+    pub sidebar_selected_text: ColorValue,
+    pub sidebar_hover_bg: ColorValue,
 }
 
 // ── ThemeSpacing (9 fields, SPEC 8.13) ──────────────────
@@ -156,6 +160,9 @@ pub struct ThemePanel {
     pub sidebar_default_width: f32,
     pub sidebar_max_width: f32,
     pub content_max_width: f32,
+    pub card_width: f32,
+    pub card_height: f32,
+    pub card_gap: f32,
 }
 
 // ── ThemeConfig (SPEC 8.11, name + 6 sub-structs) ──────
@@ -177,7 +184,7 @@ impl ThemeConfig {
             name: "light".to_string(),
             colors: ThemeColors {
                 window_bg: ColorValue::from_rgb(250, 249, 245),       // canvas
-                panel_bg: ColorValue::from_rgb(239, 233, 222),        // surface-card
+                panel_bg: ColorValue::from_rgb(237, 231, 218),        // surface-card (warmer, more depth)
                 panel_bg_muted: ColorValue::from_rgb(245, 240, 232),  // surface-soft
                 reader_bg: ColorValue::from_rgb(250, 249, 245),       // canvas
                 text_primary: ColorValue::from_rgb(20, 20, 19),       // ink
@@ -186,7 +193,7 @@ impl ThemeConfig {
                 accent: ColorValue::from_rgb(204, 120, 92),           // primary / coral #cc785c
                 accent_hover: ColorValue::from_rgb(169, 88, 62),      // primary-active #a9583e
                 accent_pressed: ColorValue::from_rgb(169, 88, 62),    // primary-active
-                border_subtle: ColorValue::from_rgb(230, 223, 216),   // hairline
+                border_subtle: ColorValue::from_rgb(232, 226, 218),   // hairline (softer)
                 border_strong: ColorValue::from_rgb(204, 120, 92),    // coral
                 selection_bg: ColorValue::from_rgb(232, 224, 210),    // surface-cream-strong
                 selection_text: ColorValue::from_rgb(20, 20, 19),     // ink
@@ -194,6 +201,10 @@ impl ThemeConfig {
                 warning: ColorValue::from_rgb(212, 160, 23),
                 danger: ColorValue::from_rgb(198, 69, 69),
                 focus_ring: ColorValue::from_rgba(204, 120, 92, 80),  // coral at low alpha
+                sidebar_bg: ColorValue::from_rgb(250, 249, 245),          // window_bg
+                sidebar_selected_bg: ColorValue::from_rgba(204, 120, 92, 31), // accent ~12% alpha
+                sidebar_selected_text: ColorValue::from_rgb(204, 120, 92), // accent
+                sidebar_hover_bg: ColorValue::from_rgb(245, 240, 232),    // panel_bg_muted
             },
             spacing: default_spacing(),
             typography: default_typography(),
@@ -208,11 +219,11 @@ impl ThemeConfig {
             name: "dark".to_string(),
             colors: ThemeColors {
                 window_bg: ColorValue::from_rgb(24, 23, 21),          // surface-dark
-                panel_bg: ColorValue::from_rgb(37, 35, 32),          // surface-dark-elevated
+                panel_bg: ColorValue::from_rgb(42, 40, 37),          // surface-dark-elevated (warmer depth)
                 panel_bg_muted: ColorValue::from_rgb(31, 30, 27),    // surface-dark-soft
                 reader_bg: ColorValue::from_rgb(24, 23, 21),         // surface-dark
                 text_primary: ColorValue::from_rgb(250, 249, 245),   // on-dark / cream-tinted white
-                text_secondary: ColorValue::from_rgb(160, 157, 150), // on-dark-soft
+                text_secondary: ColorValue::from_rgb(184, 181, 173), // on-dark-soft (improved contrast)
                 text_muted: ColorValue::from_rgb(108, 106, 100),
                 accent: ColorValue::from_rgb(204, 120, 92),          // coral stays warm
                 accent_hover: ColorValue::from_rgb(169, 88, 62),
@@ -225,6 +236,10 @@ impl ThemeConfig {
                 warning: ColorValue::from_rgb(212, 160, 23),
                 danger: ColorValue::from_rgb(198, 69, 69),
                 focus_ring: ColorValue::from_rgba(204, 120, 92, 80),
+                sidebar_bg: ColorValue::from_rgb(31, 30, 27),             // panel_bg_muted
+                sidebar_selected_bg: ColorValue::from_rgba(204, 120, 92, 38), // accent ~15% alpha
+                sidebar_selected_text: ColorValue::from_rgb(204, 120, 92), // accent
+                sidebar_hover_bg: ColorValue::from_rgb(42, 40, 37),       // panel_bg
             },
             spacing: default_spacing(),
             typography: default_typography(),
@@ -245,17 +260,21 @@ impl ThemeConfig {
                 text_primary: ColorValue::from_rgb(37, 37, 35),  // body-strong
                 text_secondary: ColorValue::from_rgb(108, 106, 100), // muted
                 text_muted: ColorValue::from_rgb(142, 139, 130), // muted-soft
-                accent: ColorValue::from_rgb(169, 88, 62),       // deeper coral for sepia
-                accent_hover: ColorValue::from_rgb(142, 70, 48),
-                accent_pressed: ColorValue::from_rgb(120, 58, 40),
+                accent: ColorValue::from_rgb(181, 98, 74),       // warmer coral for sepia
+                accent_hover: ColorValue::from_rgb(155, 80, 56),
+                accent_pressed: ColorValue::from_rgb(130, 66, 46),
                 border_subtle: ColorValue::from_rgb(224, 215, 200),
-                border_strong: ColorValue::from_rgb(169, 88, 62),
+                border_strong: ColorValue::from_rgb(181, 98, 74),
                 selection_bg: ColorValue::from_rgb(224, 215, 200),
                 selection_text: ColorValue::from_rgb(37, 37, 35),
                 success: ColorValue::from_rgb(93, 184, 114),
                 warning: ColorValue::from_rgb(212, 160, 23),
                 danger: ColorValue::from_rgb(198, 69, 69),
-                focus_ring: ColorValue::from_rgba(169, 88, 62, 80),
+                focus_ring: ColorValue::from_rgba(181, 98, 74, 80),
+                sidebar_bg: ColorValue::from_rgb(245, 240, 232),          // window_bg
+                sidebar_selected_bg: ColorValue::from_rgba(181, 98, 74, 31), // accent ~12% alpha
+                sidebar_selected_text: ColorValue::from_rgb(181, 98, 74), // accent
+                sidebar_hover_bg: ColorValue::from_rgb(232, 224, 210),    // panel_bg_muted
             },
             spacing: default_spacing(),
             typography: default_typography(),
@@ -287,6 +306,10 @@ impl ThemeConfig {
                 warning: ColorValue::from_rgb(212, 160, 23),
                 danger: ColorValue::from_rgb(198, 69, 69),
                 focus_ring: ColorValue::from_rgba(108, 117, 125, 80),
+                sidebar_bg: ColorValue::from_rgb(250, 249, 245),          // window_bg
+                sidebar_selected_bg: ColorValue::from_rgba(108, 117, 125, 31), // accent ~12% alpha
+                sidebar_selected_text: ColorValue::from_rgb(108, 117, 125), // accent
+                sidebar_hover_bg: ColorValue::from_rgb(245, 240, 232),    // panel_bg_muted
             },
             spacing: default_spacing(),
             typography: default_typography(),
@@ -341,10 +364,10 @@ fn default_radius() -> ThemeRadius {
 
 fn default_shadow() -> ThemeShadow {
     ThemeShadow {
-        panel_blur: 8.0,
+        panel_blur: 10.0,
         panel_alpha: 0.12,
-        floating_blur: 12.0,
-        card_shadow_alpha: 40,
+        floating_blur: 14.0,
+        card_shadow_alpha: 48,
         badge_bg_alpha: 120,
     }
 }
@@ -354,9 +377,12 @@ fn default_panel() -> ThemePanel {
         top_bar_height: 48.0,
         status_bar_height: 32.0,
         sidebar_min_width: 200.0,
-        sidebar_default_width: 280.0,
+        sidebar_default_width: 240.0,
         sidebar_max_width: 400.0,
         content_max_width: 720.0,
+        card_width: 150.0,
+        card_height: 200.0,
+        card_gap: 16.0,
     }
 }
 

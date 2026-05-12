@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::app_error::AppError;
 use crate::domain::book::Book;
-use crate::domain::enums::LeftPanelTab;
+use crate::domain::enums::{LeftPanelTab, LibraryNavSection};
 use crate::domain::library_item::LibraryItem;
 use crate::domain::library_view_state::{LibraryFilterMode, LibrarySortMode};
 use crate::domain::search_query::SearchQuery;
@@ -81,6 +81,9 @@ pub enum Action {
     RefreshLibraryItem(String),
     RescanMissingBooks,
     RepairLibraryPath { book_id: String, new_path: String },
+    LibraryNavChanged(LibraryNavSection),
+    LibrarySidebarSearchChanged(String),
+    LibraryDetailClosed,
 
     // TTS actions
     TtsConfigSaved(TtsConfig),

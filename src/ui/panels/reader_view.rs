@@ -294,7 +294,11 @@ fn render_paragraph_block(
             ui.add_space(s.md);
         }
         ParagraphKind::Body => {
-            let indent = paragraph.indent_level as f32 * s.lg;
+            let indent = if paragraph.indent_level > 0 {
+                paragraph.indent_level as f32 * font_size
+            } else {
+                font_size * 2.0
+            };
             let font_id = egui::FontId::new(font_size, font_family.clone());
             let resp = ui.horizontal_wrapped(|ui| {
                 if indent > 0.0 {

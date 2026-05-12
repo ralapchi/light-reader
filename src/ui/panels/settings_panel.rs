@@ -34,7 +34,7 @@ pub fn settings_panel(
     let mut actions = Vec::new();
 
     let viewport = ctx.input(|i| i.viewport().inner_rect.unwrap_or(egui::Rect::ZERO));
-    let win_w = 320.0;
+    let win_w = 400.0;
     let win_x = viewport.right() - win_w - 8.0;
     let win_y = viewport.top() + 40.0;
     let win_h = (viewport.height() - 80.0).max(200.0);
@@ -65,32 +65,32 @@ pub fn settings_panel(
             ui.separator();
                     // 外观：主题、字体、字号
                     appearance_section(ui, settings, theme, &mut actions);
-                    ui.add_space(s.md);
+                    ui.add_space(s.lg);
                     ui.separator();
-                    ui.add_space(s.md);
+                    ui.add_space(s.lg);
 
                     // 排版：行距、段距、正文宽度、侧边距
                     typography_section(ui, settings, theme, &mut actions);
-                    ui.add_space(s.md);
+                    ui.add_space(s.lg);
                     ui.separator();
-                    ui.add_space(s.md);
+                    ui.add_space(s.lg);
 
                     // 阅读行为：目录、状态栏、章节进度、启动恢复
                     reading_behavior_section(ui, settings, theme, &mut actions);
-                    ui.add_space(s.md);
+                    ui.add_space(s.lg);
                     ui.separator();
-                    ui.add_space(s.md);
+                    ui.add_space(s.lg);
 
                     // 听书：TTS 配置
                     tts_section(ui, tts_config, tts_state, theme, &mut actions);
-                    ui.add_space(s.md);
+                    ui.add_space(s.lg);
                     ui.separator();
-                    ui.add_space(s.md);
+                    ui.add_space(s.lg);
 
                     // 高级：平滑滚动、窗口内边距、自动保存、恢复默认
                     advanced_section(ui, settings, theme, &mut actions);
 
-                    ui.add_space(s.lg);
+                    ui.add_space(s.xl);
         });
 
     actions

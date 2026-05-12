@@ -4,7 +4,8 @@ use crate::app::Action;
 use crate::domain::app_state::AppState;
 use crate::domain::book::Book;
 use crate::domain::book_format::BookFormat;
-use crate::domain::enums::ScreenKind;
+use crate::domain::enums::{LibraryNavSection, ScreenKind};
+use crate::domain::library_view_state::LibraryFilterMode;
 use crate::domain::reading_progress::ReadingProgress;
 use crate::domain::recent_book_item::RecentBookItem;
 use crate::tts::types::PlaybackStatus;
@@ -253,6 +254,23 @@ pub fn reduce(state: &mut AppState, action: Action) {
                     crate::domain::library_item::FileHealth::Missing
                 };
             }
+        }
+        Action::LibraryNavChanged(section) => {
+            // Sync filter_mode with the nav section
+            state.library_view_state.filter_mode = match &section {
+                LibraryNavSection::Home | LibraryNavSection::AllBooks => LibraryFilterMode::All,
+                LibraryNavSection::InProgress => LibraryFilterMode::InProgress,
+                LibraryNavSection::Finished => LibraryFilterMode::Finished,
+                LibraryNavSection::TtsConfig => state.library_view_state.filter_mode.clone(),
+            };
+            state.library_view_state.selected_nav = section;
+        }
+        Action::LibrarySidebarSearchChanged(query) => {
+            state.library_view_state.sidebar_search_query = query.clone();
+            state.library_view_state.search_query = query;
+        }
+        Action::LibraryDetailClosed => {
+            state.library_view_state.selected_book_id = None;
         }
 
         // ── TTS actions ──────────────────────────────────────

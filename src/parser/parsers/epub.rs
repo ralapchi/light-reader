@@ -74,14 +74,16 @@ impl EpubParser {
     /// 
     /// # 返回值
     /// * `(HashMap<String, String>, Vec<String>)` - (manifest 映射, spine ID 列表)
-    fn parse_opf_file(&self, content: &str, _base_path: &str) -> (HashMap<String, String>, Vec<String>) {
+    fn parse_opf_file(&self, content: &str, _base_path: &str) -> (HashMap<String, String>, Vec<String>, Option<String>) {
         let mut reader = Reader::from_str(content);
         reader.config_mut().trim_text(true);
 
         let mut manifest: HashMap<String, String> = HashMap::new();
         let mut spine_ids: Vec<String> = Vec::new();
+        let mut cover_id: Option<String> = None;
         let mut in_manifest = false;
         let mut in_spine = false;
+        let mut in_metadata = false;
 
         let mut buffer = Vec::new();
 
@@ -90,13 +92,16 @@ impl EpubParser {
                 Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    if name.starts_with(&b"manifest"[..]) {
+                    if name.starts_with(&b"metadata"[..]) {
+                        in_metadata = true;
+                    } else if name.starts_with(&b"manifest"[..]) {
                         in_manifest = true;
                     } else if name.starts_with(&b"spine"[..]) {
                         in_spine = true;
                     } else if name.starts_with(&b"item"[..]) && in_manifest {
                         let mut id = String::new();
                         let mut href = String::new();
+                        let mut properties = String::new();
 
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
@@ -109,12 +114,49 @@ impl EpubParser {
                                     if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
                                         href = value.to_string();
                                     }
+                                } else if attr_name.starts_with(&b"properties"[..]) {
+                                    if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
+                                        properties = value.to_string();
+                                    }
                                 }
                             }
                         }
 
+                        // EPUB 3: properties="cover-image" marks the cover
+                        if properties.contains("cover-image") && !href.is_empty() {
+                            cover_id = Some(href.clone());
+                        }
+
                         if !id.is_empty() && !href.is_empty() {
                             manifest.insert(id, href);
+                        }
+                    } else if name.starts_with(&b"meta"[..]) && in_metadata {
+                        // EPUB 2: <meta name="cover" content="cover-image-id"/>
+                        let mut meta_name = String::new();
+                        let mut meta_content = String::new();
+                        for attr in e.attributes() {
+                            if let Ok(attr) = attr {
+                                let attr_name = attr.key.as_ref();
+                                if attr_name.starts_with(&b"name"[..]) {
+                                    if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
+                                        meta_name = value.to_string();
+                                    }
+                                } else if attr_name.starts_with(&b"content"[..]) {
+                                    if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
+                                        meta_content = value.to_string();
+                                    }
+                                }
+                            }
+                        }
+                        if meta_name == "cover" && !meta_content.is_empty() {
+                            // Resolve id to href via manifest (may not be populated yet,
+                            // so we store the id and resolve later)
+                            if let Some(href) = manifest.get(&meta_content) {
+                                cover_id = Some(href.clone());
+                            } else if cover_id.is_none() {
+                                // Store as id marker — resolved after manifest is fully parsed
+                                cover_id = Some(format!("__id__:{}", meta_content));
+                            }
                         }
                     } else if name.starts_with(&b"itemref"[..]) && in_spine {
                         for attr in e.attributes() {
@@ -132,7 +174,9 @@ impl EpubParser {
                 Ok(Event::End(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    if name.starts_with(&b"manifest"[..]) {
+                    if name.starts_with(&b"metadata"[..]) {
+                        in_metadata = false;
+                    } else if name.starts_with(&b"manifest"[..]) {
                         in_manifest = false;
                     } else if name.starts_with(&b"spine"[..]) {
                         in_spine = false;
@@ -144,7 +188,14 @@ impl EpubParser {
             buffer.clear();
         }
 
-        (manifest, spine_ids)
+        // Resolve EPUB 2 id marker to href
+        if let Some(ref marker) = cover_id {
+            if let Some(id) = marker.strip_prefix("__id__:") {
+                cover_id = manifest.get(id).cloned();
+            }
+        }
+
+        (manifest, spine_ids, cover_id)
     }
     
     /// 从 OPF 内容中提取元信息
@@ -904,7 +955,7 @@ impl BookParser for EpubParser {
             warnings.push(format!("无法读取 OPF 文件: {}", opf_path));
         }
 
-        let (manifest, spine_ids) = self.parse_opf_file(&opf_content, &opf_base_path);
+        let (manifest, spine_ids, opf_cover_href) = self.parse_opf_file(&opf_content, &opf_base_path);
         let metadata = self.parse_opf_metadata(&opf_content);
         if metadata.is_none() {
             warnings.push("EPUB 缺少元信息，使用文件名作为标题".to_string());
@@ -1057,23 +1108,46 @@ impl BookParser for EpubParser {
 
         // Extract cover image + media type
         let (cover_image, cover_media_type) = {
-            let result = manifest.iter().find_map(|(id, href)| {
-                let lower = format!("{}|{}", id.to_lowercase(), href.to_lowercase());
-                if lower.contains("cover") { Some(href.clone()) } else { None }
-            }).and_then(|href| {
+            fn is_image_href(href: &str) -> bool {
+                let h = href.to_lowercase();
+                h.ends_with(".jpg") || h.ends_with(".jpeg") || h.ends_with(".png")
+                    || h.ends_with(".webp") || h.ends_with(".gif") || h.ends_with(".svg")
+            }
+            fn read_from_archive(archive: &mut zip::ZipArchive<std::io::BufReader<std::fs::File>>, opf_base_path: &str, href: &str) -> Option<(Vec<u8>, &'static str)> {
                 let cover_path = if opf_base_path.is_empty() {
-                    href.clone()
+                    href.to_string()
                 } else {
                     format!("{}/{}", opf_base_path.trim_end_matches('/'), href)
                 };
-                archive.by_name(&cover_path).ok().map(|mut f| {
+                archive.by_name(&cover_path).ok().and_then(|mut f| {
                     let mut buf = Vec::new();
-                    let _ = std::io::Read::read_to_end(&mut f, &mut buf);
-                    (buf, href_media_type(&href))
+                    if std::io::Read::read_to_end(&mut f, &mut buf).is_ok() && !buf.is_empty() {
+                        Some((buf, href_media_type(href)))
+                    } else {
+                        None
+                    }
                 })
-            });
+            }
+            // Priority 1: OPF meta properties="cover-image" or <meta name="cover">
+            let result = opf_cover_href.as_ref()
+                .filter(|href| is_image_href(href))
+                .and_then(|href| read_from_archive(&mut archive, &opf_base_path, href))
+                .or_else(|| {
+                    // Priority 2: manifest item with "cover" in id/href (image files only)
+                    manifest.iter().find_map(|(id, href)| {
+                        let lower = format!("{}|{}", id.to_lowercase(), href.to_lowercase());
+                        if lower.contains("cover") && is_image_href(href) { Some(href.clone()) } else { None }
+                    }).and_then(|href| read_from_archive(&mut archive, &opf_base_path, &href))
+                })
+                .or_else(|| {
+                    // Priority 3: any image file with "cover" in its path
+                    manifest.iter().find_map(|(_, href)| {
+                        let h = href.to_lowercase();
+                        if h.contains("cover") && is_image_href(href) { Some(href.clone()) } else { None }
+                    }).and_then(|href| read_from_archive(&mut archive, &opf_base_path, &href))
+                });
             match result {
-                Some((buf, mime)) if !buf.is_empty() => (Some(buf), Some(mime.to_string())),
+                Some((buf, mime)) => (Some(buf), Some(mime.to_string())),
                 _ => (None, None),
             }
         };

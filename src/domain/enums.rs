@@ -14,3 +14,12 @@ pub enum LeftPanelTab {
     Bookmarks,
     Recent,
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum LibraryNavSection {
+    Home,
+    AllBooks,
+    InProgress,
+    Finished,
+    TtsConfig,
+}
