@@ -40,6 +40,24 @@ impl AppShell {
             shell.dispatch(action);
         }
 
+        // Deferred open: LibraryBookSelected set the flag.
+        // Wait for loading_min_frames to count down before dispatching,
+        // so the LoadingBook UI is visible for at least ~200ms.
+        if shell.state().ui_state.loading_pending_dispatch {
+            let frames = shell.state().ui_state.loading_min_frames;
+            if frames > 0 {
+                shell.state_mut().ui_state.loading_min_frames = frames - 1;
+            } else {
+                let path = shell.state().ui_state.pending_open_path.clone();
+                shell.state_mut().ui_state.loading_pending_dispatch = false;
+                shell.state_mut().ui_state.pending_open_path = None;
+                if let Some(p) = path.and_then(|p| p.to_str().map(String::from)) {
+                    shell.dispatch(Action::OpenBookSelected(p));
+                    return;
+                }
+            }
+        }
+
         let screen = shell.state().ui_state.screen.clone();
 
         match screen {

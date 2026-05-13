@@ -168,19 +168,11 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
                     state.ui_state.loading_book_title = Some(title);
                     state.ui_state.loading_book_author = author;
                     state.ui_state.loading_book_cover_key = cover_key;
-                }
-            }
-            let path = adapter
-                .state()
-                .ui_state
-                .pending_open_path
-                .as_ref()
-                .filter(|p| p.exists())
-                .cloned();
-            adapter.state_mut().ui_state.pending_open_path = None;
-            if let Some(path) = path {
-                if let Some(path_str) = path.to_str() {
-                    dispatch(adapter, Action::OpenBookSelected(path_str.to_string()));
+                    // Switch to LoadingBook now; actual loading deferred so UI paints first
+                    state.ui_state.screen = ScreenKind::LoadingBook;
+                    state.ui_state.loading_pending_dispatch = true;
+                    // 至少显示 ~200ms (12帧 @60fps)
+                    state.ui_state.loading_min_frames = 12;
                 }
             }
         }

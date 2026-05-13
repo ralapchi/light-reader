@@ -24,6 +24,10 @@ pub struct UiState {
     pub loading_book_title: Option<String>,
     pub loading_book_author: Option<String>,
     pub loading_book_cover_key: Option<String>,
+    /// 延迟打开：LibraryBookSelected 设置此标志，shell 下一帧才真正 dispatch OpenBookSelected
+    pub loading_pending_dispatch: bool,
+    /// 最短展示帧数：LoadingBook 至少显示这么多帧再执行打开
+    pub loading_min_frames: u8,
 }
 
 impl Default for UiState {
@@ -44,6 +48,8 @@ impl Default for UiState {
             loading_book_title: None,
             loading_book_author: None,
             loading_book_cover_key: None,
+            loading_pending_dispatch: false,
+            loading_min_frames: 0,
         }
     }
 }
