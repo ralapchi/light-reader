@@ -20,6 +20,7 @@ pub struct UiState {
     /// 阅读页顶部工具栏可见（hover reveal）
     pub reader_toolbar_visible: bool,
     /// LoadingBook 状态的书籍上下文
+    pub loading_book_id: Option<String>,
     pub loading_book_title: Option<String>,
     pub loading_book_author: Option<String>,
     pub loading_book_cover_key: Option<String>,
@@ -38,7 +39,8 @@ impl Default for UiState {
             focused_search_input: false,
             sidebar_collapsed: false,
             show_floating_toc: false,
-            reader_toolbar_visible: true, // visible by default for discoverability
+            reader_toolbar_visible: false, // hidden by default, hover to reveal
+            loading_book_id: None,
             loading_book_title: None,
             loading_book_author: None,
             loading_book_cover_key: None,

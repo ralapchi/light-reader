@@ -15,6 +15,16 @@ pub struct TtsService {
     player: Option<AudioPlayer>,
 }
 
+fn create_provider_from_config(config: &TtsConfig) -> Box<dyn TtsProvider> {
+    match config.provider {
+        TtsProviderKind::Xiaomi => Box::new(crate::tts::xiaomi_provider::XiaomiTtsProvider::new()),
+    }
+}
+
+fn provider_cache_label(config: &TtsConfig) -> String {
+    format!("{:?}", config.provider).to_lowercase()
+}
+
 #[allow(dead_code)]
 impl TtsService {
     pub fn new(cache_dir: PathBuf) -> Self {
@@ -64,7 +74,7 @@ impl TtsService {
 
     // ── Synthesis with cache ─────────────────────────────────
 
-    /// Synthesize audio via the Xiaomi provider, write result to cache.
+    /// Synthesize audio via the configured provider, write result to cache.
     /// Designed to be called from background threads — takes no `&self`,
     /// only explicit params so callers don't need a TtsService handle.
     pub fn synthesize_blocking(
@@ -73,11 +83,10 @@ impl TtsService {
         voice_id: &str,
         cache: &TtsCache,
     ) -> Result<TtsResponse, TtsError> {
-        let provider =
-            crate::tts::xiaomi_provider::XiaomiTtsProvider::new();
+        let provider = create_provider_from_config(config);
         let resp = provider.synthesize(request, config)?;
         let path = cache.segment_path(
-            "xiaomi",
+            &provider_cache_label(config),
             &request.book_id,
             request.chapter_index,
             request.segment_index,
@@ -99,10 +108,9 @@ impl TtsService {
 
         let voice_id = config.voice_id.as_deref().unwrap_or("default");
         let ext = "pcm16";
-        let provider_str = format!("{:?}", config.provider).to_lowercase();
 
         let cache_path = self.cache.segment_path(
-            &provider_str,
+            &provider_cache_label(config),
             &request.book_id,
             request.chapter_index,
             request.segment_index,

@@ -263,10 +263,10 @@ impl CompatAdapter {
         let mut settings_file = storage::settings_store::SettingsFile::from_reader_settings(
             &state.reader_settings,
             state.current_book.as_ref().map(|b| b.id.clone()),
+            Some(state.tts_config.clone()),
         );
         settings_file.window_size = state.window_size;
         settings_file.window_pos = state.window_pos;
-        settings_file.tts_config = Some(state.tts_config.clone());
         if let Err(e) = storage::settings_store::save(&settings_file) {
             warn!("保存设置失败: {}", e);
         }

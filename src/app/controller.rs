@@ -161,9 +161,10 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
             if let Some(ref book_id) = book_id {
                 let ctx = adapter.state().library_index.items.iter()
                     .find(|i| i.book_id == *book_id)
-                    .map(|item| (item.title.clone(), item.author.clone(), item.cover_cache_key.clone()));
-                if let Some((title, author, cover_key)) = ctx {
+                    .map(|item| (item.book_id.clone(), item.title.clone(), item.author.clone(), item.cover_cache_key.clone()));
+                if let Some((bid, title, author, cover_key)) = ctx {
                     let state = adapter.state_mut();
+                    state.ui_state.loading_book_id = Some(bid);
                     state.ui_state.loading_book_title = Some(title);
                     state.ui_state.loading_book_author = author;
                     state.ui_state.loading_book_cover_key = cover_key;
@@ -260,6 +261,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
                 return;
             }
 
+            adapter.state_mut().playback_state.total_segments = segments.len();
             reducer::reduce(adapter.state_mut(), Action::TtsSynthesisStarted);
 
             let segment = segments[0].clone();
@@ -327,7 +329,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
             reducer::reduce(adapter.state_mut(), Action::StopTts);
         }
         Action::PlayNextSegment => {
-            let (ch_idx, curr_seg, paragraphs, config) = {
+            let (ch_idx, curr_seg, paragraphs, config, book_id) = {
                 let state = adapter.state();
                 let ch_idx = state.tts_state.current_chapter_index.unwrap_or(0);
                 let curr = state.playback_state.current_segment_index.unwrap_or(0);
@@ -335,14 +337,18 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
                     .and_then(|b| b.chapters.get(ch_idx))
                     .map(|ch| ch.paragraphs.clone())
                     .unwrap_or_default();
-                (ch_idx, curr, paras, state.tts_config.clone())
+                let book_id = state.tts_state.current_book_id.clone().unwrap_or_default();
+                (ch_idx, curr, paras, state.tts_config.clone(), book_id)
             };
 
             if paragraphs.is_empty() { return; }
 
             let segments = adapter.tts_service().segment_chapter(ch_idx, &paragraphs, &config);
             let next_seg = curr_seg + 1;
-            if next_seg >= segments.len() { return; }
+            if next_seg >= segments.len() {
+                reducer::reduce(adapter.state_mut(), Action::PlaybackAllFinished);
+                return;
+            }
 
             reducer::reduce(adapter.state_mut(), Action::PlayNextSegment);
 
@@ -350,7 +356,8 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
             let paragraph_indices = segment.paragraph_indices.clone();
             let voice_id = tts_voice_id(&config);
             let cache = adapter.tts_cache_arc();
-            let cache_path = cache.segment_path("xiaomi", "", ch_idx, segment.segment_index, &voice_id, "pcm16");
+            let provider_str = format!("{:?}", config.provider).to_lowercase();
+            let cache_path = cache.segment_path(&provider_str, &book_id, ch_idx, segment.segment_index, &voice_id, "pcm16");
 
             // Check cache first
             if cache.exists(&cache_path) {
@@ -370,7 +377,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
 
             // Cache miss: spawn synthesis thread
             let request = TtsRequest {
-                book_id: String::new(),
+                book_id: book_id.clone(),
                 chapter_index: ch_idx,
                 segment_index: segment.segment_index,
                 paragraph_indices: paragraph_indices.clone(),
@@ -396,7 +403,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
             });
         }
         Action::PlayPrevSegment => {
-            let (ch_idx, curr_seg, paragraphs, config) = {
+            let (ch_idx, curr_seg, paragraphs, config, book_id) = {
                 let state = adapter.state();
                 let ch_idx = state.tts_state.current_chapter_index.unwrap_or(0);
                 let curr = state.playback_state.current_segment_index.unwrap_or(0);
@@ -404,7 +411,8 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
                     .and_then(|b| b.chapters.get(ch_idx))
                     .map(|ch| ch.paragraphs.clone())
                     .unwrap_or_default();
-                (ch_idx, curr, paras, state.tts_config.clone())
+                let book_id = state.tts_state.current_book_id.clone().unwrap_or_default();
+                (ch_idx, curr, paras, state.tts_config.clone(), book_id)
             };
 
             if paragraphs.is_empty() || curr_seg == 0 { return; }
@@ -418,7 +426,8 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
             let paragraph_indices = segment.paragraph_indices.clone();
             let voice_id = tts_voice_id(&config);
             let cache = adapter.tts_cache_arc();
-            let cache_path = cache.segment_path("xiaomi", "", ch_idx, segment.segment_index, &voice_id, "pcm16");
+            let provider_str = format!("{:?}", config.provider).to_lowercase();
+            let cache_path = cache.segment_path(&provider_str, &book_id, ch_idx, segment.segment_index, &voice_id, "pcm16");
 
             // Check cache first
             if cache.exists(&cache_path) {
@@ -438,7 +447,7 @@ pub fn dispatch(adapter: &mut CompatAdapter, action: Action) {
 
             // Cache miss: spawn synthesis thread
             let request = TtsRequest {
-                book_id: String::new(),
+                book_id: book_id.clone(),
                 chapter_index: ch_idx,
                 segment_index: segment.segment_index,
                 paragraph_indices: paragraph_indices.clone(),
@@ -644,6 +653,7 @@ fn save_settings(adapter: &CompatAdapter) {
     let settings_file = storage::settings_store::SettingsFile::from_reader_settings(
         &state.reader_settings,
         state.current_book.as_ref().map(|b| b.id.clone()),
+        Some(state.tts_config.clone()),
     );
     if let Err(e) = storage::settings_store::save(&settings_file) {
         log::warn!("保存设置失败: {}", e);

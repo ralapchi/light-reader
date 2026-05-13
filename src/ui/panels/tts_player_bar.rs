@@ -10,7 +10,6 @@ use crate::ui::ThemeConfig;
 pub struct TtsPlayerBarProps<'a> {
     pub tts_state: &'a TtsState,
     pub playback_state: &'a PlaybackState,
-    pub chapter_count: usize,
 }
 
 /// Render the TTS player bar with playback controls.
@@ -86,7 +85,7 @@ pub fn tts_player_bar(
         ui.add_space(s.xxs);
 
         // Next segment button
-        let total_segments = props.chapter_count;
+        let total_segments = props.playback_state.total_segments;
         let is_last = props
             .playback_state
             .current_segment_index

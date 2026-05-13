@@ -21,5 +21,4 @@ pub enum LibraryNavSection {
     AllBooks,
     InProgress,
     Finished,
-    TtsConfig,
 }

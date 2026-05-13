@@ -36,6 +36,7 @@ pub struct PlaybackState {
     pub current_chapter_index: Option<usize>,
     pub current_segment_index: Option<usize>,
     pub current_paragraph_indices: Vec<usize>,
+    pub total_segments: usize,
     pub progress_ms: Option<u64>,
     pub duration_ms: Option<u64>,
 }
@@ -48,6 +49,7 @@ impl Default for PlaybackState {
             current_chapter_index: None,
             current_segment_index: None,
             current_paragraph_indices: Vec::new(),
+            total_segments: 0,
             progress_ms: None,
             duration_ms: None,
         }

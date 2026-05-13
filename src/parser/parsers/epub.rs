@@ -381,6 +381,122 @@ impl EpubParser {
 
         result.join("\n\n")
     }
+
+    /// 单次遍历 HTML，同时提取段落文本和图片位置。
+    /// 返回 (paragraphs, images_with_pos)，其中 pos == -1 表示图片在所有段落之前，
+    /// pos == N 表示图片在第 N 段之后。
+    fn extract_html_with_positions(&self, html: &str) -> (Vec<String>, Vec<(isize, String, Option<String>)>) {
+        let mut paragraphs: Vec<String> = Vec::new();
+        let mut current_para = String::new();
+        let mut text_indent = false;
+        let mut images: Vec<(isize, String, Option<String>)> = Vec::new();
+        let mut para_count: isize = 0;
+
+        let mut reader = Reader::from_str(html);
+        reader.config_mut().trim_text(true);
+        let mut buffer = Vec::new();
+
+        loop {
+            match reader.read_event_into(&mut buffer) {
+                Ok(Event::Start(ref e)) => {
+                    let qname = e.name();
+                    let name = qname.as_ref();
+                    if name.starts_with(&b"p"[..]) || name.starts_with(&b"div"[..]) {
+                        if !current_para.trim().is_empty() {
+                            paragraphs.push(current_para.clone());
+                        }
+                        current_para.clear();
+                        for attr in e.attributes() {
+                            if let Ok(attr) = attr {
+                                let attr_name = attr.key.as_ref();
+                                if attr_name.starts_with(&b"style"[..]) {
+                                    if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
+                                        if value.contains("text-indent") {
+                                            text_indent = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if name.starts_with(&b"br"[..]) {
+                        if !current_para.trim().is_empty() {
+                            paragraphs.push(current_para.clone());
+                        }
+                        current_para.clear();
+                        text_indent = false;
+                        para_count += 1;
+                    }
+                }
+                Ok(Event::Empty(ref e)) => {
+                    let qname = e.name();
+                    let name = qname.as_ref();
+                    let is_img = {
+                        let lower = name.to_ascii_lowercase();
+                        lower.starts_with(&b"img"[..]) || lower.ends_with(&b":img"[..]) || lower.ends_with(&b"image"[..])
+                    };
+                    if is_img {
+                        let mut src = String::new();
+                        let mut alt = None;
+                        for attr in e.attributes() {
+                            if let Ok(attr) = attr {
+                                let an = attr.key.as_ref();
+                                let an_lower = an.to_ascii_lowercase();
+                                if an_lower.starts_with(&b"src"[..]) || an_lower.starts_with(&b"xlink:href"[..]) {
+                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                                        src = v.to_string();
+                                    }
+                                } else if an_lower.starts_with(&b"alt"[..]) {
+                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                                        if !v.trim().is_empty() { alt = Some(v.to_string()); }
+                                    }
+                                }
+                            }
+                        }
+                        if !src.is_empty() {
+                            images.push((para_count - 1, src, alt));
+                        }
+                    } else if name.starts_with(&b"br"[..]) {
+                        if !current_para.trim().is_empty() {
+                            paragraphs.push(current_para.clone());
+                        }
+                        current_para.clear();
+                        text_indent = false;
+                        para_count += 1;
+                    }
+                }
+                Ok(Event::End(ref e)) => {
+                    let qname = e.name();
+                    let name = qname.as_ref();
+                    if name.starts_with(&b"p"[..]) || name.starts_with(&b"div"[..]) {
+                        if !current_para.trim().is_empty() {
+                            paragraphs.push(current_para.clone());
+                        }
+                        current_para.clear();
+                        text_indent = false;
+                        para_count += 1;
+                    }
+                }
+                Ok(Event::Text(ref e)) => {
+                    if let Ok(text) = e.unescape() {
+                        if text_indent && current_para.is_empty() {
+                            current_para.push_str("\x01INDENT\x01");
+                            text_indent = false;
+                        }
+                        current_para.push_str(&text);
+                    }
+                }
+                Ok(Event::Eof) => break,
+                _ => {}
+            }
+            buffer.clear();
+        }
+
+        if !current_para.trim().is_empty() {
+            paragraphs.push(current_para);
+        }
+
+        (paragraphs, images)
+    }
     
     /// 从 HTML 内容中提取标题
     /// 
@@ -1011,7 +1127,7 @@ impl BookParser for EpubParser {
         let mut chapter_titles = Vec::new();
         let mut spine_hrefs = Vec::new();
         let mut image_assets: Vec<crate::domain::book_assets::BookImageAsset> = Vec::new();
-        let mut chapter_image_blocks: Vec<Vec<(usize, crate::domain::chapter_block::InlineImageBlock)>> = Vec::new();
+        let mut chapter_image_blocks: Vec<Vec<(isize, crate::domain::chapter_block::InlineImageBlock)>> = Vec::new();
 
         for idref in &spine_ids {
             if let Some(href) = manifest.get(idref.as_str()) {
@@ -1025,16 +1141,16 @@ impl BookParser for EpubParser {
                     content
                 };
                 if !html_content.is_empty() {
-                    let text_content = self.strip_html_tags(&html_content);
+                    let (paragraphs, images_with_pos) = self.extract_html_with_positions(&html_content);
+                    let text_content = paragraphs.join("\n\n");
                     if !text_content.is_empty() {
                         let chapter_idx = content.len();
                         content.push(text_content);
                         spine_hrefs.push(href.clone());
 
-                        // Collect image info from HTML
-                        let imgs = self.extract_html_images(&html_content, href);
-                        let mut img_blocks: Vec<(usize, crate::domain::chapter_block::InlineImageBlock)> = Vec::new();
-                        for (img_idx, (img_src, img_alt)) in imgs.into_iter().enumerate() {
+                        // Build image blocks from single-pass extraction
+                        let mut img_blocks: Vec<(isize, crate::domain::chapter_block::InlineImageBlock)> = Vec::new();
+                        for (img_idx, (pos, img_src, img_alt)) in images_with_pos.into_iter().enumerate() {
                             let asset_id = format!("{}-c{}-i{}",
                                 spine_hrefs.last().unwrap_or(&"unknown".to_string())
                                     .replace('/', "-").replace('.', "-"),
@@ -1066,14 +1182,14 @@ impl BookParser for EpubParser {
                             }
                             image_assets.push(crate::domain::book_assets::BookImageAsset {
                                 asset_id: asset_id.clone(),
-                                source_href: img_src,
+                                source_href: img_src.clone(),
                                 media_type: Some(mime.to_string()),
                                 cache_key: cache_key.clone(),
                                 width_hint: None,
                                 height_hint: None,
                                 alt_text: img_alt,
                             });
-                            img_blocks.push((img_idx, crate::domain::chapter_block::InlineImageBlock {
+                            img_blocks.push((pos, crate::domain::chapter_block::InlineImageBlock {
                                 index: img_idx,
                                 asset_id,
                                 alt_text: None,

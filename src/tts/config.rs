@@ -9,7 +9,7 @@ use crate::tts::types::TtsProviderKind;
 ///
 /// TRANSITIONAL: api_key is stored as plaintext in settings.json.
 /// Migrate to OS keychain in a future iteration.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct TtsConfig {
     pub enabled: bool,
     pub provider: TtsProviderKind,
@@ -21,6 +21,19 @@ pub struct TtsConfig {
     pub model: Option<String>,
     /// Voice / speaker identifier (e.g. "default_en").
     pub voice_id: Option<String>,
+}
+
+impl std::fmt::Debug for TtsConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TtsConfig")
+            .field("enabled", &self.enabled)
+            .field("provider", &self.provider)
+            .field("api_key", &self.api_key.as_ref().map(|_| "***masked***"))
+            .field("base_url", &self.base_url)
+            .field("model", &self.model)
+            .field("voice_id", &self.voice_id)
+            .finish()
+    }
 }
 
 impl Default for TtsConfig {

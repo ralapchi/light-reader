@@ -261,7 +261,6 @@ pub fn reduce(state: &mut AppState, action: Action) {
                 LibraryNavSection::Home | LibraryNavSection::AllBooks => LibraryFilterMode::All,
                 LibraryNavSection::InProgress => LibraryFilterMode::InProgress,
                 LibraryNavSection::Finished => LibraryFilterMode::Finished,
-                LibraryNavSection::TtsConfig => state.library_view_state.filter_mode.clone(),
             };
             state.library_view_state.selected_nav = section;
         }
@@ -358,6 +357,7 @@ pub fn reduce(state: &mut AppState, action: Action) {
         Action::PlaybackAllFinished => {
             state.playback_state.status = PlaybackStatus::Finished;
             state.tts_state.is_generating = false;
+            state.playback_state.current_paragraph_indices.clear();
         }
         Action::TtsClearCache | Action::TtsClearBookCache(_) => {
             // Controller handles the side effects; no state change needed
@@ -1243,5 +1243,19 @@ mod tests {
         assert_eq!(loaded.items[0].title, "往返测试");
         assert_eq!(loaded.items[0].progress_percent, 0.3);
         let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn playback_all_finished_sets_status() {
+        let mut state = AppState::default();
+        state.playback_state.status = PlaybackStatus::Playing;
+        state.tts_state.is_generating = true;
+        state.playback_state.current_paragraph_indices = vec![0, 1, 2];
+
+        reduce(&mut state, Action::PlaybackAllFinished);
+
+        assert_eq!(state.playback_state.status, PlaybackStatus::Finished);
+        assert!(!state.tts_state.is_generating);
+        assert!(state.playback_state.current_paragraph_indices.is_empty());
     }
 }

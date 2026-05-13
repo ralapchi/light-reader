@@ -130,6 +130,26 @@ mod tests {
     }
 
     #[test]
+    fn segment_path_differs_for_different_providers() {
+        let cache = TtsCache::new(PathBuf::from("/tmp/tts-cache"));
+        let a = cache.segment_path("xiaomi", "book-1", 0, 0, "default", "pcm16");
+        let b = cache.segment_path("aliyun", "book-1", 0, 0, "default", "pcm16");
+        assert_ne!(a, b);
+        assert!(a.to_string_lossy().contains("xiaomi"));
+        assert!(b.to_string_lossy().contains("aliyun"));
+    }
+
+    #[test]
+    fn segment_path_includes_all_indices() {
+        let cache = TtsCache::new(PathBuf::from("/tmp/tts-cache"));
+        let path = cache.segment_path("xiaomi", "book-42", 5, 3, "male", "mp3");
+        let s = path.to_string_lossy();
+        assert!(s.contains("/book-42/"), "missing book_id: {}", s);
+        assert!(s.contains("/5/"), "missing chapter_index: {}", s);
+        assert!(s.contains("3_male.mp3"), "missing segment/voice/ext: {}", s);
+    }
+
+    #[test]
     fn write_and_read_roundtrip() -> std::io::Result<()> {
         let tmp = std::env::temp_dir().join("reader-tts-cache-test");
         let _ = std::fs::remove_dir_all(&tmp);

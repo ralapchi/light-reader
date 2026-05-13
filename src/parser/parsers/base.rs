@@ -30,7 +30,7 @@ pub struct ParseResult {
     /// 书籍内置图片资源索引
     pub image_assets: Vec<crate::domain::book_assets::BookImageAsset>,
     /// 每章节的图片块列表（与 content 索引对齐）
-    pub chapter_image_blocks: Vec<Vec<(usize, crate::domain::chapter_block::InlineImageBlock)>>,
+    pub chapter_image_blocks: Vec<Vec<(isize, crate::domain::chapter_block::InlineImageBlock)>>,
 }
 
 /// 解析器 trait

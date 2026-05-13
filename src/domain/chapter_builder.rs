@@ -14,7 +14,7 @@ pub(crate) fn build_chapter(
     index: usize,
     title: &str,
     text: &str,
-    img_blocks: &[(usize, InlineImageBlock)],
+    img_blocks: &[(isize, InlineImageBlock)],
 ) -> Chapter {
     let mut line_number = 0usize;
     let paragraphs = text
@@ -49,16 +49,28 @@ pub(crate) fn build_chapter(
     let content = paragraphs.iter().map(|p| p.text.as_str()).collect::<Vec<_>>().join("\n\n");
 
     let mut blocks: Vec<ChapterBlock> = Vec::new();
-    for para in &paragraphs {
-        if para.index == 0 {
-            for (_pos, img) in img_blocks {
+
+    if paragraphs.is_empty() {
+        // No paragraphs: render all images
+        for (_pos, img) in img_blocks {
+            blocks.push(ChapterBlock::Image(img.clone()));
+        }
+    } else {
+        // pos == -1 的图片放最前面
+        for (pos, img) in img_blocks.iter().filter(|(pos, _)| *pos == -1) {
+            let _ = pos;
+            blocks.push(ChapterBlock::Image(img.clone()));
+        }
+
+        for para in &paragraphs {
+            blocks.push(ChapterBlock::Paragraph(para.clone()));
+            // 在该段落之后插入 pos == para.index 的图片
+            for (_pos, img) in img_blocks.iter().filter(|(p, _)| *p == para.index as isize) {
                 blocks.push(ChapterBlock::Image(img.clone()));
             }
         }
-        blocks.push(ChapterBlock::Paragraph(para.clone()));
-    }
-    if paragraphs.is_empty() {
-        for (_pos, img) in img_blocks {
+        // pos >= paragraphs.len() 的图片放最后
+        for (_pos, img) in img_blocks.iter().filter(|(p, _)| *p >= paragraphs.len() as isize) {
             blocks.push(ChapterBlock::Image(img.clone()));
         }
     }
@@ -239,4 +251,67 @@ pub(crate) fn map_toc_chapter_indices(
             item
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn img_block(pos: isize, idx: usize) -> (isize, InlineImageBlock) {
+        (
+            pos,
+            InlineImageBlock {
+                index: idx,
+                asset_id: format!("img-{}", idx),
+                alt_text: None,
+                caption: None,
+                source_href: None,
+            },
+        )
+    }
+
+    #[test]
+    fn images_interleaved_at_correct_positions() {
+        let text = "第一段\n\n第二段\n\n第三段";
+        let imgs = vec![img_block(0, 0), img_block(2, 1)];
+        let ch = build_chapter(0, "test", text, &imgs);
+        // Expected: Para(0), Img(0), Para(1), Para(2), Img(1)
+        let kinds: Vec<&str> = ch
+            .blocks
+            .iter()
+            .map(|b| match b {
+                ChapterBlock::Paragraph(_) => "P",
+                ChapterBlock::Image(_) => "I",
+                ChapterBlock::Separator => "S",
+            })
+            .collect();
+        assert_eq!(kinds, vec!["P", "I", "P", "P", "I"]);
+    }
+
+    #[test]
+    fn pos_neg1_images_before_first_paragraph() {
+        let text = "第一段\n\n第二段";
+        let imgs = vec![img_block(-1, 0), img_block(-1, 1)];
+        let ch = build_chapter(0, "test", text, &imgs);
+        let kinds: Vec<&str> = ch
+            .blocks
+            .iter()
+            .map(|b| match b {
+                ChapterBlock::Paragraph(_) => "P",
+                ChapterBlock::Image(_) => "I",
+                ChapterBlock::Separator => "S",
+            })
+            .collect();
+        assert_eq!(kinds, vec!["I", "I", "P", "P"]);
+    }
+
+    #[test]
+    fn no_images_produces_only_paragraphs() {
+        let text = "第一段\n\n第二段";
+        let ch = build_chapter(0, "test", text, &[]);
+        assert_eq!(ch.blocks.len(), 2);
+        for block in &ch.blocks {
+            assert!(matches!(block, ChapterBlock::Paragraph(_)));
+        }
+    }
 }

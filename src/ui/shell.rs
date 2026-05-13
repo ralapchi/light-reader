@@ -54,12 +54,13 @@ impl AppShell {
                 let state = shell.state();
                 let title = state.ui_state.loading_book_title.as_deref().unwrap_or("正在加载");
                 let author = state.ui_state.loading_book_author.as_deref();
+                let book_id = state.ui_state.loading_book_id.as_deref();
                 let cover_key = state.ui_state.loading_book_cover_key.as_deref();
                 // Try to load cover for loading screen
                 let mut cover_tex = None;
-                if let Some(key) = cover_key {
+                if let Some(bid) = book_id {
                     cover_tex = IMG_CACHE.with(|c| c.borrow_mut().cover_texture(
-                        ctx, key, cover_key,
+                        ctx, bid, cover_key,
                     ));
                 }
                 let _ = state;
@@ -316,7 +317,6 @@ impl AppShell {
                 let tts_props = TtsPlayerBarProps {
                     tts_state: &state.tts_state,
                     playback_state: &state.playback_state,
-                    chapter_count: chapters.len(),
                 };
                 egui::TopBottomPanel::bottom("tts_player_bar").show(ctx, |ui| {
                     let player_actions = tts_player_bar(ui, &tts_props, theme);

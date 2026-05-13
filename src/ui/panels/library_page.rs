@@ -118,9 +118,6 @@ fn library_sidebar(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) -
             ui.add_space(s.md);
 
             // ── Nav: 功能 ──────────────────────────────────
-            nav_label(ui, "功能", typo.caption_size, colors.text_muted.to_color32());
-            ui.add_space(s.xxs);
-            nav_item(ui, "听书设置", LibraryNavSection::TtsConfig, selected_nav, theme, &mut actions);
 
             // Push import button to bottom
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
@@ -222,7 +219,6 @@ fn library_content(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) -
         LibraryNavSection::AllBooks => all_books_view(ctx, state, theme),
         LibraryNavSection::InProgress => filtered_books_view(ctx, state, theme, "阅读中", LibraryFilterMode::InProgress),
         LibraryNavSection::Finished => filtered_books_view(ctx, state, theme, "已读完", LibraryFilterMode::Finished),
-        LibraryNavSection::TtsConfig => tts_config_placeholder(ctx, state, theme),
     }
 }
 
@@ -450,36 +446,6 @@ fn filtered_books_view(
         });
 
     actions
-}
-
-// ── TTS Config Placeholder ────────────────────────────────
-
-fn tts_config_placeholder(ctx: &egui::Context, _state: &AppState, theme: &ThemeConfig) -> Vec<Action> {
-    let s = &theme.spacing;
-    let typo = &theme.typography;
-    let colors = &theme.colors;
-
-    egui::CentralPanel::default()
-        .frame(egui::Frame::new().inner_margin(egui::vec2(s.lg, s.lg)))
-        .show(ctx, |ui| {
-            ui.add_space(s.xl);
-            ui.vertical_centered(|ui| {
-                ui.label(
-                    egui::RichText::new("听书设置")
-                        .size(typo.title_size)
-                        .color(colors.text_primary.to_color32())
-                        .strong(),
-                );
-                ui.add_space(s.md);
-                ui.label(
-                    egui::RichText::new("请在阅读器内打开设置面板配置听书功能")
-                        .size(typo.body_size)
-                        .color(colors.text_secondary.to_color32()),
-                );
-            });
-        });
-
-    Vec::new()
 }
 
 // ═══════════════════════════════════════════════════════════
