@@ -51,21 +51,50 @@ impl AppShell {
                 }
             }
             ScreenKind::LoadingBook => {
-                let state = shell.state();
-                let title = state.ui_state.loading_book_title.as_deref().unwrap_or("正在加载");
-                let author = state.ui_state.loading_book_author.as_deref();
-                let book_id = state.ui_state.loading_book_id.as_deref();
-                let cover_key = state.ui_state.loading_book_cover_key.as_deref();
-                // Try to load cover for loading screen
-                let mut cover_tex = None;
-                if let Some(bid) = book_id {
-                    cover_tex = IMG_CACHE.with(|c| c.borrow_mut().cover_texture(
-                        ctx, bid, cover_key,
-                    ));
-                }
-                let _ = state;
+                let (has_error, err_msg, last_path, title_owned, author_owned, cover_tex) = {
+                    let state = shell.state();
+                    let has_error = state.last_error.is_some();
+                    let err_msg = state
+                        .last_error
+                        .as_ref()
+                        .map(|e| format!("[{}] {}", e.code, e.message));
+                    let last_path = state.ui_state.last_attempted_path.clone();
+                    let title = state.ui_state.loading_book_title.clone().unwrap_or_else(|| "正在加载".into());
+                    let author = state.ui_state.loading_book_author.clone();
+                    let book_id = state.ui_state.loading_book_id.as_deref();
+                    let cover_key = state.ui_state.loading_book_cover_key.as_deref();
+                    let mut cover_tex = None;
+                    if let Some(bid) = book_id {
+                        cover_tex = IMG_CACHE.with(|c| c.borrow_mut().cover_texture(
+                            ctx, bid, cover_key,
+                        ));
+                    }
+                    (has_error, err_msg, last_path, title, author, cover_tex)
+                };
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    book_loading_screen(ui, title, author, cover_tex.as_ref(), &config);
+                    if has_error {
+                        let (retry, reopen) = book_error_screen(
+                            ui, &title_owned, author_owned.as_deref(), cover_tex.as_ref(),
+                            &err_msg.unwrap_or_default(), &config,
+                        );
+                        if retry {
+                            if let Some(path) = &last_path {
+                                let path_str = path.to_string_lossy().to_string();
+                                shell.dispatch(Action::OpenBookSelected(path_str));
+                            }
+                        }
+                        if reopen {
+                            if let Some(path) = FileDialog::new()
+                                .add_filter("电子书", &["epub", "txt"])
+                                .pick_file()
+                            {
+                                let path_str = path.to_string_lossy().to_string();
+                                shell.dispatch(Action::OpenBookSelected(path_str));
+                            }
+                        }
+                    } else {
+                        book_loading_screen(ui, &title_owned, author_owned.as_deref(), cover_tex.as_ref(), &config);
+                    }
                 });
             }
             ScreenKind::Reader => {
@@ -491,6 +520,88 @@ fn book_loading_screen(
 
         ui.add_space(s.loading_screen_spacer);
     });
+}
+
+/// Error sub-state within LoadingBook — shows cover, error message, and action buttons.
+fn book_error_screen(
+    ui: &mut egui::Ui,
+    title: &str,
+    author: Option<&str>,
+    cover_texture: Option<&egui::TextureHandle>,
+    error_message: &str,
+    theme: &ThemeConfig,
+) -> (bool, bool) {
+    let s = &theme.spacing;
+    let mut retry = false;
+    let mut reopen = false;
+
+    ui.vertical_centered(|ui| {
+        ui.add_space(s.chapter_end_spacer);
+
+        // Cover area (dimmed on error)
+        let cover_size = egui::Vec2::new(140.0, 184.0);
+        let cover_rect = egui::Rect::from_min_size(ui.next_widget_position(), cover_size);
+        let (_r, _resp) = ui.allocate_exact_size(cover_size, egui::Sense::hover());
+        if ui.is_rect_visible(cover_rect) {
+            let painter = ui.painter_at(cover_rect);
+            if let Some(tex) = cover_texture {
+                painter.image(tex.id(), cover_rect,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE.gamma_multiply(0.5));
+            } else {
+                painter.rect_filled(cover_rect, egui::CornerRadius::same(6),
+                    theme.colors.panel_bg.to_color32());
+            }
+        }
+
+        ui.add_space(s.lg);
+
+        // Title
+        ui.label(egui::RichText::new(title).size(theme.typography.title_size).strong());
+        ui.add_space(s.xs);
+
+        // Author
+        if let Some(a) = author {
+            ui.label(egui::RichText::new(a).size(theme.typography.caption_size)
+                .color(theme.colors.text_secondary.to_color32()));
+        }
+
+        ui.add_space(s.xl);
+
+        // Error icon + message
+        ui.label(egui::RichText::new("打开失败").size(theme.typography.body_size)
+            .color(theme.colors.danger.to_color32()).strong());
+        ui.add_space(s.sm);
+        ui.label(egui::RichText::new(error_message).size(theme.typography.caption_size)
+            .color(theme.colors.text_muted.to_color32()));
+
+        ui.add_space(s.lg);
+
+        // Action buttons
+        ui.horizontal(|ui| {
+            let retry_btn = egui::Button::new(
+                egui::RichText::new("重试").size(theme.typography.body_size)
+                    .color(theme.colors.text_primary.to_color32()),
+            )
+            .fill(theme.colors.panel_bg.to_color32())
+            .corner_radius(egui::CornerRadius::same(theme.radius.button as u8));
+            if ui.add_sized(egui::vec2(100.0, 36.0), retry_btn).clicked() {
+                retry = true;
+            }
+
+            let reopen_btn = egui::Button::new(
+                egui::RichText::new("重新打开").size(theme.typography.body_size)
+                    .color(egui::Color32::WHITE),
+            )
+            .fill(theme.colors.accent.to_color32())
+            .corner_radius(egui::CornerRadius::same(theme.radius.button as u8));
+            if ui.add_sized(egui::vec2(100.0, 36.0), reopen_btn).clicked() {
+                reopen = true;
+            }
+        });
+    });
+
+    (retry, reopen)
 }
 
 #[cfg(test)]

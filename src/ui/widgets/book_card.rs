@@ -242,10 +242,6 @@ pub fn book_card(
                         popup_actions.push(Action::LibraryBookSelected(item.book_id.clone()));
                         egui::Popup::close_id(ui.ctx(), popup_id);
                     }
-                    if ui.button("详情").clicked() {
-                        popup_actions.push(Action::LibraryBookSelected(item.book_id.clone()));
-                        egui::Popup::close_id(ui.ctx(), popup_id);
-                    }
                     if ui.button("移除").clicked() {
                         popup_actions.push(Action::RemoveFromLibrary(item.book_id.clone()));
                         egui::Popup::close_id(ui.ctx(), popup_id);

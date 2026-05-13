@@ -432,7 +432,7 @@ mod tests {
         let mut adapter = CompatAdapter::new();
         adapter.dispatch(Action::OpenBookSelected("unsupported.xyz".to_string()));
 
-        assert_eq!(adapter.state().ui_state.screen, ScreenKind::Error);
+        assert_eq!(adapter.state().ui_state.screen, ScreenKind::LoadingBook);
         assert_eq!(
             adapter.state().last_error.as_ref().map(|err| err.code.as_str()),
             Some(error_codes::UNSUPPORTED_FORMAT)

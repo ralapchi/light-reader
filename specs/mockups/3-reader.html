@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>阅读页 — Reader</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FAF8F5;
+    --surface: #FFFFFF;
+    --surface-hover: #F5F2EE;
+    --text-primary: #1A1A1A;
+    --text-secondary: #8A8680;
+    --text-tertiary: #B5AFA8;
+    --accent: #C8553D;
+    --accent-soft: #F2E0D9;
+    --border: #E8E4DF;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.08);
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  .reader-app {
+    height: 100vh;
+    position: relative;
+  }
+
+  /* ── Top Toolbar (hover reveal) ── */
+  .toolbar-trigger {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    z-index: 100;
+  }
+
+  .toolbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: rgba(250, 248, 245, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+  }
+
+  .toolbar-trigger:hover ~ .toolbar,
+  .toolbar:hover {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .toolbar-left, .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .toolbar-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .toolbar-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .toolbar-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 4px;
+  }
+
+  .toolbar-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+  }
+
+  /* ── Floating TOC Panel ── */
+  .toc-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 200;
+    display: none; /* shown via JS */
+  }
+
+  .toc-overlay.visible {
+    display: block;
+  }
+
+  .toc-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.15);
+  }
+
+  .toc-panel {
+    position: absolute;
+    top: 64px;
+    left: 20px;
+    width: 300px;
+    max-height: calc(100vh - 100px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: tocIn 0.2s ease-out;
+  }
+
+  @keyframes tocIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .toc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .toc-header-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .toc-close {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+
+  .toc-close:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .toc-list {
+    overflow-y: auto;
+    padding: 8px;
+    flex: 1;
+  }
+
+  .toc-item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toc-item:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .toc-item.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .toc-item .chapter-num {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    min-width: 20px;
+  }
+
+  .toc-item.active .chapter-num {
+    color: var(--accent);
+  }
+
+  .toc-progress {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .toc-progress-bar {
+    flex: 1;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .toc-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    width: 34%;
+  }
+
+  .toc-progress-text {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+
+  /* ── Reader Content ── */
+  .reader-content {
+    height: 100vh;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    padding: 80px 0 60px;
+  }
+
+  .reader-column {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  .chapter-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 32px;
+    line-height: 1.4;
+  }
+
+  .reader-paragraph {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 17px;
+    line-height: 1.85;
+    color: var(--text-primary);
+    margin-bottom: 1.2em;
+    text-align: justify;
+  }
+
+  .reader-paragraph.indent {
+    text-indent: 2em;
+  }
+
+  .reader-paragraph.quote {
+    border-left: 3px solid var(--accent-soft);
+    padding-left: 16px;
+    margin-left: -19px;
+    color: var(--text-secondary);
+    font-style: italic;
+  }
+
+  .reader-paragraph.separator {
+    text-align: center;
+    color: var(--text-tertiary);
+    letter-spacing: 0.5em;
+    margin: 2em 0;
+  }
+
+  /* ── Bottom Status Bar ── */
+  .status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 32px;
+    background: rgba(250, 248, 245, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(232, 228, 223, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    z-index: 50;
+  }
+
+  /* ── View toggle (demo only) ── */
+  .demo-controls {
+    position: fixed;
+    bottom: 40px;
+    right: 20px;
+    z-index: 500;
+    display: flex;
+    gap: 6px;
+  }
+
+  .demo-btn {
+    font-family: inherit;
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: white;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.15s;
+  }
+
+  .demo-btn:hover {
+    border-color: var(--text-tertiary);
+    color: var(--text-primary);
+  }
+
+  .demo-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  /* ── Search overlay (demo) ── */
+  .search-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 300;
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 120px;
+    background: rgba(0,0,0,0.15);
+  }
+
+  .search-overlay.visible {
+    display: flex;
+  }
+
+  .search-panel {
+    width: 480px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    animation: searchIn 0.2s ease-out;
+  }
+
+  @keyframes searchIn {
+    from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .search-input-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .search-input-area svg {
+    width: 18px;
+    height: 18px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+
+  .search-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-family: inherit;
+    font-size: 15px;
+    color: var(--text-primary);
+    background: none;
+  }
+
+  .search-input::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .search-results {
+    padding: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .search-result-item {
+    padding: 10px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .search-result-item:hover {
+    background: var(--surface-hover);
+  }
+
+  .search-result-context {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 4px;
+  }
+
+  .search-result-context mark {
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: 500;
+  }
+
+  .search-result-meta {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  .search-hint {
+    padding: 20px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-tertiary);
+  }
+</style>
+</head>
+<body>
+<div class="reader-app">
+  <!-- Hover trigger zone -->
+  <div class="toolbar-trigger"></div>
+
+  <!-- Top Toolbar -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button class="toolbar-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        书架
+      </button>
+      <div class="toolbar-divider"></div>
+      <span class="toolbar-title">三体 · 第18章</span>
+    </div>
+    <div class="toolbar-right">
+      <button class="toolbar-btn" id="tocBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        目录
+      </button>
+      <button class="toolbar-btn" id="searchBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        搜索
+      </button>
+      <button class="toolbar-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button class="toolbar-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        听书
+      </button>
+      <div class="toolbar-divider"></div>
+      <button class="toolbar-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <button class="toolbar-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Floating TOC Panel -->
+  <div class="toc-overlay" id="tocOverlay">
+    <div class="toc-backdrop" id="tocBackdrop"></div>
+    <div class="toc-panel">
+      <div class="toc-header">
+        <span class="toc-header-title">目录</span>
+        <button class="toc-close" id="tocClose">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="toc-list">
+        <div class="toc-item"><span class="chapter-num">1</span> 红岸基地</div>
+        <div class="toc-item"><span class="chapter-num">2</span> 宇宙闪烁</div>
+        <div class="toc-item"><span class="chapter-num">3</span> 台球</div>
+        <div class="toc-item"><span class="chapter-num">4</span> 射手与农场主</div>
+        <div class="toc-item"><span class="chapter-num">5</span> 三体、哥德尔、泡利</div>
+        <div class="toc-item"><span class="chapter-num">6</span> 周文王</div>
+        <div class="toc-item"><span class="chapter-num">7</span> 疯狂年代</div>
+        <div class="toc-item"><span class="chapter-num">8</span> 寂静的春天</div>
+        <div class="toc-item"><span class="chapter-num">9</span> 红岸之二</div>
+        <div class="toc-item"><span class="chapter-num">10</span> 宇宙闪烁之二</div>
+        <div class="toc-item"><span class="chapter-num">11</span> 大史</div>
+        <div class="toc-item"><span class="chapter-num">12</span> 三体游戏</div>
+        <div class="toc-item"><span class="chapter-num">13</span> 红岸之三</div>
+        <div class="toc-item"><span class="chapter-num">14</span> 三体、墨子、烈焰</div>
+        <div class="toc-item"><span class="chapter-num">15</span> 三体、牛顿、冯·诺依曼</div>
+        <div class="toc-item"><span class="chapter-num">16</span> 三体、爱因斯坦</div>
+        <div class="toc-item"><span class="chapter-num">17</span> 三体之尾声</div>
+        <div class="toc-item active"><span class="chapter-num">18</span> 聚会</div>
+        <div class="toc-item"><span class="chapter-num">19</span> 三体问题</div>
+        <div class="toc-item"><span class="chapter-num">20</span> 三体、哥白尼、牛顿</div>
+        <div class="toc-item"><span class="chapter-num">21</span> 三体、爱因斯坦之二</div>
+        <div class="toc-item"><span class="chapter-num">22</span> 地球叛军</div>
+      </div>
+      <div class="toc-progress">
+        <div class="toc-progress-bar"><div class="toc-progress-fill"></div></div>
+        <span class="toc-progress-text">第 18 章 · 68%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search Overlay -->
+  <div class="search-overlay" id="searchOverlay">
+    <div class="search-panel">
+      <div class="search-input-area">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="search-input" type="text" placeholder="在本书中搜索..." autofocus>
+      </div>
+      <div class="search-results">
+        <div class="search-result-item">
+          <div class="search-result-context">...汪淼看着面前的<span>聚会</span>，每个人脸上都带着一种奇怪的表情...</div>
+          <div class="search-result-meta">第 18 章 · 约 12% 处</div>
+        </div>
+        <div class="search-result-item">
+          <div class="search-result-context">...在那次<span>聚会</span>上，他第一次听到了关于三体游戏的真正含义...</div>
+          <div class="search-result-meta">第 18 章 · 约 45% 处</div>
+        </div>
+        <div class="search-result-item">
+          <div class="search-result-context">...回忆起那场改变一切的<span>聚会</span>，汪淼仍然心有余悸...</div>
+          <div class="search-result-meta">第 22 章 · 约 8% 处</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reader Content -->
+  <div class="reader-content">
+    <div class="reader-column">
+      <h1 class="chapter-title">第18章 聚会</h1>
+
+      <p class="reader-paragraph indent">汪淼站在别墅门口，看着面前这栋三层小楼。他没有按门铃，而是深吸了一口气，让自己冷静下来。这次聚会是他主动要求参加的，申玉菲在电话里的语气让他感到不安——那种平静下面隐藏着某种他无法理解的东西。</p>
+
+      <p class="reader-paragraph indent">门开了，申玉菲站在门口。她穿着一件简单的白色衬衫和黑色长裤，看上去完全不像一个"科学边界"组织的核心成员。她向汪淼点了点头，没有寒暄，直接把他引进了客厅。</p>
+
+      <p class="reader-paragraph indent">客厅里已经有十几个人了。他们三三两两地站着或坐着，低声交谈。汪淼注意到，这些人的脸上都带着一种奇怪的表情——不是忧虑，不是恐惧，而是一种更复杂的东西，仿佛他们共同守着一个不能说出口的秘密。</p>
+
+      <p class="reader-paragraph quote">"汪教授，你来了就好。"潘寒从人群中走出来，手里端着一杯红酒。"我们一直在等你。"</p>
+
+      <p class="reader-paragraph indent">汪淼皱了皱眉。他和潘寒并不熟，只是在学术会议上见过几次。这个年轻人身上有一种让人不太舒服的自信，仿佛他比在场所有人都更了解世界的真相。</p>
+
+      <p class="reader-paragraph indent">"等我？"汪淼重复了一遍，"为什么等我？"</p>
+
+      <p class="reader-paragraph indent">潘寒没有直接回答，而是转身走向客厅中央。那里放着一张大桌子，桌上铺着一块深蓝色的桌布，上面散落着一些纸张和照片。汪淼走近一看，发现那些照片全是天文台的观测数据——和他最近看到的宇宙背景辐射数据惊人地相似。</p>
+
+      <p class="reader-paragraph separator">***</p>
+
+      <p class="reader-paragraph indent">"我们来做一个思想实验。"潘寒拍了拍手，吸引了所有人的注意。"假设你是一个射手，在一个靶场上射击。靶子上画着一条线，你每隔十厘米打一枪。对于靶子上的二维生物来说，它们发现了一个规律：每隔十厘米就有一个弹孔。它们称之为'射手定律'。"</p>
+
+      <p class="reader-paragraph indent">他停顿了一下，环顾四周。所有人都安静下来。</p>
+
+      <p class="reader-paragraph indent">"现在，假设这个射手是个'神枪手'，每枪都精确地打在整十厘米的位置上。对于二维生物来说，这是一个完美的物理定律。但如果射手稍微偏差一点——比如说打了10.1厘米、20.2厘米、30.1厘米——那么二维生物就会发现，它们的'定律'在更精确的测量下出现了偏差。"</p>
+
+      <p class="reader-paragraph indent">汪淼感到一阵寒意。他知道潘寒要说什么了。</p>
+
+      <p class="reader-paragraph quote">"物理学不存在。"潘寒的声音很轻，但在安静的客厅里格外清晰。"或者说，我们以为的物理定律，不过是更高维度存在无意中留下的痕迹。"</p>
+
+      <p class="reader-paragraph indent">客厅里一片沉默。汪淼看到几个人不约而同地低下了头，仿佛在消化这个他们早已听过、但始终不愿接受的结论。</p>
+
+      <p class="reader-paragraph indent">"这就是为什么，"申玉菲接过了话头，"我们邀请你来。因为你是纳米材料领域的顶尖专家，而你的研究——或者说你即将看到的东西——将改变一切。"</p>
+    </div>
+  </div>
+
+  <!-- Bottom Status Bar -->
+  <div class="status-bar">
+    <span>第 18 章 · 聚会</span>
+    <span>68% · 约剩余 42 分钟</span>
+  </div>
+
+  <!-- Demo Controls -->
+  <div class="demo-controls">
+    <button class="demo-btn active" id="btnDefault">默认</button>
+    <button class="demo-btn" id="btnToc">目录</button>
+    <button class="demo-btn" id="btnSearch">搜索</button>
+  </div>
+</div>
+
+<script>
+  // TOC toggle
+  const tocBtn = document.getElementById('tocBtn');
+  const tocOverlay = document.getElementById('tocOverlay');
+  const tocBackdrop = document.getElementById('tocBackdrop');
+  const tocClose = document.getElementById('tocClose');
+  const btnToc = document.getElementById('btnToc');
+  const btnDefault = document.getElementById('btnDefault');
+
+  function showToc() {
+    tocOverlay.classList.add('visible');
+    searchOverlay.classList.remove('visible');
+    setActiveBtn('btnToc');
+  }
+  function hideToc() {
+    tocOverlay.classList.remove('visible');
+    setActiveBtn('btnDefault');
+  }
+
+  tocBtn.addEventListener('click', () => {
+    tocOverlay.classList.contains('visible') ? hideToc() : showToc();
+  });
+  tocBackdrop.addEventListener('click', hideToc);
+  tocClose.addEventListener('click', hideToc);
+  btnToc.addEventListener('click', showToc);
+
+  // Search toggle
+  const searchBtn = document.getElementById('searchBtn');
+  const searchOverlay = document.getElementById('searchOverlay');
+  const btnSearch = document.getElementById('btnSearch');
+
+  function showSearch() {
+    searchOverlay.classList.add('visible');
+    tocOverlay.classList.remove('visible');
+    setActiveBtn('btnSearch');
+  }
+  function hideSearch() {
+    searchOverlay.classList.remove('visible');
+    setActiveBtn('btnDefault');
+  }
+
+  searchBtn.addEventListener('click', () => {
+    searchOverlay.classList.contains('visible') ? hideSearch() : showSearch();
+  });
+  searchOverlay.addEventListener('click', (e) => {
+    if (e.target === searchOverlay) hideSearch();
+  });
+  btnSearch.addEventListener('click', showSearch);
+  btnDefault.addEventListener('click', () => {
+    hideToc();
+    hideSearch();
+  });
+
+  function setActiveBtn(id) {
+    document.querySelectorAll('.demo-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+</script>
+</body>
+</html>

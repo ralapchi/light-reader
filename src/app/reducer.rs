@@ -17,7 +17,8 @@ pub fn reduce(state: &mut AppState, action: Action) {
             set_status_message(state, err.message.clone());
             state.last_error = Some(err);
             state.ui_state.is_loading = false;
-            state.ui_state.screen = ScreenKind::Error;
+            // Stay in LoadingBook — shell shows error sub-state via last_error
+            state.ui_state.screen = ScreenKind::LoadingBook;
             state.ui_state.pending_open_path = None;
         }
         Action::GoToChapter(index) => go_to_chapter(state, index),

@@ -8,18 +8,11 @@ use crate::domain::book_format::BookFormat;
 use crate::domain::enums::LibraryNavSection;
 use crate::domain::library_item::{FileHealth, LibraryItem};
 use crate::domain::library_view_state::{LibraryFilterMode, LibrarySortMode, LibraryViewState};
-use std::cell::Cell;
-
 use crate::ui::image_cache::IMG_CACHE;
 use crate::ui::widgets::book_card;
-use crate::ui::widgets::library_detail::library_detail_panel;
 use crate::ui::ThemeConfig;
 
-thread_local! {
-    static SELECTED_DETAIL: Cell<Option<String>> = const { Cell::new(None) };
-}
-
-/// The main library home page with dual-panel layout.
+/// The main library home page.
 pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) -> Vec<Action> {
     let mut actions = Vec::new();
 
@@ -30,27 +23,6 @@ pub fn library_page(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) 
     // ── Central content ───────────────────────────────────
     let content_actions = library_content(ctx, state, theme);
     actions.extend(content_actions);
-
-    // ── Detail panel overlay ──────────────────────────────
-    SELECTED_DETAIL.with(|cell| {
-        let detail_id = cell.take();
-        if let Some(book_id) = detail_id {
-            let item_found = state.library_index.items.iter().find(|i| i.book_id == book_id).cloned();
-            if let Some(item) = item_found {
-                let detail_actions = library_detail_panel(ctx, &item, theme);
-                let mut should_close = false;
-                for action in &detail_actions {
-                    if matches!(action, Action::LibraryBookSelected(_) | Action::LibraryDetailClosed | Action::RemoveFromLibrary(_)) {
-                        should_close = true;
-                    }
-                }
-                if !should_close {
-                    cell.set(Some(book_id));
-                }
-                actions.extend(detail_actions);
-            }
-        }
-    });
 
     actions
 }
@@ -264,10 +236,8 @@ fn home_view(ctx: &egui::Context, state: &AppState, theme: &ThemeConfig) -> Vec<
                         let (card_responses, card_actions) = book_card::book_card_scaled(ui, item, theme, cover_tex.as_ref(), 1.3);
                         actions.extend(card_actions);
                         for response in &card_responses {
-                            if response.double_clicked() {
+                            if response.clicked() {
                                 actions.push(Action::LibraryBookSelected(item.book_id.clone()));
-                            } else if response.clicked() {
-                                SELECTED_DETAIL.with(|c| c.set(Some(item.book_id.clone())));
                             }
                         }
                         ui.add_space(s.md);
@@ -474,10 +444,8 @@ fn render_book_grid(
                 let (card_responses, card_actions) = book_card::book_card(ui, item, theme, cover_tex.as_ref());
                 actions.extend(card_actions);
                 for response in &card_responses {
-                    if response.double_clicked() {
+                    if response.clicked() {
                         actions.push(Action::LibraryBookSelected(item.book_id.clone()));
-                    } else if response.clicked() {
-                        SELECTED_DETAIL.with(|c| c.set(Some(item.book_id.clone())));
                     }
                 }
                 if (i + 1) % columns == 0 {

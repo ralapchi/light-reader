@@ -1,6 +1,4 @@
 use eframe::egui;
-use log::info;
-use rfd::FileDialog;
 
 use crate::app::Action;
 use crate::ui::ThemeConfig;
@@ -58,17 +56,8 @@ impl TopBar {
 
             ui.add_space(s.md);
 
-            if ui.button("打开书籍").clicked() {
-                info!("点击了打开书籍按钮");
-                if let Some(path) = FileDialog::new()
-                    .add_filter("电子书", &["epub", "txt"])
-                    .add_filter("EPUB", &["epub"])
-                    .add_filter("文本文件", &["txt"])
-                    .pick_file()
-                {
-                    let path_str = path.to_str().unwrap_or("").to_string();
-                    actions.push(Action::OpenBookSelected(path_str));
-                }
+            if ui.button("听书").clicked() {
+                actions.push(Action::StartTts);
             }
 
             // === Center section: chapter navigation ===

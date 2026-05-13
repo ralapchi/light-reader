@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>打开书籍 — Loading</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FAF8F5;
+    --text-primary: #1A1A1A;
+    --text-secondary: #8A8680;
+    --text-tertiary: #B5AFA8;
+    --accent: #C8553D;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .loading-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    animation: fadeIn 0.4s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .cover-wrapper {
+    width: 180px;
+    height: 240px;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+    animation: coverAppear 0.6s ease-out;
+  }
+
+  @keyframes coverAppear {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .cover-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #8B7355, #A69076);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 48px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 0.04em;
+  }
+
+  .book-meta {
+    text-align: center;
+    animation: metaFade 0.6s ease-out 0.2s both;
+  }
+
+  @keyframes metaFade {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .book-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+
+  .book-author {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 28px;
+  }
+
+  .spinner-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    animation: metaFade 0.6s ease-out 0.35s both;
+  }
+
+  .spinner {
+    width: 28px;
+    height: 28px;
+    border: 2.5px solid var(--text-tertiary);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .status-text {
+    font-size: 13px;
+    color: var(--text-tertiary);
+    letter-spacing: 0.01em;
+  }
+
+  /* Back button hint */
+  .back-hint {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: color 0.15s;
+    padding: 6px 10px;
+    border-radius: 6px;
+  }
+
+  .back-hint:hover {
+    color: var(--text-secondary);
+    background: rgba(0,0,0,0.03);
+  }
+
+  .back-hint svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Error state demo */
+  .error-state {
+    display: none; /* hidden by default, shown via JS toggle */
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    text-align: center;
+  }
+
+  .error-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #F2E0D9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+  }
+
+  .error-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .error-detail {
+    font-size: 13px;
+    color: var(--text-secondary);
+    max-width: 320px;
+    line-height: 1.5;
+  }
+
+  .error-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .btn-secondary {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid #E8E4DF;
+    background: white;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--text-tertiary);
+    color: var(--text-primary);
+  }
+
+  .btn-accent {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-accent:hover {
+    filter: brightness(1.08);
+  }
+
+  /* Toggle between loading and error */
+  .toggle-bar {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    background: white;
+    border: 1px solid #E8E4DF;
+    border-radius: 20px;
+    padding: 6px 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  .toggle-bar span {
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 10px;
+    transition: all 0.15s;
+  }
+
+  .toggle-bar span.active {
+    background: var(--accent);
+    color: white;
+  }
+</style>
+</head>
+<body>
+  <div class="back-hint">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    返回书架
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-screen" id="loadingState">
+    <div class="cover-wrapper">
+      <div class="cover-placeholder">三</div>
+    </div>
+    <div class="book-meta">
+      <div class="book-title">三体</div>
+      <div class="book-author">刘慈欣</div>
+    </div>
+    <div class="spinner-area">
+      <div class="spinner"></div>
+      <div class="status-text">正在解析书籍...</div>
+    </div>
+  </div>
+
+  <!-- Error State (hidden by default) -->
+  <div class="error-state" id="errorState">
+    <div class="error-icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+    </div>
+    <div class="error-title">打开失败</div>
+    <div class="error-detail">无法解析此 EPUB 文件，文件可能已损坏或格式不受支持。</div>
+    <div class="error-actions">
+      <button class="btn-secondary">返回书架</button>
+      <button class="btn-accent">重新选择文件</button>
+    </div>
+  </div>
+
+  <!-- Toggle bar for demo -->
+  <div class="toggle-bar">
+    <span class="active" id="toggleLoading">加载中</span>
+    <span id="toggleError">失败态</span>
+  </div>
+
+  <script>
+    const loadingEl = document.getElementById('loadingState');
+    const errorEl = document.getElementById('errorState');
+    const toggleLoading = document.getElementById('toggleLoading');
+    const toggleError = document.getElementById('toggleError');
+
+    toggleLoading.addEventListener('click', () => {
+      loadingEl.style.display = 'flex';
+      errorEl.style.display = 'none';
+      toggleLoading.classList.add('active');
+      toggleError.classList.remove('active');
+    });
+
+    toggleError.addEventListener('click', () => {
+      loadingEl.style.display = 'none';
+      errorEl.style.display = 'flex';
+      toggleError.classList.add('active');
+      toggleLoading.classList.remove('active');
+    });
+  </script>
+</body>
+</html>
