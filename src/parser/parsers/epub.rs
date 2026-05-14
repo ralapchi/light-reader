@@ -300,88 +300,6 @@ impl EpubParser {
         }
     }
     
-    /// 剥离 HTML 标签，提取纯文本内容
-    /// 
-    /// # 参数
-    /// * `html` - HTML 内容
-    /// 
-    /// # 返回值
-    /// * `String` - 纯文本内容
-    fn strip_html_tags(&self, html: &str) -> String {
-        let mut result = Vec::new();
-        let mut current_paragraph = String::new();
-        let mut text_indent = false;
-
-        let mut reader = Reader::from_str(html);
-        reader.config_mut().trim_text(true);
-
-        let mut buffer = Vec::new();
-
-        loop {
-            match reader.read_event_into(&mut buffer) {
-                Ok(Event::Start(ref e)) => {
-                    let qname = e.name();
-                    let name = qname.as_ref();
-                    if name.starts_with(&b"p"[..]) || name.starts_with(&b"div"[..]) {
-                        if !current_paragraph.trim().is_empty() {
-                            result.push(current_paragraph.clone());
-                        }
-                        current_paragraph.clear();
-
-                        for attr in e.attributes() {
-                            if let Ok(attr) = attr {
-                                let attr_name = attr.key.as_ref();
-                                if attr_name.starts_with(&b"style"[..]) {
-                                    if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
-                                        if value.contains("text-indent") {
-                                            text_indent = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } else if name.starts_with(&b"br"[..]) {
-                        if !current_paragraph.trim().is_empty() {
-                            result.push(current_paragraph.clone());
-                        }
-                        current_paragraph.clear();
-                        text_indent = false;
-                    }
-                }
-                Ok(Event::End(ref e)) => {
-                    let qname = e.name();
-                    let name = qname.as_ref();
-                    if name.starts_with(&b"p"[..]) || name.starts_with(&b"div"[..]) {
-                        if !current_paragraph.trim().is_empty() {
-                            result.push(current_paragraph.clone());
-                        }
-                        current_paragraph.clear();
-                        text_indent = false;
-                    }
-                }
-                Ok(Event::Text(ref e)) => {
-                    if let Ok(text) = e.unescape() {
-                        if text_indent && current_paragraph.is_empty() {
-                            // 注入缩进标记，由 build_chapter 解析
-                            current_paragraph.push_str("\x01INDENT\x01");
-                            text_indent = false;
-                        }
-                        current_paragraph.push_str(&text);
-                    }
-                }
-                Ok(Event::Eof) => break,
-                _ => {}
-            }
-            buffer.clear();
-        }
-
-        if !current_paragraph.trim().is_empty() {
-            result.push(current_paragraph);
-        }
-
-        result.join("\n\n")
-    }
-
     /// 单次遍历 HTML，同时提取段落文本和图片位置。
     /// 返回 (paragraphs, images_with_pos)，其中 pos == -1 表示图片在所有段落之前，
     /// pos == N 表示图片在第 N 段之后。
@@ -945,53 +863,6 @@ impl EpubParser {
         current
     }
 
-    /// Extract image src and alt from HTML content.
-    fn extract_html_images(&self, html: &str, _base_href: &str) -> Vec<(String, Option<String>)> {
-        let mut images = Vec::new();
-        let mut reader = Reader::from_str(html);
-        reader.config_mut().trim_text(true);
-        let mut buffer = Vec::new();
-        loop {
-            match reader.read_event_into(&mut buffer) {
-                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
-                    let qname = e.name();
-                    let name = qname.as_ref();
-                    // Case-insensitive img match (also handles xhtml:img, svg:image)
-                    let is_img = {
-                        let lower = name.to_ascii_lowercase();
-                        lower.starts_with(&b"img"[..]) || lower.ends_with(&b":img"[..]) || lower.ends_with(&b"image"[..])
-                    };
-                    if is_img {
-                        let mut src = String::new();
-                        let mut alt = None;
-                        for attr in e.attributes() {
-                            if let Ok(attr) = attr {
-                                let an = attr.key.as_ref();
-                                let an_lower = an.to_ascii_lowercase();
-                                if an_lower.starts_with(&b"src"[..]) || an_lower.starts_with(&b"xlink:href"[..]) {
-                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
-                                        src = v.to_string();
-                                    }
-                                } else if an_lower.starts_with(&b"alt"[..]) {
-                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
-                                        if !v.trim().is_empty() { alt = Some(v.to_string()); }
-                                    }
-                                }
-                            }
-                        }
-                        if !src.is_empty() {
-                            log::info!("找到图片: src={}, alt={:?}", src, alt);
-                            images.push((src, alt));
-                        }
-                    }
-                }
-                Ok(Event::Eof) => break,
-                _ => {}
-            }
-            buffer.clear();
-        }
-        images
-    }
 }
 
 /// Resolve an EPUB-internal path, normalising `../` segments for flat zip lookups.
@@ -1163,19 +1034,16 @@ impl BookParser for EpubParser {
                                 .unwrap_or_default();
                             let img_full_path = resolve_epub_path(&chapter_dir, &img_src);
                             let mime = href_media_type(&img_src);
+                            let mut img_bytes: Option<Vec<u8>> = None;
                             let mut cache_key: Option<String> = None;
-                            // Second borrow: read image from zip
+                            // Second borrow: read image from zip (no disk write here)
                             if let Ok(mut img_file) = archive.by_name(&img_full_path) {
                                 let mut buf = Vec::new();
-                                if std::io::Read::read_to_end(&mut img_file, &mut buf).is_ok() && !buf.is_empty() {
+                                if Read::read_to_end(&mut img_file, &mut buf).is_ok() && !buf.is_empty() {
                                     let ext = mime_to_ext(mime);
                                     let key = format!("{}.{}", asset_id, ext);
-                                    let cache_path = crate::storage::paths::image_cache_path(&asset_id, ext);
-                                    let _ = std::fs::create_dir_all(cache_path.parent().unwrap());
-                                    if std::fs::write(&cache_path, &buf).is_ok() {
-                                        cache_key = Some(key);
-                                        log::info!("图片已缓存: {} ({} bytes)", cache_path.display(), buf.len());
-                                    }
+                                    cache_key = Some(key);
+                                    img_bytes = Some(buf);
                                 }
                             } else {
                                 log::warn!("EPUB 图片未找到: {}", img_full_path);
@@ -1183,11 +1051,13 @@ impl BookParser for EpubParser {
                             image_assets.push(crate::domain::book_assets::BookImageAsset {
                                 asset_id: asset_id.clone(),
                                 source_href: img_src.clone(),
+                                asset_path: img_full_path.clone(),
                                 media_type: Some(mime.to_string()),
                                 cache_key: cache_key.clone(),
                                 width_hint: None,
                                 height_hint: None,
                                 alt_text: img_alt,
+                                image_bytes: img_bytes,
                             });
                             img_blocks.push((pos, crate::domain::chapter_block::InlineImageBlock {
                                 index: img_idx,

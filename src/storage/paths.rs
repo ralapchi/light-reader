@@ -24,10 +24,6 @@ pub fn settings_path() -> PathBuf {
     app_data_dir().join("settings.json")
 }
 
-pub fn recent_books_path() -> PathBuf {
-    app_data_dir().join("recent_books.json")
-}
-
 pub fn progress_path(book_id: &str) -> PathBuf {
     app_data_dir().join("progress").join(format!("{}.json", book_id))
 }
@@ -44,8 +40,8 @@ pub fn cover_cache_path(book_id: &str, ext: &str) -> PathBuf {
     app_data_dir().join("cache/covers").join(format!("{}.{}", book_id, ext))
 }
 
-pub fn image_cache_path(asset_id: &str, ext: &str) -> PathBuf {
-    app_data_dir().join("cache/images").join(format!("{}.{}", asset_id, ext))
+pub fn image_cache_path(book_id: &str, asset_id: &str, ext: &str) -> PathBuf {
+    app_data_dir().join("cache/images").join(book_id).join(format!("{}.{}", asset_id, ext))
 }
 
 pub fn tts_cache_dir() -> PathBuf {

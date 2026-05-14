@@ -1,63 +1,32 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::app_error::AppError;
-use crate::domain::book::Book;
-use crate::domain::bookmark::Bookmark;
-use crate::domain::library_item::LibraryIndex;
+use crate::domain::core_state::CoreState;
+use crate::domain::frontend_ui_state::FrontendUiState;
 use crate::domain::library_view_state::LibraryViewState;
-use crate::domain::reader_settings::ReaderSettings;
-use crate::domain::reading_progress::ReadingProgress;
-use crate::domain::recent_book_item::RecentBookItem;
-use crate::domain::search_state::SearchState;
-use crate::domain::tts_state::{PlaybackState, TtsState};
+use crate::domain::session_state::SessionState;
 use crate::domain::ui_state::UiState;
-use crate::tts::config::TtsConfig;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppState {
-    pub current_book: Option<Book>,
-    pub reader_settings: ReaderSettings,
-    pub reading_progress: Option<ReadingProgress>,
-    pub recent_books: Vec<RecentBookItem>,
-    pub bookmarks: Vec<Bookmark>,
-    pub search_state: SearchState,
+    pub core: CoreState,
+    pub session: SessionState,
+    pub frontend_ui: FrontendUiState,
     pub ui_state: UiState,
-    pub library_index: LibraryIndex,
     pub library_view_state: LibraryViewState,
-    pub status_message: String,
-    pub status_message_set_at: Option<String>,
-    pub last_error: Option<AppError>,
-    pub window_size: Option<(f32, f32)>,
-    pub window_pos: Option<(f32, f32)>,
     pub session_started_at: Option<String>,
     pub total_read_seconds_at_session_start: u64,
-    pub tts_state: TtsState,
-    pub playback_state: PlaybackState,
-    pub tts_config: TtsConfig,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
-            current_book: None,
-            reader_settings: ReaderSettings::default(),
-            reading_progress: None,
-            recent_books: Vec::new(),
-            bookmarks: Vec::new(),
-            search_state: SearchState::default(),
+            core: CoreState::default(),
+            session: SessionState::default(),
+            frontend_ui: FrontendUiState::default(),
             ui_state: UiState::default(),
-            library_index: LibraryIndex::default(),
             library_view_state: LibraryViewState::default(),
-            status_message: "就绪".to_string(),
-            status_message_set_at: None,
-            last_error: None,
-            window_size: None,
-            window_pos: None,
             session_started_at: None,
             total_read_seconds_at_session_start: 0,
-            tts_state: TtsState::default(),
-            playback_state: PlaybackState::default(),
-            tts_config: TtsConfig::default(),
         }
     }
 }

@@ -1,9 +1,8 @@
 pub mod cache;
 pub mod config;
 pub mod player;
-pub mod secure_store;
 pub mod segmenter;
-pub mod service;
+pub mod synthesis_service;
 pub mod tts_provider;
 pub mod types;
 pub mod xiaomi_provider;

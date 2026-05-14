@@ -5,16 +5,14 @@ EPUB 阅读器主入口
 use std::io::Write;
 use std::sync::Mutex;
 
-use eframe;
-use eframe::egui;
 use log::info;
 
-mod app;
 mod domain;
 mod parser;
+mod services;
 mod storage;
+mod tauri_api;
 mod tts;
-mod ui;
 
 /// Writes to two `Write` targets simultaneously.
 struct TeeWriter<A: Write, B: Write> {
@@ -66,27 +64,55 @@ fn init_logging() {
 
 fn main() {
     init_logging();
-    info!("X阅读器 启动");
 
-    let _ = storage::paths::ensure_dirs();
-    let saved_settings = storage::settings_store::load();
+    use tauri_api::commands::*;
 
-    let mut viewport = egui::ViewportBuilder::default();
-    if let Some((w, h)) = saved_settings.window_size {
-        viewport = viewport.with_inner_size(egui::vec2(w, h));
-    }
-    if let Some((x, y)) = saved_settings.window_pos {
-        viewport = viewport.with_position(egui::pos2(x, y));
-    }
-
-    let options = eframe::NativeOptions {
-        viewport,
-        ..Default::default()
-    };
-    eframe::run_native(
-        "X阅读器",
-        options,
-        Box::new(|cc| Ok(Box::new(app::ReaderApp::new(cc)))),
-    )
-    .unwrap();
+    info!("Tauri 模式启动");
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(Mutex::new(TtsSession::new()))
+        .invoke_handler(tauri::generate_handler![
+            // Library
+            library_list,
+            library_import,
+            library_open,
+            library_remove,
+            library_remove_batch,
+            library_search,
+            library_repair_path,
+            library_cover,
+            // Reader
+            reader_get_book,
+            reader_open_book,
+            reader_get_chapter,
+            reader_chapter_image,
+            reader_chapter_image_path,
+            reader_go_to_chapter,
+            reader_save_progress,
+            reader_get_progress,
+            // Search / Bookmarks
+            search_in_book,
+            bookmark_list,
+            bookmark_list_all,
+            bookmark_add,
+            bookmark_remove,
+            // Settings
+            settings_load,
+            settings_save,
+            tts_config_load,
+            tts_config_save,
+            // Assets
+            asset_read_file,
+            // TTS
+            tts_test_connection,
+            tts_start,
+            tts_pause,
+            tts_resume,
+            tts_stop,
+            tts_next_segment,
+            tts_prev_segment,
+            tts_clear_cache,
+        ])
+        .run(tauri::generate_context!())
+        .expect("Tauri 启动失败");
 }

@@ -5,11 +5,19 @@ use serde::{Deserialize, Serialize};
 pub struct BookImageAsset {
     pub asset_id: String,
     pub source_href: String,
+    /// Resolved full path inside the EPUB zip (e.g. "OEBPS/images/photo.jpg").
+    /// Used for on-demand image extraction from EPUB.
+    #[serde(default)]
+    pub asset_path: String,
     pub media_type: Option<String>,
     pub cache_key: Option<String>,
     pub width_hint: Option<u32>,
     pub height_hint: Option<u32>,
     pub alt_text: Option<String>,
+    /// Raw image bytes extracted by the parser. Not serialized to JSON;
+    /// consumed by the asset/cache layer to write to disk.
+    #[serde(skip)]
+    pub image_bytes: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

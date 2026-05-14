@@ -52,3 +52,26 @@ pub fn save(book_id: &str, bookmarks: &[Bookmark]) -> Result<(), String> {
     let data = serde_json::to_string_pretty(&file).map_err(|e| e.to_string())?;
     std::fs::write(&path, data).map_err(|e| e.to_string())
 }
+
+pub fn load_all() -> Vec<Bookmark> {
+    let dir = paths::app_data_dir().join("bookmarks");
+    let mut all = Vec::new();
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return all,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        match std::fs::read_to_string(&path) {
+            Ok(data) => match serde_json::from_str::<BookmarksFile>(&data) {
+                Ok(file) => all.extend(file.items),
+                Err(e) => warn!("书签文件解析失败 ({:?}): {}", path, e),
+            },
+            Err(e) => warn!("书签文件读取失败 ({:?}): {}", path, e),
+        }
+    }
+    all
+}

@@ -1,5 +1,8 @@
 pub mod app_error;
 pub mod app_state;
+pub mod core_state;
+pub mod frontend_ui_state;
+pub mod session_state;
 pub mod book;
 pub mod tts_state;
 pub mod book_assets;
@@ -28,7 +31,6 @@ pub mod toc_item;
 pub mod ui_state;
 
 pub use paragraph_kind::ParagraphKind;
-pub use theme_kind::ThemeKind;
 
 pub mod error_codes {
     pub const FILE_OPEN_FAILED: &str = "FILE_OPEN_FAILED";
