@@ -1,6 +1,5 @@
 /// Chapter building utilities: paragraph parsing, kind inference, TOC mapping.
 /// Extracted from `app/compat.rs` to keep the adapter focused on coordination.
-
 use crate::domain::chapter::Chapter;
 use crate::domain::chapter_block::ChapterBlock;
 use crate::domain::chapter_block::InlineImageBlock;
@@ -46,7 +45,11 @@ pub(crate) fn build_chapter(
         })
         .collect::<Vec<_>>();
 
-    let content = paragraphs.iter().map(|p| p.text.as_str()).collect::<Vec<_>>().join("\n\n");
+    let content = paragraphs
+        .iter()
+        .map(|p| p.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
 
     let mut blocks: Vec<ChapterBlock> = Vec::new();
 
@@ -70,7 +73,10 @@ pub(crate) fn build_chapter(
             }
         }
         // pos >= paragraphs.len() 的图片放最后
-        for (_pos, img) in img_blocks.iter().filter(|(p, _)| *p >= paragraphs.len() as isize) {
+        for (_pos, img) in img_blocks
+            .iter()
+            .filter(|(p, _)| *p >= paragraphs.len() as isize)
+        {
             blocks.push(ChapterBlock::Image(img.clone()));
         }
     }
@@ -123,7 +129,16 @@ pub(crate) fn infer_paragraph_kind(text: &str) -> ParagraphKind {
 }
 
 fn is_separator_line(text: &str) -> bool {
-    let separators = ["***", "---", "＊＊＊", "* * *", "————", "====", "~~~~", "___"];
+    let separators = [
+        "***",
+        "---",
+        "＊＊＊",
+        "* * *",
+        "————",
+        "====",
+        "~~~~",
+        "___",
+    ];
     let trimmed = text.trim();
     if separators.contains(&trimmed) {
         return true;
@@ -138,9 +153,15 @@ fn is_separator_line(text: &str) -> bool {
     if chars.len() >= 5 && chars.iter().all(|&c| c == '.') {
         return true;
     }
-    let non_space: Vec<char> = chars.iter().copied().filter(|c| !c.is_whitespace()).collect();
+    let non_space: Vec<char> = chars
+        .iter()
+        .copied()
+        .filter(|c| !c.is_whitespace())
+        .collect();
     if non_space.len() >= 3
-        && non_space.iter().all(|&c| c == '─' || c == '━' || c == '·' || c == '•')
+        && non_space
+            .iter()
+            .all(|&c| c == '─' || c == '━' || c == '·' || c == '•')
         && non_space.windows(2).all(|w| w[0] == w[1])
     {
         return true;
@@ -199,8 +220,9 @@ fn is_subtitle_like(text: &str) -> bool {
         }
     }
     let cn_numbers = [
-        "一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二", "十三", "十四", "十五", "十六", "十七",
-        "十八", "十九", "二十", "三十", "四十", "五十", "六十", "七十", "八十", "九十",
+        "一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二", "十三", "十四",
+        "十五", "十六", "十七", "十八", "十九", "二十", "三十", "四十", "五十", "六十", "七十",
+        "八十", "九十",
     ];
     for num in cn_numbers {
         if trimmed.starts_with(num) {
@@ -218,12 +240,13 @@ pub(crate) fn strip_href_fragment(href: &str) -> &str {
 }
 
 pub(crate) fn href_filename(href: &str) -> &str {
-    strip_href_fragment(href).rsplit('/').next().unwrap_or(strip_href_fragment(href))
+    strip_href_fragment(href)
+        .rsplit('/')
+        .next()
+        .unwrap_or(strip_href_fragment(href))
 }
 
-pub(crate) fn build_href_index(
-    spine_hrefs: &[String],
-) -> std::collections::HashMap<String, usize> {
+pub(crate) fn build_href_index(spine_hrefs: &[String]) -> std::collections::HashMap<String, usize> {
     let mut map = std::collections::HashMap::new();
     for (index, href) in spine_hrefs.iter().enumerate() {
         let key = href_filename(href).to_string();

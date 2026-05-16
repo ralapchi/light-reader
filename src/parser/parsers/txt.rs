@@ -20,7 +20,9 @@ fn skip_number(s: &str) -> &str {
 
 /// Strip a Chinese number prefix (一~九十九) from the input, returning the remainder.
 pub(crate) fn strip_cn_number_prefix(s: &str) -> Option<&str> {
-    let cn_units = ["二十", "三十", "四十", "五十", "六十", "七十", "八十", "九十", "十"];
+    let cn_units = [
+        "二十", "三十", "四十", "五十", "六十", "七十", "八十", "九十", "十",
+    ];
     let cn_digits = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
 
     // Try unit + optional digit (e.g. "二十一", "十")
@@ -70,14 +72,21 @@ impl TxtParser {
             let rest = skip_number(after_first);
             if !rest.is_empty() && rest == after_first {
                 // No number found after 第
-            } else if rest.starts_with("章") || rest.starts_with("回")
-                || rest.starts_with("节") || rest.starts_with("卷")
-                || rest.starts_with("部分") || rest.starts_with("篇")
+            } else if rest.starts_with("章")
+                || rest.starts_with("回")
+                || rest.starts_with("节")
+                || rest.starts_with("卷")
+                || rest.starts_with("部分")
+                || rest.starts_with("篇")
             {
                 // After marker, remaining should be short title or empty (not body text)
-                let marker_len = if rest.starts_with("部分") { "部分".len() }
-                    else if rest.starts_with("篇") { "篇".len() }
-                    else { "章".len() };
+                let marker_len = if rest.starts_with("部分") {
+                    "部分".len()
+                } else if rest.starts_with("篇") {
+                    "篇".len()
+                } else {
+                    "章".len()
+                };
                 let after_marker = &rest[marker_len..];
                 let after_trimmed = after_marker.trim();
                 if after_trimmed.is_empty() || after_trimmed.chars().count() <= 20 {
@@ -87,7 +96,9 @@ impl TxtParser {
         }
 
         // 特殊中文章节词：序章、终章、番外、楔子、尾声、引子、后记、前言
-        let special_cn = ["序章", "终章", "番外", "楔子", "尾声", "引子", "后记", "前言", "序言", "序节"];
+        let special_cn = [
+            "序章", "终章", "番外", "楔子", "尾声", "引子", "后记", "前言", "序言", "序节",
+        ];
         for word in special_cn {
             if trimmed.starts_with(word) {
                 return Some(trimmed.to_string());
@@ -171,21 +182,23 @@ impl BookParser for TxtParser {
     fn parse(&self, path: &str) -> Result<ParseResult, String> {
         let mut file = File::open(path).map_err(|e| format!("文件打开失败: {}", e))?;
         let mut content_str = String::new();
-        file.read_to_string(&mut content_str).map_err(|e| format!("文件读取失败: {}", e))?;
+        file.read_to_string(&mut content_str)
+            .map_err(|e| format!("文件读取失败: {}", e))?;
 
         let lines: Vec<&str> = content_str.lines().collect();
 
         // 检测是否包含章节
-        let has_chapters = lines.iter().any(|line| Self::is_chapter_line(line).is_some());
+        let has_chapters = lines
+            .iter()
+            .any(|line| Self::is_chapter_line(line).is_some());
 
         let (content, chapter_titles) = if has_chapters {
             // 按章节分割
             Self::split_by_chapters(lines)
         } else {
             // 回退到按空行分割，全文作为单章
-            let content: Vec<String> = content_str
-                .split("\n\n")
-                .map(|s| s.trim().to_string())
+            let content = vec![content_str.trim().to_string()]
+                .into_iter()
                 .filter(|s| !s.is_empty())
                 .collect();
             let chapter_titles = vec!["文本文件".to_string()];

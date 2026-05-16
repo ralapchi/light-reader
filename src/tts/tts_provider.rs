@@ -54,7 +54,8 @@ impl TtsError {
 pub trait TtsProvider: Send + Sync {
     fn kind(&self) -> TtsProviderKind;
     fn validate_config(&self, config: &TtsConfig) -> Result<(), Vec<String>>;
-    fn synthesize(&self, request: &TtsRequest, config: &TtsConfig) -> Result<TtsResponse, TtsError>;
+    fn synthesize(&self, request: &TtsRequest, config: &TtsConfig)
+    -> Result<TtsResponse, TtsError>;
     fn test_connection(&self, config: &TtsConfig) -> Result<(), TtsError>;
     fn list_voices(&self, config: &TtsConfig) -> Result<Vec<TtsVoice>, TtsError>;
     fn max_text_length(&self) -> usize;

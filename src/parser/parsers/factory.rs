@@ -9,16 +9,16 @@ use crate::parser::parsers::epub::EpubParser;
 use crate::parser::parsers::txt::TxtParser;
 
 /// 解析器工厂
-/// 
+///
 /// 根据文件扩展名选择合适的解析器
 pub struct ParserFactory;
 
 impl ParserFactory {
     /// 根据文件路径获取对应的解析器
-    /// 
+    ///
     /// # 参数
     /// * `path` - 文件路径
-    /// 
+    ///
     /// # 返回值
     /// * `Some(Box<dyn BookParser>)` - 找到对应格式的解析器
     /// * `None` - 不支持的文件格式

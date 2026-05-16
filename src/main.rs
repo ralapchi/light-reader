@@ -53,11 +53,9 @@ fn init_logging() {
         b: Mutex::new(file),
     };
 
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or(&level_var),
-    )
-    .target(env_logger::Target::Pipe(Box::new(tee)))
-    .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&level_var))
+        .target(env_logger::Target::Pipe(Box::new(tee)))
+        .init();
 
     info!("日志启动 (级别={}, 文件={})", level_var, log_path.display());
 }

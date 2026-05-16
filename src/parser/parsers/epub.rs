@@ -7,15 +7,15 @@ EPUB 解析器模块
 use crate::domain::book_metadata::BookMetadata;
 use crate::domain::toc_item::TocItem;
 use crate::parser::parsers::base::{BookParser, ParseResult};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use zip::ZipArchive;
 
 /// EPUB 解析器
-/// 
+///
 /// 负责解析 EPUB 格式的书籍文件
 pub struct EpubParser;
 
@@ -24,12 +24,12 @@ impl EpubParser {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// 解析 container.xml 文件，获取 OPF 文件路径
-    /// 
+    ///
     /// # 参数
     /// * `content` - container.xml 文件内容
-    /// 
+    ///
     /// # 返回值
     /// * `Some(String)` - 成功解析到 OPF 文件路径
     /// * `None` - 解析失败
@@ -65,16 +65,20 @@ impl EpubParser {
 
         None
     }
-    
+
     /// 解析 OPF 文件，获取 manifest 和 spine 信息
-    /// 
+    ///
     /// # 参数
     /// * `content` - OPF 文件内容
     /// * `_base_path` - 基础路径
-    /// 
+    ///
     /// # 返回值
     /// * `(HashMap<String, String>, Vec<String>)` - (manifest 映射, spine ID 列表)
-    fn parse_opf_file(&self, content: &str, _base_path: &str) -> (HashMap<String, String>, Vec<String>, Option<String>) {
+    fn parse_opf_file(
+        &self,
+        content: &str,
+        _base_path: &str,
+    ) -> (HashMap<String, String>, Vec<String>, Option<String>) {
         let mut reader = Reader::from_str(content);
         reader.config_mut().trim_text(true);
 
@@ -197,7 +201,7 @@ impl EpubParser {
 
         (manifest, spine_ids, cover_id)
     }
-    
+
     /// 从 OPF 内容中提取元信息
     fn parse_opf_metadata(&self, content: &str) -> Option<BookMetadata> {
         let mut reader = Reader::from_str(content);
@@ -270,9 +274,21 @@ impl EpubParser {
 
         Some(BookMetadata {
             title,
-            author: if creator.is_empty() { None } else { Some(creator) },
-            language: if language.is_empty() { None } else { Some(language) },
-            identifier: if identifier.is_empty() { None } else { Some(identifier) },
+            author: if creator.is_empty() {
+                None
+            } else {
+                Some(creator)
+            },
+            language: if language.is_empty() {
+                None
+            } else {
+                Some(language)
+            },
+            identifier: if identifier.is_empty() {
+                None
+            } else {
+                Some(identifier)
+            },
             publisher: None,
             description: None,
             series: None,
@@ -299,11 +315,14 @@ impl EpubParser {
             format!("{}/{}", base, href)
         }
     }
-    
+
     /// 单次遍历 HTML，同时提取段落文本和图片位置。
     /// 返回 (paragraphs, images_with_pos)，其中 pos == -1 表示图片在所有段落之前，
     /// pos == N 表示图片在第 N 段之后。
-    fn extract_html_with_positions(&self, html: &str) -> (Vec<String>, Vec<(isize, String, Option<String>)>) {
+    fn extract_html_with_positions(
+        &self,
+        html: &str,
+    ) -> (Vec<String>, Vec<(isize, String, Option<String>)>) {
         let mut paragraphs: Vec<String> = Vec::new();
         let mut current_para = String::new();
         let mut text_indent = false;
@@ -350,7 +369,9 @@ impl EpubParser {
                     let name = qname.as_ref();
                     let is_img = {
                         let lower = name.to_ascii_lowercase();
-                        lower.starts_with(&b"img"[..]) || lower.ends_with(&b":img"[..]) || lower.ends_with(&b"image"[..])
+                        lower.starts_with(&b"img"[..])
+                            || lower.ends_with(&b":img"[..])
+                            || lower.ends_with(&b"image"[..])
                     };
                     if is_img {
                         let mut src = String::new();
@@ -359,13 +380,17 @@ impl EpubParser {
                             if let Ok(attr) = attr {
                                 let an = attr.key.as_ref();
                                 let an_lower = an.to_ascii_lowercase();
-                                if an_lower.starts_with(&b"src"[..]) || an_lower.starts_with(&b"xlink:href"[..]) {
+                                if an_lower.starts_with(&b"src"[..])
+                                    || an_lower.starts_with(&b"xlink:href"[..])
+                                {
                                     if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
                                         src = v.to_string();
                                     }
                                 } else if an_lower.starts_with(&b"alt"[..]) {
                                     if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
-                                        if !v.trim().is_empty() { alt = Some(v.to_string()); }
+                                        if !v.trim().is_empty() {
+                                            alt = Some(v.to_string());
+                                        }
                                     }
                                 }
                             }
@@ -415,12 +440,12 @@ impl EpubParser {
 
         (paragraphs, images)
     }
-    
+
     /// 从 HTML 内容中提取标题
-    /// 
+    ///
     /// # 参数
     /// * `html` - HTML 内容
-    /// 
+    ///
     /// # 返回值
     /// * `String` - 提取的标题
     fn extract_title(&self, html: &str) -> String {
@@ -443,7 +468,10 @@ impl EpubParser {
                     let name = qname.as_ref();
 
                     // h1-h3 标签
-                    if name.starts_with(&b"h1"[..]) || name.starts_with(&b"h2"[..]) || name.starts_with(&b"h3"[..]) {
+                    if name.starts_with(&b"h1"[..])
+                        || name.starts_with(&b"h2"[..])
+                        || name.starts_with(&b"h3"[..])
+                    {
                         if depth == 0 {
                             h_title.clear();
                         }
@@ -479,7 +507,10 @@ impl EpubParser {
                     let qname = e.name();
                     let name = qname.as_ref();
 
-                    if name.starts_with(&b"h1"[..]) || name.starts_with(&b"h2"[..]) || name.starts_with(&b"h3"[..]) {
+                    if name.starts_with(&b"h1"[..])
+                        || name.starts_with(&b"h2"[..])
+                        || name.starts_with(&b"h3"[..])
+                    {
                         if depth > 0 {
                             depth -= 1;
                             if depth == 0 {
@@ -542,11 +573,29 @@ impl EpubParser {
 
         // 去除常见编号前缀
         let prefixes = [
-            "第一章 ", "第二章 ", "第三章 ", "第四章 ", "第五章 ",
-            "第六章 ", "第七章 ", "第八章 ", "第九章 ", "第十章 ",
-            "第十一章 ", "第十二章 ", "第十三章 ", "第十四章 ", "第十五章 ",
-            "第十六章 ", "第十七章 ", "第十八章 ", "第十九章 ", "第二十章 ",
-            "Chapter ", "CHAPTER ", "CH ",
+            "第一章 ",
+            "第二章 ",
+            "第三章 ",
+            "第四章 ",
+            "第五章 ",
+            "第六章 ",
+            "第七章 ",
+            "第八章 ",
+            "第九章 ",
+            "第十章 ",
+            "第十一章 ",
+            "第十二章 ",
+            "第十三章 ",
+            "第十四章 ",
+            "第十五章 ",
+            "第十六章 ",
+            "第十七章 ",
+            "第十八章 ",
+            "第十九章 ",
+            "第二十章 ",
+            "Chapter ",
+            "CHAPTER ",
+            "CH ",
         ];
 
         for prefix in &prefixes {
@@ -554,7 +603,9 @@ impl EpubParser {
                 let rest = &trimmed[prefix.len()..];
                 // 跳过可能的数字和分隔符
                 let rest = rest.trim_start_matches(|c: char| c.is_ascii_digit());
-                let rest = rest.trim_start_matches(|c: char| c == ' ' || c == ':' || c == '.' || c == '-' || c == '–' || c == '—');
+                let rest = rest.trim_start_matches(|c: char| {
+                    c == ' ' || c == ':' || c == '.' || c == '-' || c == '–' || c == '—'
+                });
                 let rest = rest.trim();
                 if !rest.is_empty() {
                     return rest.to_string();
@@ -614,7 +665,12 @@ impl EpubParser {
 
     /// 解析 EPUB3 nav.xhtml 目录。
     /// `strict_type`: 为 true 时仅匹配含 type/epub:type="toc" 的 nav 元素
-    fn parse_nav_with_filter(&self, content: &str, base_href: &str, strict_type: bool) -> Vec<TocItem> {
+    fn parse_nav_with_filter(
+        &self,
+        content: &str,
+        base_href: &str,
+        strict_type: bool,
+    ) -> Vec<TocItem> {
         let mut reader = Reader::from_str(content);
         reader.config_mut().trim_text(true);
 
@@ -638,8 +694,11 @@ impl EpubParser {
                             for attr in e.attributes() {
                                 if let Ok(attr) = attr {
                                     let attr_name = attr.key.as_ref();
-                                    if attr_name.starts_with(&b"type"[..]) || attr_name.starts_with(&b"epub:type"[..]) {
-                                        if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
+                                    if attr_name.starts_with(&b"type"[..])
+                                        || attr_name.starts_with(&b"epub:type"[..])
+                                    {
+                                        if let Ok(value) = std::str::from_utf8(attr.value.as_ref())
+                                        {
                                             if value.contains("toc") {
                                                 in_nav = true;
                                             }
@@ -855,14 +914,17 @@ impl EpubParser {
     }
 
     /// 辅助方法：根据栈找到可变父节点
-    fn find_parent_mut<'a>(&self, root: &'a mut Vec<TocItem>, stack: &[(u8, usize)]) -> &'a mut TocItem {
+    fn find_parent_mut<'a>(
+        &self,
+        root: &'a mut Vec<TocItem>,
+        stack: &[(u8, usize)],
+    ) -> &'a mut TocItem {
         let mut current = &mut root[stack[0].1];
         for &(_, idx) in &stack[1..] {
             current = &mut current.children[idx];
         }
         current
     }
-
 }
 
 /// Resolve an EPUB-internal path, normalising `../` segments for flat zip lookups.
@@ -875,7 +937,9 @@ fn resolve_epub_path(base_dir: &str, relative: &str) -> String {
     for seg in relative.split('/') {
         match seg {
             "" | "." => {}
-            ".." => { parts.pop(); }
+            ".." => {
+                parts.pop();
+            }
             _ => parts.push(seg),
         }
     }
@@ -885,12 +949,19 @@ fn resolve_epub_path(base_dir: &str, relative: &str) -> String {
 /// Detect media type from href extension.
 fn href_media_type(href: &str) -> &'static str {
     let lower = href.to_lowercase();
-    if lower.ends_with(".jpg") || lower.ends_with(".jpeg") { "image/jpeg" }
-    else if lower.ends_with(".png") { "image/png" }
-    else if lower.ends_with(".webp") { "image/webp" }
-    else if lower.ends_with(".gif") { "image/gif" }
-    else if lower.ends_with(".svg") { "image/svg+xml" }
-    else { "image/png" }
+    if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if lower.ends_with(".png") {
+        "image/png"
+    } else if lower.ends_with(".webp") {
+        "image/webp"
+    } else if lower.ends_with(".gif") {
+        "image/gif"
+    } else if lower.ends_with(".svg") {
+        "image/svg+xml"
+    } else {
+        "image/png"
+    }
 }
 
 /// Map media type to file extension.
@@ -916,7 +987,8 @@ impl BookParser for EpubParser {
     /// * `Err(String)` - 解析失败，返回错误信息
     fn parse(&self, path: &str) -> Result<ParseResult, String> {
         let file = File::open(path).map_err(|e| format!("文件打开失败: {}", e))?;
-        let mut archive = ZipArchive::new(BufReader::new(file)).map_err(|e| format!("ZIP 解析失败: {}", e))?;
+        let mut archive =
+            ZipArchive::new(BufReader::new(file)).map_err(|e| format!("ZIP 解析失败: {}", e))?;
         let mut warnings = Vec::new();
 
         let opf_path = {
@@ -926,7 +998,8 @@ impl BookParser for EpubParser {
             } else {
                 warnings.push("缺少 META-INF/container.xml，使用默认路径".to_string());
             }
-            self.parse_container_xml(&container_content).unwrap_or_else(|| "content.opf".to_string())
+            self.parse_container_xml(&container_content)
+                .unwrap_or_else(|| "content.opf".to_string())
         };
 
         let opf_base_path = if let Some(last_slash) = opf_path.rfind('/') {
@@ -942,7 +1015,8 @@ impl BookParser for EpubParser {
             warnings.push(format!("无法读取 OPF 文件: {}", opf_path));
         }
 
-        let (manifest, spine_ids, opf_cover_href) = self.parse_opf_file(&opf_content, &opf_base_path);
+        let (manifest, spine_ids, opf_cover_href) =
+            self.parse_opf_file(&opf_content, &opf_base_path);
         let metadata = self.parse_opf_metadata(&opf_content);
         if metadata.is_none() {
             warnings.push("EPUB 缺少元信息，使用文件名作为标题".to_string());
@@ -952,7 +1026,10 @@ impl BookParser for EpubParser {
         let mut toc_items: Option<Vec<TocItem>> = None;
 
         // 1. 尝试 EPUB3 nav.xhtml
-        if let Some(nav_href) = manifest.values().find(|href| href.ends_with("nav.xhtml") || href.contains("nav")) {
+        if let Some(nav_href) = manifest
+            .values()
+            .find(|href| href.ends_with("nav.xhtml") || href.contains("nav"))
+        {
             let nav_path = self.get_full_path(&opf_base_path, nav_href);
             if let Ok(mut nav_file) = archive.by_name(&nav_path) {
                 let mut nav_content = String::new();
@@ -998,7 +1075,9 @@ impl BookParser for EpubParser {
         let mut chapter_titles = Vec::new();
         let mut spine_hrefs = Vec::new();
         let mut image_assets: Vec<crate::domain::book_assets::BookImageAsset> = Vec::new();
-        let mut chapter_image_blocks: Vec<Vec<(isize, crate::domain::chapter_block::InlineImageBlock)>> = Vec::new();
+        let mut chapter_image_blocks: Vec<
+            Vec<(isize, crate::domain::chapter_block::InlineImageBlock)>,
+        > = Vec::new();
 
         for idref in &spine_ids {
             if let Some(href) = manifest.get(idref.as_str()) {
@@ -1012,7 +1091,8 @@ impl BookParser for EpubParser {
                     content
                 };
                 if !html_content.is_empty() {
-                    let (paragraphs, images_with_pos) = self.extract_html_with_positions(&html_content);
+                    let (paragraphs, images_with_pos) =
+                        self.extract_html_with_positions(&html_content);
                     let text_content = paragraphs.join("\n\n");
                     if !text_content.is_empty() {
                         let chapter_idx = content.len();
@@ -1020,12 +1100,23 @@ impl BookParser for EpubParser {
                         spine_hrefs.push(href.clone());
 
                         // Build image blocks from single-pass extraction
-                        let mut img_blocks: Vec<(isize, crate::domain::chapter_block::InlineImageBlock)> = Vec::new();
-                        for (img_idx, (pos, img_src, img_alt)) in images_with_pos.into_iter().enumerate() {
-                            let asset_id = format!("{}-c{}-i{}",
-                                spine_hrefs.last().unwrap_or(&"unknown".to_string())
-                                    .replace('/', "-").replace('.', "-"),
-                                chapter_idx, img_idx);
+                        let mut img_blocks: Vec<(
+                            isize,
+                            crate::domain::chapter_block::InlineImageBlock,
+                        )> = Vec::new();
+                        for (img_idx, (pos, img_src, img_alt)) in
+                            images_with_pos.into_iter().enumerate()
+                        {
+                            let asset_id = format!(
+                                "{}-c{}-i{}",
+                                spine_hrefs
+                                    .last()
+                                    .unwrap_or(&"unknown".to_string())
+                                    .replace('/', "-")
+                                    .replace('.', "-"),
+                                chapter_idx,
+                                img_idx
+                            );
                             // Resolve img src relative to chapter's full path inside the EPUB zip
                             let chapter_full = self.get_full_path(&opf_base_path, href);
                             let chapter_dir = std::path::Path::new(&chapter_full)
@@ -1039,7 +1130,9 @@ impl BookParser for EpubParser {
                             // Second borrow: read image from zip (no disk write here)
                             if let Ok(mut img_file) = archive.by_name(&img_full_path) {
                                 let mut buf = Vec::new();
-                                if Read::read_to_end(&mut img_file, &mut buf).is_ok() && !buf.is_empty() {
+                                if Read::read_to_end(&mut img_file, &mut buf).is_ok()
+                                    && !buf.is_empty()
+                                {
                                     let ext = mime_to_ext(mime);
                                     let key = format!("{}.{}", asset_id, ext);
                                     cache_key = Some(key);
@@ -1059,27 +1152,31 @@ impl BookParser for EpubParser {
                                 alt_text: img_alt,
                                 image_bytes: img_bytes,
                             });
-                            img_blocks.push((pos, crate::domain::chapter_block::InlineImageBlock {
-                                index: img_idx,
-                                asset_id,
-                                alt_text: None,
-                                caption: None,
-                                source_href: None,
-                            }));
+                            img_blocks.push((
+                                pos,
+                                crate::domain::chapter_block::InlineImageBlock {
+                                    index: img_idx,
+                                    asset_id,
+                                    alt_text: None,
+                                    caption: None,
+                                    source_href: None,
+                                },
+                            ));
                         }
                         chapter_image_blocks.push(img_blocks);
 
                         // 优先使用 TOC 标题
-                        let chapter_title = if let Some(toc_title) = toc_title_map.get(href.as_str()) {
-                            toc_title.clone()
-                        } else {
-                            let title = self.extract_title(&html_content);
-                            if title.is_empty() {
-                                format!("章节 {}", content.len())
+                        let chapter_title =
+                            if let Some(toc_title) = toc_title_map.get(href.as_str()) {
+                                toc_title.clone()
                             } else {
-                                title
-                            }
-                        };
+                                let title = self.extract_title(&html_content);
+                                if title.is_empty() {
+                                    format!("章节 {}", content.len())
+                                } else {
+                                    title
+                                }
+                            };
                         chapter_titles.push(chapter_title);
                     } else {
                         warnings.push(format!("章节 {} 内容为空，已跳过", idref));
@@ -1096,10 +1193,18 @@ impl BookParser for EpubParser {
         let (cover_image, cover_media_type) = {
             fn is_image_href(href: &str) -> bool {
                 let h = href.to_lowercase();
-                h.ends_with(".jpg") || h.ends_with(".jpeg") || h.ends_with(".png")
-                    || h.ends_with(".webp") || h.ends_with(".gif") || h.ends_with(".svg")
+                h.ends_with(".jpg")
+                    || h.ends_with(".jpeg")
+                    || h.ends_with(".png")
+                    || h.ends_with(".webp")
+                    || h.ends_with(".gif")
+                    || h.ends_with(".svg")
             }
-            fn read_from_archive(archive: &mut zip::ZipArchive<std::io::BufReader<std::fs::File>>, opf_base_path: &str, href: &str) -> Option<(Vec<u8>, &'static str)> {
+            fn read_from_archive(
+                archive: &mut zip::ZipArchive<std::io::BufReader<std::fs::File>>,
+                opf_base_path: &str,
+                href: &str,
+            ) -> Option<(Vec<u8>, &'static str)> {
                 let cover_path = if opf_base_path.is_empty() {
                     href.to_string()
                 } else {
@@ -1115,22 +1220,37 @@ impl BookParser for EpubParser {
                 })
             }
             // Priority 1: OPF meta properties="cover-image" or <meta name="cover">
-            let result = opf_cover_href.as_ref()
+            let result = opf_cover_href
+                .as_ref()
                 .filter(|href| is_image_href(href))
                 .and_then(|href| read_from_archive(&mut archive, &opf_base_path, href))
                 .or_else(|| {
                     // Priority 2: manifest item with "cover" in id/href (image files only)
-                    manifest.iter().find_map(|(id, href)| {
-                        let lower = format!("{}|{}", id.to_lowercase(), href.to_lowercase());
-                        if lower.contains("cover") && is_image_href(href) { Some(href.clone()) } else { None }
-                    }).and_then(|href| read_from_archive(&mut archive, &opf_base_path, &href))
+                    manifest
+                        .iter()
+                        .find_map(|(id, href)| {
+                            let lower = format!("{}|{}", id.to_lowercase(), href.to_lowercase());
+                            if lower.contains("cover") && is_image_href(href) {
+                                Some(href.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .and_then(|href| read_from_archive(&mut archive, &opf_base_path, &href))
                 })
                 .or_else(|| {
                     // Priority 3: any image file with "cover" in its path
-                    manifest.iter().find_map(|(_, href)| {
-                        let h = href.to_lowercase();
-                        if h.contains("cover") && is_image_href(href) { Some(href.clone()) } else { None }
-                    }).and_then(|href| read_from_archive(&mut archive, &opf_base_path, &href))
+                    manifest
+                        .iter()
+                        .find_map(|(_, href)| {
+                            let h = href.to_lowercase();
+                            if h.contains("cover") && is_image_href(href) {
+                                Some(href.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .and_then(|href| read_from_archive(&mut archive, &opf_base_path, &href))
                 });
             match result {
                 Some((buf, mime)) => (Some(buf), Some(mime.to_string())),

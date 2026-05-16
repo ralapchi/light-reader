@@ -31,12 +31,18 @@ pub fn load(book_id: &str) -> Vec<Bookmark> {
                 file.items
             }
             Err(e) => {
-                warn!("书签文件解析失败 (book_id={}): {}，返回空书签列表", book_id, e);
+                warn!(
+                    "书签文件解析失败 (book_id={}): {}，返回空书签列表",
+                    book_id, e
+                );
                 Vec::new()
             }
         },
         Err(e) => {
-            warn!("书签文件读取失败 (book_id={}): {}，返回空书签列表", book_id, e);
+            warn!(
+                "书签文件读取失败 (book_id={}): {}，返回空书签列表",
+                book_id, e
+            );
             Vec::new()
         }
     }

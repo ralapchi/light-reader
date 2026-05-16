@@ -56,9 +56,7 @@ impl TtsConfig {
         if !self.enabled {
             return Ok(());
         }
-        if self.api_key.is_none()
-            || self.api_key.as_ref().map_or(true, |s| s.is_empty())
-        {
+        if self.api_key.is_none() || self.api_key.as_ref().map_or(true, |s| s.is_empty()) {
             errors.push("API Key 不能为空".to_string());
         }
         if errors.is_empty() {

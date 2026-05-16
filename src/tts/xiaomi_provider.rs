@@ -44,9 +44,7 @@ impl TtsProvider for XiaomiTtsProvider {
 
     fn validate_config(&self, config: &TtsConfig) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
-        if config.api_key.is_none()
-            || config.api_key.as_ref().map_or(true, |s| s.is_empty())
-        {
+        if config.api_key.is_none() || config.api_key.as_ref().map_or(true, |s| s.is_empty()) {
             errors.push("Xiaomi TTS: API Key 不能为空".to_string());
         }
         if errors.is_empty() {
@@ -98,9 +96,9 @@ impl TtsProvider for XiaomiTtsProvider {
 
         let status = resp.status();
         if status.is_success() {
-            let text = resp.text().map_err(|e| {
-                TtsError::HttpError(format!("读取响应失败: {}", e))
-            })?;
+            let text = resp
+                .text()
+                .map_err(|e| TtsError::HttpError(format!("读取响应失败: {}", e)))?;
 
             let audio_bytes = parse_sse_response(&text)?;
 
@@ -129,8 +127,7 @@ impl TtsProvider for XiaomiTtsProvider {
 
             match status_code {
                 401 | 403 => Err(TtsError::AuthError(
-                    err_detail
-                        .unwrap_or_else(|| "鉴权失败，请检查 API Key".to_string()),
+                    err_detail.unwrap_or_else(|| "鉴权失败，请检查 API Key".to_string()),
                 )),
                 429 => Err(TtsError::RateLimited { retry_after: None }),
                 code if code >= 500 => Err(TtsError::HttpError(format!(
@@ -142,9 +139,7 @@ impl TtsProvider for XiaomiTtsProvider {
                     let detail = err_detail.unwrap_or_else(|| format!("HTTP {}", status_code));
                     Err(TtsError::Unknown(format!(
                         "{} (voice={}, model={})",
-                        detail,
-                        voice,
-                        model
+                        detail, voice, model
                     )))
                 }
             }
@@ -255,4 +250,3 @@ fn parse_sse_response(text: &str) -> Result<Vec<u8>, TtsError> {
         Ok(all_audio)
     }
 }
-

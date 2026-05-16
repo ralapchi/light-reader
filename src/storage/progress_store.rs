@@ -30,12 +30,18 @@ pub fn load(book_id: &str) -> Option<ReadingProgress> {
                 Some(file.progress)
             }
             Err(e) => {
-                warn!("阅读进度文件解析失败 (book_id={}): {}，回退到章节开头", book_id, e);
+                warn!(
+                    "阅读进度文件解析失败 (book_id={}): {}，回退到章节开头",
+                    book_id, e
+                );
                 None
             }
         },
         Err(e) => {
-            warn!("阅读进度文件读取失败 (book_id={}): {}，回退到章节开头", book_id, e);
+            warn!(
+                "阅读进度文件读取失败 (book_id={}): {}，回退到章节开头",
+                book_id, e
+            );
             None
         }
     }

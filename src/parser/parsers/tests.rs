@@ -5,8 +5,8 @@
 */
 
 use std::io::Write;
-use zip::write::FileOptions;
 use zip::ZipWriter;
+use zip::write::FileOptions;
 
 use super::base::BookParser;
 use super::epub::EpubParser;
@@ -84,7 +84,9 @@ fn epub_metadata_extracts_dc_fields() {
     let data = build_epub(opf, &[("ch1.xhtml", html)]);
     let tmp = write_temp_epub(&data);
 
-    let result = EpubParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     let meta = result.metadata.expect("metadata should be present");
 
     assert_eq!(meta.title, "Test Book");
@@ -112,7 +114,9 @@ fn epub_metadata_missing_title_yields_none() {
     let data = build_epub(opf, &[("ch1.xhtml", html)]);
     let tmp = write_temp_epub(&data);
 
-    let result = EpubParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert!(result.metadata.is_none());
     assert!(result.warnings.iter().any(|w| w.contains("元信息")));
 }
@@ -145,7 +149,9 @@ fn epub_ncx_toc_parsed() {
     let data = build_epub(opf, &[("ch1.xhtml", html), ("toc.ncx", ncx)]);
     let tmp = write_temp_epub(&data);
 
-    let result = EpubParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     let toc = result.toc.expect("toc should be present");
     assert!(!toc.is_empty());
     assert_eq!(toc[0].title, "Chapter 1");
@@ -179,7 +185,9 @@ fn epub_html_stripped_to_paragraphs() {
     let data = build_epub(opf, &[("ch1.xhtml", html)]);
     let tmp = write_temp_epub(&data);
 
-    let result = EpubParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert_eq!(result.content.len(), 1);
     let text = &result.content[0];
     assert!(text.contains("First paragraph."));
@@ -197,7 +205,9 @@ fn txt_chinese_chapter_detection() {
     let content = "第1章 起始\n\n段落一。\n\n段落二。\n\n第2章 发展\n\n段落三。";
     let tmp = write_temp_txt(content);
 
-    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = TxtParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert_eq!(result.content.len(), 2);
     assert_eq!(result.chapter_titles[0], "第1章 起始");
     assert_eq!(result.chapter_titles[1], "第2章 发展");
@@ -210,7 +220,9 @@ fn txt_english_chapter_detection() {
     let content = "Chapter 1 Beginning\n\nSome text.\n\nChapter 2 Middle\n\nMore text.";
     let tmp = write_temp_txt(content);
 
-    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = TxtParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert_eq!(result.content.len(), 2);
     assert_eq!(result.chapter_titles[0], "Chapter 1 Beginning");
     assert_eq!(result.chapter_titles[1], "Chapter 2 Middle");
@@ -221,7 +233,9 @@ fn txt_no_chapter_fallback() {
     let content = "Just some text.\n\nAnother paragraph.\n\nYet another.";
     let tmp = write_temp_txt(content);
 
-    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = TxtParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     // Fallback: split by double newline, single chapter titled "文本文件"
     assert_eq!(result.chapter_titles.len(), 1);
     assert_eq!(result.chapter_titles[0], "文本文件");
@@ -232,7 +246,9 @@ fn txt_no_chapter_fallback() {
 fn txt_arabic_cn_mixed_chapter() {
     let content = "第1章 开始\n\n段落一。\n\n第12章 结束\n\n段落二。";
     let tmp = write_temp_txt(content);
-    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = TxtParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert_eq!(result.content.len(), 2);
     assert_eq!(result.chapter_titles[0], "第1章 开始");
     assert_eq!(result.chapter_titles[1], "第12章 结束");
@@ -242,7 +258,9 @@ fn txt_arabic_cn_mixed_chapter() {
 fn txt_special_cn_chapters() {
     let content = "序章 引子\n\n段落一。\n\n第一章 正文\n\n段落二。\n\n终章 结局\n\n段落三。";
     let tmp = write_temp_txt(content);
-    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = TxtParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert_eq!(result.content.len(), 3);
     assert_eq!(result.chapter_titles[0], "序章 引子");
     assert_eq!(result.chapter_titles[1], "第一章 正文");
@@ -253,7 +271,9 @@ fn txt_special_cn_chapters() {
 fn txt_english_part_detection() {
     let content = "Part 1 Beginning\n\nText.\n\nPart 2 End\n\nMore text.";
     let tmp = write_temp_txt(content);
-    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = TxtParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert_eq!(result.content.len(), 2);
     assert_eq!(result.chapter_titles[0], "Part 1 Beginning");
     assert_eq!(result.chapter_titles[1], "Part 2 End");
@@ -263,7 +283,9 @@ fn txt_english_part_detection() {
 fn txt_number_dot_prefix() {
     let content = "1. 开篇\n\n段落一。\n\n12. 结尾\n\n段落二。";
     let tmp = write_temp_txt(content);
-    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = TxtParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert_eq!(result.content.len(), 2);
     assert_eq!(result.chapter_titles[0], "1. 开篇");
     assert_eq!(result.chapter_titles[1], "12. 结尾");
@@ -273,7 +295,9 @@ fn txt_number_dot_prefix() {
 fn txt_cn_number_prefix() {
     let content = "一、开篇\n\n段落一。\n\n二十、结尾\n\n段落二。";
     let tmp = write_temp_txt(content);
-    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = TxtParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert_eq!(result.content.len(), 2);
     assert_eq!(result.chapter_titles[0], "一、开篇");
     assert_eq!(result.chapter_titles[1], "二十、结尾");
@@ -316,7 +340,9 @@ fn epub_warns_on_missing_container() {
     }
 
     let tmp = write_temp_epub(&buf);
-    let result = EpubParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert!(result.warnings.iter().any(|w| w.contains("container.xml")));
 }
 
@@ -337,7 +363,9 @@ fn epub_warns_on_empty_chapter() {
     let data = build_epub(opf, &[("ch1.xhtml", empty_html)]);
     let tmp = write_temp_epub(&data);
 
-    let result = EpubParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert!(result.content.is_empty());
     assert!(result.warnings.iter().any(|w| w.contains("内容为空")));
 }
@@ -366,7 +394,9 @@ fn epub_parse_result_has_all_fields() {
     let data = build_epub(opf, &[("ch1.xhtml", html)]);
     let tmp = write_temp_epub(&data);
 
-    let result = EpubParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert!(!result.content.is_empty());
     assert!(!result.chapter_titles.is_empty());
     assert!(result.metadata.is_some());
@@ -379,7 +409,9 @@ fn txt_parse_result_has_all_fields() {
     let content = "第1章 测试\n\n内容段落。";
     let tmp = write_temp_txt(content);
 
-    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = TxtParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert!(!result.content.is_empty());
     assert!(!result.chapter_titles.is_empty());
     assert!(result.metadata.is_none()); // TXT has no metadata
@@ -397,12 +429,17 @@ fn txt_large_file_does_not_panic() {
     for i in 1..=100 {
         content.push_str(&format!("第{}章 章节标题\n\n", i));
         for j in 1..=50 {
-            content.push_str(&format!("这是第{}章的第{}个段落，包含一些测试内容用于验证大文件解析不会崩溃。\n\n", i, j));
+            content.push_str(&format!(
+                "这是第{}章的第{}个段落，包含一些测试内容用于验证大文件解析不会崩溃。\n\n",
+                i, j
+            ));
         }
     }
     let tmp = write_temp_txt(&content);
 
-    let result = TxtParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = TxtParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert_eq!(result.content.len(), 100);
     assert_eq!(result.chapter_titles.len(), 100);
 }
@@ -438,6 +475,8 @@ fn epub_without_cover_parses() {
     let data = build_epub(opf, &[("ch1.xhtml", html)]);
     let tmp = write_temp_epub(&data);
 
-    let result = EpubParser::new().parse(tmp.path().to_str().unwrap()).unwrap();
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
     assert!(!result.content.is_empty());
 }

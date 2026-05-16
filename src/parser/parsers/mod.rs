@@ -12,8 +12,8 @@
 
 pub mod base;
 pub mod epub;
-pub mod txt;
 pub mod factory;
+pub mod txt;
 
 pub use factory::ParserFactory;
 

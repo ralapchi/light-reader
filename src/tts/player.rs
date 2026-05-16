@@ -25,8 +25,7 @@ impl AudioPlayer {
     /// rodio auto-detects the format from the byte content.
     pub fn append(&self, data: Vec<u8>) -> Result<(), String> {
         let cursor = std::io::Cursor::new(data);
-        let source =
-            rodio::Decoder::new(cursor).map_err(|e| format!("音频解码失败: {}", e))?;
+        let source = rodio::Decoder::new(cursor).map_err(|e| format!("音频解码失败: {}", e))?;
         self.sink.append(source);
         Ok(())
     }
@@ -92,7 +91,7 @@ pub fn wrap_pcm16_as_wav(pcm_data: &[u8], sample_rate: u32, channels: u16) -> Ve
     // fmt sub-chunk (16 bytes for PCM)
     wav.extend_from_slice(b"fmt ");
     wav.extend_from_slice(&16u32.to_le_bytes()); // chunk size
-    wav.extend_from_slice(&1u16.to_le_bytes());  // audio format (1 = PCM)
+    wav.extend_from_slice(&1u16.to_le_bytes()); // audio format (1 = PCM)
     wav.extend_from_slice(&channels.to_le_bytes());
     wav.extend_from_slice(&sample_rate.to_le_bytes());
     wav.extend_from_slice(&byte_rate.to_le_bytes());

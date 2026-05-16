@@ -91,7 +91,6 @@ mod tests {
     use crate::domain::reader_settings::ReaderSettings;
     use crate::tts::config::TtsConfig;
     use crate::tts::types::TtsProviderKind;
-    
 
     #[test]
     fn from_reader_settings_preserves_tts_config() {
@@ -122,11 +121,8 @@ mod tests {
             model: None,
             voice_id: None,
         };
-        let original = SettingsFile::from_reader_settings(
-            &ReaderSettings::default(),
-            None,
-            Some(tts),
-        );
+        let original =
+            SettingsFile::from_reader_settings(&ReaderSettings::default(), None, Some(tts));
         let json = serde_json::to_string(&original).unwrap();
         let restored: SettingsFile = serde_json::from_str(&json).unwrap();
         assert_eq!(original.tts_config, restored.tts_config);

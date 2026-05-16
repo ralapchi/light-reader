@@ -31,9 +31,7 @@ pub fn segment_chapter(
             continue;
         }
         // If adding this paragraph would exceed max_chars, flush current segment
-        if !current_text.is_empty()
-            && current_text.len() + para_text.len() + 1 > max_chars
-        {
+        if !current_text.is_empty() && current_text.len() + para_text.len() + 1 > max_chars {
             segments.push(Segment {
                 chapter_index,
                 segment_index,

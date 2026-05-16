@@ -37,7 +37,12 @@ impl TtsCache {
             .join(provider)
             .join(sanitize_filename(book_id))
             .join(chapter_index.to_string())
-            .join(format!("{}_{}.{}", segment_index, sanitize_filename(voice_id), ext))
+            .join(format!(
+                "{}_{}.{}",
+                segment_index,
+                sanitize_filename(voice_id),
+                ext
+            ))
     }
 
     pub fn exists(&self, path: &Path) -> bool {
@@ -85,7 +90,13 @@ impl TtsCache {
 /// Replace non-alphanumeric characters for safe filesystem usage.
 fn sanitize_filename(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 

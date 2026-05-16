@@ -1,10 +1,10 @@
 [package]
-name = "reader-demo"
+name = "light-reader"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "reader-demo"
+name = "light-reader"
 path = "src/main.rs"
 
 
