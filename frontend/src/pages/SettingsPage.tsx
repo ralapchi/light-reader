@@ -1,13 +1,8 @@
-import { useEffect, useState, useCallback } from 'react'
-import useAppStore from '../store/useAppStore'
-import { ttsConfigLoad, ttsConfigSave, ttsTestConnection, ttsClearCache, settingsSave } from '../services/api'
-import type { TtsConfigDto } from '../services/api'
-import { READER_FONTS, READER_THEMES, findReaderFont, findReaderTheme, readerFontFamily } from '../utils/readerOptions'
+import { FONT_SIZE_RANGE, LINE_HEIGHT_RANGE, PARAGRAPH_SPACING_RANGE, READER_FONTS, READER_THEMES } from '../utils/readerOptions'
+import { useSettingsPage, type SettingsSection } from './settings/useSettingsPage'
 import './SettingsPage.css'
 
-type Section = 'general' | 'tts' | 'reading' | 'about'
-
-const SECTIONS: { id: Section; label: string; desc: string }[] = [
+const SECTIONS: { id: SettingsSection; label: string; desc: string }[] = [
   { id: 'general', label: '常规', desc: '应用偏好' },
   { id: 'tts', label: '听书', desc: '朗读服务' },
   { id: 'reading', label: '阅读', desc: '主题与排版' },
@@ -15,39 +10,24 @@ const SECTIONS: { id: Section; label: string; desc: string }[] = [
 ]
 
 function SettingsPage() {
-  const setSidebarFooter = useAppStore(s => s.setSidebarFooter)
-  const { reader, setSettings } = useAppStore()
-  const { settings } = reader
-  const [activeSection, setActiveSection] = useState<Section>('general')
-  const [ttsConfig, setTtsConfig] = useState<TtsConfigDto | null>(null)
-  const [ttsLoaded, setTtsLoaded] = useState(false)
-  const [ttsTestStatus, setTtsTestStatus] = useState<'idle' | 'success' | 'error'>('idle')
-
-  useEffect(() => {
-    setSidebarFooter('设置')
-  }, [setSidebarFooter])
-
-  useEffect(() => {
-    ttsConfigLoad().then(cfg => {
-      setTtsConfig(cfg)
-      setTtsLoaded(true)
-    }).catch(() => setTtsLoaded(true))
-  }, [])
-
-  const handleTtsSave = useCallback((next: TtsConfigDto) => {
-    setTtsConfig(next)
-    ttsConfigSave(next).catch(() => {})
-  }, [])
-
-  const updateAndSave = useCallback((partial: Partial<typeof settings>) => {
-    setSettings(partial)
-    const next = { ...settings, ...partial }
-    settingsSave(next).catch(() => {})
-  }, [settings, setSettings])
-
-  const activeTheme = findReaderTheme(settings.theme)
-  const activeFont = findReaderFont(settings.font_family)?.label ?? '自定义'
-  const previewFontFamily = readerFontFamily(settings.font_family)
+  const {
+    activeFont,
+    activeSection,
+    activeTheme,
+    clearTtsCache,
+    handleTtsSave,
+    previewFontFamily,
+    saveApiKey,
+    saveTtsPartial,
+    setActiveSection,
+    settings,
+    testTtsConnection,
+    ttsConfig,
+    ttsLoaded,
+    ttsTestStatus,
+    updateAndSave,
+    updateTtsDraft,
+  } = useSettingsPage()
 
   return (
     <main className="settings-main">
@@ -127,7 +107,7 @@ function SettingsPage() {
                       <span className="settings-value">{settings.font_size}px</span>
                     </div>
                     <input
-                      type="range" min={12} max={28} step={1}
+                      type="range" min={FONT_SIZE_RANGE.min} max={FONT_SIZE_RANGE.max} step={FONT_SIZE_RANGE.step}
                       value={settings.font_size}
                       onChange={e => updateAndSave({ font_size: Number(e.target.value) })}
                       className="settings-slider"
@@ -140,7 +120,7 @@ function SettingsPage() {
                       <span className="settings-value">{settings.line_height.toFixed(2)}</span>
                     </div>
                     <input
-                      type="range" min={1.2} max={2.5} step={0.05}
+                      type="range" min={LINE_HEIGHT_RANGE.min} max={LINE_HEIGHT_RANGE.max} step={LINE_HEIGHT_RANGE.step}
                       value={settings.line_height}
                       onChange={e => updateAndSave({ line_height: Number(e.target.value) })}
                       className="settings-slider"
@@ -153,7 +133,7 @@ function SettingsPage() {
                       <span className="settings-value">{settings.paragraph_spacing.toFixed(1)}em</span>
                     </div>
                     <input
-                      type="range" min={0.4} max={3} step={0.1}
+                      type="range" min={PARAGRAPH_SPACING_RANGE.min} max={PARAGRAPH_SPACING_RANGE.max} step={PARAGRAPH_SPACING_RANGE.step}
                       value={settings.paragraph_spacing}
                       onChange={e => updateAndSave({ paragraph_spacing: Number(e.target.value) })}
                       className="settings-slider"
@@ -223,10 +203,8 @@ function SettingsPage() {
                       placeholder={ttsConfig.has_api_key ? '已设置（输入新值覆盖）' : '输入 API Key'}
                       onBlur={e => {
                         if (e.target.value) {
-                          ttsConfigSave({ ...ttsConfig, api_key: e.target.value }).then(() => {
-                            setTtsConfig(prev => prev ? { ...prev, has_api_key: true } : prev)
-                            e.target.value = ''
-                          })
+                          saveApiKey(e.target.value)
+                          e.target.value = ''
                         }
                       }}
                     />
@@ -239,8 +217,8 @@ function SettingsPage() {
                       type="text"
                       placeholder="https://api.example.com/v1"
                       value={ttsConfig.base_url ?? ''}
-                      onChange={e => setTtsConfig({ ...ttsConfig, base_url: e.target.value })}
-                      onBlur={e => ttsConfigSave({ ...ttsConfig, base_url: e.target.value || null })}
+                      onChange={e => updateTtsDraft({ base_url: e.target.value })}
+                      onBlur={e => saveTtsPartial({ base_url: e.target.value || null })}
                     />
                   </div>
 
@@ -251,8 +229,8 @@ function SettingsPage() {
                       type="text"
                       placeholder="mimo-v2-tts"
                       value={ttsConfig.model ?? ''}
-                      onChange={e => setTtsConfig({ ...ttsConfig, model: e.target.value })}
-                      onBlur={e => ttsConfigSave({ ...ttsConfig, model: e.target.value || null })}
+                      onChange={e => updateTtsDraft({ model: e.target.value })}
+                      onBlur={e => saveTtsPartial({ model: e.target.value || null })}
                     />
                   </div>
 
@@ -263,8 +241,8 @@ function SettingsPage() {
                       type="text"
                       placeholder="voice_id"
                       value={ttsConfig.voice_id ?? ''}
-                      onChange={e => setTtsConfig({ ...ttsConfig, voice_id: e.target.value })}
-                      onBlur={e => ttsConfigSave({ ...ttsConfig, voice_id: e.target.value || null })}
+                      onChange={e => updateTtsDraft({ voice_id: e.target.value })}
+                      onBlur={e => saveTtsPartial({ voice_id: e.target.value || null })}
                     />
                   </div>
 
@@ -272,15 +250,12 @@ function SettingsPage() {
                     <button
                       className="settings-action-btn primary"
                       type="button"
-                      onClick={async () => {
-                        const ok = await ttsTestConnection(ttsConfig)
-                        setTtsTestStatus(ok ? 'success' : 'error')
-                      }}
+                      onClick={testTtsConnection}
                     >测试连接</button>
                     <button
                       className="settings-action-btn"
                       type="button"
-                      onClick={() => ttsClearCache()}
+                      onClick={clearTtsCache}
                     >清空缓存</button>
                   </div>
                   {ttsTestStatus !== 'idle' && (

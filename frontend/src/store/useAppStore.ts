@@ -63,7 +63,6 @@ interface AppState {
   // Opening actions
   startOpening: (bookId: string, title: string, author: string | null, coverUrl: string | null) => void
   setOpeningError: (message: string) => void
-  resetOpening: () => void
 
   // Reader actions
   setReaderBook: (book: ReaderBookDto) => void
@@ -149,7 +148,6 @@ const useAppStore = create<AppState>((set) => ({
     set({ opening: { bookId, title, author, coverUrl, status: 'loading', errorMessage: null } }),
   setOpeningError: (message) =>
     set((s) => ({ opening: { ...s.opening, status: 'error', errorMessage: message } })),
-  resetOpening: () => set({ opening: { ...defaultOpening } }),
 
   setReaderBook: (book) =>
     set((s) => ({ reader: { ...s.reader, book } })),

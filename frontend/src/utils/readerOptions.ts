@@ -38,6 +38,10 @@ export const COMPACT_READER_FONTS = READER_FONTS.filter(font =>
   ['sans-serif', 'serif', 'monospace'].includes(font.id),
 )
 
+export const FONT_SIZE_RANGE = { min: 12, max: 28, step: 1 }
+export const LINE_HEIGHT_RANGE = { min: 1.2, max: 2.5, step: 0.05 }
+export const PARAGRAPH_SPACING_RANGE = { min: 0.4, max: 3.0, step: 0.1 }
+
 export function findReaderTheme(themeId: string): ReaderThemeOption {
   return READER_THEMES.find(theme => theme.id === themeId) ?? READER_THEMES[0]
 }

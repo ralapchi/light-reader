@@ -1,10 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { libraryList, libraryImport, librarySearch, libraryCover, libraryRemove, libraryRemoveBatch, assetUrl } from '../services/api'
-import { open } from '@tauri-apps/plugin-dialog'
 import type { LibraryBookCardDto } from '../services/api'
-import useAppStore from '../store/useAppStore'
 import { coverColor } from '../utils/cover'
+import { useLibraryPage } from './library/useLibraryPage'
 import './LibraryPage.css'
 
 function formatProgress(item: LibraryBookCardDto): string {
@@ -20,192 +16,26 @@ function lastChapterInfo(item: LibraryBookCardDto): string {
 }
 
 function LibraryPage() {
-  const navigate = useNavigate()
-  const { books, setBooks, startOpening, setSidebarFooter } = useAppStore()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isSearching, setIsSearching] = useState(false)
-  const [coverImages, setCoverImages] = useState<Record<string, string>>({})
-  const [selectMode, setSelectMode] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [deleteConfirm, setDeleteConfirm] = useState<{
-    open: boolean; bookIds: string[]; title: string; message: string; deleteFiles: boolean
-  }>({ open: false, bookIds: [], title: '', message: '', deleteFiles: false })
-
-  // Load cover images via libraryCover API (returns base64 data URI)
-  const loadCovers = useCallback(async (items: LibraryBookCardDto[]) => {
-    const results = await Promise.allSettled(
-      items.map(async (item) => {
-        const uri = await libraryCover(item.book_id)
-        return { bookId: item.book_id, uri }
-      })
-    )
-    const covers: Record<string, string> = {}
-    for (const r of results) {
-      if (r.status === 'fulfilled' && r.value.uri) {
-        covers[r.value.bookId] = r.value.uri
-      }
-    }
-    setCoverImages(prev => ({ ...prev, ...covers }))
-  }, [])
-
-  const loadBooks = useCallback(async () => {
-    try {
-      const items = await libraryList()
-      setBooks(items)
-      // Clean up stale covers for books no longer in the list
-      setCoverImages(prev => {
-        const validIds = new Set(items.map(i => i.book_id))
-        const next: Record<string, string> = {}
-        for (const [id, uri] of Object.entries(prev)) {
-          if (validIds.has(id)) next[id] = uri
-        }
-        return next
-      })
-      loadCovers(items)
-    } catch (e) {
-      console.error('加载书库失败:', e)
-    }
-  }, [setBooks, loadCovers])
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadInitialBooks() {
-      try {
-        const items = await libraryList()
-        if (cancelled) return
-        setBooks(items)
-        setCoverImages(prev => {
-          const validIds = new Set(items.map(i => i.book_id))
-          const next: Record<string, string> = {}
-          for (const [id, uri] of Object.entries(prev)) {
-            if (validIds.has(id)) next[id] = uri
-          }
-          return next
-        })
-        await loadCovers(items)
-      } catch (e) {
-        if (!cancelled) console.error('加载书库失败:', e)
-      }
-    }
-
-    void loadInitialBooks()
-    return () => {
-      cancelled = true
-    }
-  }, [setBooks, loadCovers])
-
-  useEffect(() => {
-    setSidebarFooter(`${books.length} 本藏书`)
-  }, [books.length, setSidebarFooter])
-
-  const handleSearch = useCallback(async (query: string) => {
-    setSearchQuery(query)
-    if (!query.trim()) {
-      setIsSearching(false)
-      loadBooks()
-      return
-    }
-    setIsSearching(true)
-    try {
-      const results = await librarySearch(query)
-      setBooks(results)
-      loadCovers(results)
-    } catch (e) {
-      console.error('搜索失败:', e)
-    }
-  }, [loadBooks, setBooks, loadCovers])
-
-  const handleImport = useCallback(async () => {
-    try {
-      const selected = await open({
-        multiple: true,
-        filters: [{ name: '电子书', extensions: ['epub', 'txt'] }],
-      })
-      if (!selected) return
-      const paths = Array.isArray(selected) ? selected : [selected]
-      if (paths.length > 0) {
-        await libraryImport(paths)
-        loadBooks()
-      }
-    } catch (e) {
-      console.error('导入失败:', e)
-    }
-  }, [loadBooks])
-
-  const handleOpenBook = useCallback((bookId: string) => {
-    if (selectMode) return
-    const book = books.find(b => b.book_id === bookId)
-    if (book) {
-      // Use coverImages (base64 data URI) if loaded, otherwise fall back to
-      // file path via convertFileSrc to avoid waiting for async loadCovers
-      const cover = coverImages[bookId] ?? (book.cover_url ? assetUrl(book.cover_url) : null)
-      startOpening(bookId, book.title, book.author, cover)
-    }
-    navigate(`/loading/${bookId}`)
-  }, [navigate, books, coverImages, startOpening, selectMode])
-
-  const toggleSelect = useCallback((bookId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(bookId)) next.delete(bookId)
-      else next.add(bookId)
-      return next
-    })
-  }, [])
-
-  const handleDeleteSingle = useCallback((bookId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    const book = books.find(b => b.book_id === bookId)
-    const title = book?.title ?? '该书籍'
-    setDeleteConfirm({
-      open: true,
-      bookIds: [bookId],
-      title: '移除书籍',
-      message: `将从书架移除「${title}」，阅读进度和缓存也将一并清除。`,
-      deleteFiles: false,
-    })
-  }, [books])
-
-  const handleDeleteBatch = useCallback(() => {
-    const ids = Array.from(selectedIds)
-    if (ids.length === 0) return
-    setDeleteConfirm({
-      open: true,
-      bookIds: ids,
-      title: '批量移除',
-      message: `将从书架移除 ${ids.length} 本书籍，所有阅读进度和缓存也将一并清除。`,
-      deleteFiles: false,
-    })
-  }, [selectedIds])
-
-  const handleDeleteConfirm = useCallback(async () => {
-    const { bookIds, deleteFiles } = deleteConfirm
-    try {
-      if (bookIds.length === 1) {
-        await libraryRemove(bookIds[0], deleteFiles)
-      } else {
-        await libraryRemoveBatch(bookIds, deleteFiles)
-      }
-    } catch (e) {
-      console.error('删除失败:', e)
-    }
-    setDeleteConfirm(prev => ({ ...prev, open: false }))
-    setSelectedIds(new Set())
-    setSelectMode(false)
-    loadBooks()
-  }, [deleteConfirm, loadBooks])
-
-  // "Continue reading" = books with some progress, sorted by last_opened_at
-  const continueReading = books
-    .filter(b => b.progress_percent > 0 && b.progress_percent < 1 && b.last_opened_at)
-    .sort((a, b) => {
-      const da = a.last_opened_at ?? ''
-      const db = b.last_opened_at ?? ''
-      return db.localeCompare(da)
-    })
-    .slice(0, 3)
+  const {
+    books,
+    closeDeleteConfirm,
+    continueReading,
+    coverImages,
+    deleteConfirm,
+    handleDeleteBatch,
+    handleDeleteConfirm,
+    handleDeleteSingle,
+    handleImport,
+    handleOpenBook,
+    handleSearch,
+    isSearching,
+    searchQuery,
+    selectedIds,
+    selectMode,
+    setDeleteFiles,
+    toggleSelect,
+    toggleSelectMode,
+  } = useLibraryPage()
 
   return (
     <main className="library-main">
@@ -224,7 +54,7 @@ function LibraryPage() {
                 onChange={e => handleSearch(e.target.value)}
               />
             </div>
-            <button className={`btn-secondary ${selectMode ? 'active' : ''}`} onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()) }}>
+            <button className={`btn-secondary ${selectMode ? 'active' : ''}`} onClick={toggleSelectMode}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="9 11 12 14 22 4" />
                 <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
@@ -310,7 +140,7 @@ function LibraryPage() {
                   {selectMode ? (
                     <button
                       className={`cover-checkbox ${selectedIds.has(item.book_id) ? 'checked' : ''}`}
-                      onClick={(e) => toggleSelect(item.book_id, e)}
+                      onClick={(e) => { e.stopPropagation(); toggleSelect(item.book_id) }}
                     >
                       {selectedIds.has(item.book_id) && (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -321,7 +151,7 @@ function LibraryPage() {
                   ) : (
                     <button
                       className="cover-delete"
-                      onClick={(e) => handleDeleteSingle(item.book_id, e)}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteSingle(item.book_id) }}
                       title="移除"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -358,7 +188,7 @@ function LibraryPage() {
         {/* Delete Confirm Dialog */}
         {deleteConfirm.open && (
           <>
-            <div className="modal-backdrop" onClick={() => setDeleteConfirm(prev => ({ ...prev, open: false }))} />
+            <div className="modal-backdrop" onClick={closeDeleteConfirm} />
             <div className="delete-modal">
               <div className="delete-modal-title">{deleteConfirm.title}</div>
               <div className="delete-modal-message">{deleteConfirm.message}</div>
@@ -366,7 +196,7 @@ function LibraryPage() {
                 <input
                   type="checkbox"
                   checked={deleteConfirm.deleteFiles}
-                  onChange={e => setDeleteConfirm(prev => ({ ...prev, deleteFiles: e.target.checked }))}
+                  onChange={e => setDeleteFiles(e.target.checked)}
                 />
                 <span>同时删除本地源文件</span>
               </label>
@@ -375,7 +205,7 @@ function LibraryPage() {
                 <div className="delete-modal-warning">本地源文件删除后将无法恢复。</div>
               )}
               <div className="delete-modal-actions">
-                <button className="btn-secondary" onClick={() => setDeleteConfirm(prev => ({ ...prev, open: false }))}>取消</button>
+                <button className="btn-secondary" onClick={closeDeleteConfirm}>取消</button>
                 <button className="btn-danger" onClick={handleDeleteConfirm}>确认移除</button>
               </div>
             </div>

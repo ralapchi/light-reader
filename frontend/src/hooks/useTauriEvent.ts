@@ -1,24 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
-// ── Event payload types (mirrors Rust events.rs) ──────────────
-
-export interface BookOpeningStarted {
-  book_id: string
-  title: string
-  author: string | null
-}
-
 export interface BookOpeningProgress {
   book_id: string
   stage: string
   progress_text: string | null
-}
-
-export interface BookOpeningFinished {
-  book_id: string
-  chapter_count: number
-  load_duration_ms: number
 }
 
 export interface BookOpeningFailed {
@@ -33,13 +19,6 @@ export interface BookOpeningFailed {
  *
  * Wraps @tauri-apps/api `listen()` with automatic cleanup on unmount.
  * The handler receives the typed event payload.
- *
- * @example
- * ```tsx
- * useTauriEvent<BookOpeningFinished>('book-opening-finished', (payload) => {
- *   console.log('Book loaded:', payload.chapter_count)
- * })
- * ```
  */
 export function useTauriEvent<T = unknown>(
   event: string,
