@@ -1,4 +1,4 @@
-import { COMPACT_READER_FONTS, FONT_SIZE_RANGE, LINE_HEIGHT_RANGE, PARAGRAPH_SPACING_RANGE, READER_THEMES } from '../../utils/readerOptions'
+import { FONT_SIZE_RANGE, LINE_HEIGHT_RANGE, PARAGRAPH_SPACING_RANGE, READER_FONTS, READER_THEMES } from '../../utils/readerOptions'
 import type { ReaderSettings } from '../../services/api'
 import type { ReaderSettingsPanel } from './useReaderPage'
 
@@ -44,17 +44,19 @@ export default function ReaderSettingsControls({
                 <div className="option-row">
                   <span className="option-label">字体</span>
                   <div className="option-group">
-                    {COMPACT_READER_FONTS.map(f => (
-                      <button
-                        key={f.id}
-                        className={`option-chip ${settings.font_family === f.id ? 'active' : ''}`}
-                        onClick={() => onUpdateSettings({ font_family: f.id })}
-                      >{f.compactLabel}</button>
-                    ))}
+                    <select
+                      className="option-select"
+                      value={settings.font_family}
+                      onChange={e => onUpdateSettings({ font_family: e.target.value })}
+                    >
+                      {READER_FONTS.map(f => (
+                        <option key={f.id} value={f.id}>{f.label}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <div className="option-row">
-                  <span className="option-label">字号 {settings.font_size}px</span>
+                  <span className="option-label">字号</span>
                   <input
                     type="range" min={FONT_SIZE_RANGE.min} max={FONT_SIZE_RANGE.max} step={FONT_SIZE_RANGE.step}
                     value={settings.font_size}
@@ -67,7 +69,7 @@ export default function ReaderSettingsControls({
             {activePanel === 'format' && (
               <div className="format-options">
                 <div className="option-row">
-                  <span className="option-label">行距 {settings.line_height.toFixed(2)}</span>
+                  <span className="option-label">行距</span>
                   <input
                     type="range" min={LINE_HEIGHT_RANGE.min} max={LINE_HEIGHT_RANGE.max} step={LINE_HEIGHT_RANGE.step}
                     value={settings.line_height}
@@ -76,7 +78,7 @@ export default function ReaderSettingsControls({
                   />
                 </div>
                 <div className="option-row">
-                  <span className="option-label">段间距 {settings.paragraph_spacing.toFixed(1)}em</span>
+                  <span className="option-label">段间距</span>
                   <input
                     type="range" min={PARAGRAPH_SPACING_RANGE.min} max={PARAGRAPH_SPACING_RANGE.max} step={PARAGRAPH_SPACING_RANGE.step}
                     value={settings.paragraph_spacing}

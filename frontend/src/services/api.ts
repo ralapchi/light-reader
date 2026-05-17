@@ -190,6 +190,10 @@ export function bookmarkRemove(bookId: string, bookmarkId: string): Promise<void
   return invoke('bookmark_remove', { bookId, bookmarkId })
 }
 
+export function settingsLoad(): Promise<ReaderSettings> {
+  return invoke('settings_load')
+}
+
 export function settingsSave(settings: ReaderSettings): Promise<void> {
   return invoke('settings_save', { settings })
 }

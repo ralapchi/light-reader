@@ -4,17 +4,16 @@ import type { ReaderSettings } from '../services/api'
 import useAppStore from '../store/useAppStore'
 
 export function useSettingsPersistence() {
-  const { reader, setSettings } = useAppStore()
-  const { settings } = reader
+  const setSettings = useAppStore(s => s.setSettings)
 
   const updateAndSave = useCallback((partial: Partial<ReaderSettings>) => {
-    if (settings.theme === 'original' && !partial.theme && (partial.font_family || partial.font_size || partial.line_height || partial.paragraph_spacing)) {
-      partial = { ...partial, theme: 'light' }
-    }
-    setSettings(partial)
-    const next = { ...settings, ...partial }
-    settingsSave(next).catch(() => {})
-  }, [settings, setSettings])
+    const current = useAppStore.getState().reader.settings
+    const adjusted = (current.theme === 'original' && !partial.theme && (partial.font_family || partial.font_size || partial.line_height || partial.paragraph_spacing))
+      ? { ...partial, theme: 'light' as const }
+      : partial
+    setSettings(adjusted)
+    settingsSave({ ...current, ...adjusted }).catch(() => {})
+  }, [setSettings])
 
   return updateAndSave
 }
