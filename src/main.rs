@@ -107,8 +107,6 @@ fn main() {
             tts_pause,
             tts_resume,
             tts_stop,
-            tts_next_segment,
-            tts_prev_segment,
             tts_clear_cache,
         ])
         .run(tauri::generate_context!())

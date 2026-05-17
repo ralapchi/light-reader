@@ -4,6 +4,4 @@ use serde::{Deserialize, Serialize};
 pub enum BookFormat {
     Epub,
     Txt,
-    ReservedPdf,
-    ReservedMobi,
 }

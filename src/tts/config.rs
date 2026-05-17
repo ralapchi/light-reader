@@ -49,20 +49,4 @@ impl Default for TtsConfig {
     }
 }
 
-impl TtsConfig {
-    #[allow(dead_code)]
-    pub fn validate(&self) -> Result<(), Vec<String>> {
-        let mut errors = Vec::new();
-        if !self.enabled {
-            return Ok(());
-        }
-        if self.api_key.is_none() || self.api_key.as_ref().map_or(true, |s| s.is_empty()) {
-            errors.push("API Key 不能为空".to_string());
-        }
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
-    }
-}
+impl TtsConfig {}

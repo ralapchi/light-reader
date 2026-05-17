@@ -33,24 +33,3 @@ pub struct TtsResponse {
     pub media_type: String,
     pub duration_ms: Option<u64>,
 }
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct TtsVoice {
-    pub id: String,
-    pub display_name: String,
-    pub gender: Option<String>,
-    pub locale: Option<String>,
-    pub styles: Vec<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AudioCacheEntry {
-    pub provider: TtsProviderKind,
-    pub book_id: String,
-    pub chapter_index: usize,
-    pub segment_index: usize,
-    pub voice_id: String,
-    pub format: String,
-    pub cache_key: String,
-    pub file_path: String,
-}

@@ -1,25 +1,12 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 pub struct TtsCache {
     base_dir: PathBuf,
 }
 
-#[allow(dead_code)]
 impl TtsCache {
     pub fn new(base_dir: PathBuf) -> Self {
         Self { base_dir }
-    }
-
-    /// Compute a stable cache key from synthesis parameters.
-    /// Used for dedup detection when voice/format changes.
-    pub fn cache_key(voice_id: &str, format: &str, text: &str) -> String {
-        let mut hasher = DefaultHasher::new();
-        voice_id.hash(&mut hasher);
-        format.hash(&mut hasher);
-        text.hash(&mut hasher);
-        format!("{:016x}", hasher.finish())
     }
 
     /// Compute the on-disk path for a cached audio segment.
@@ -68,23 +55,6 @@ impl TtsCache {
         }
         Ok(())
     }
-
-    /// Remove cached audio for a specific book across all providers.
-    pub fn clear_book(&self, book_id: &str) -> std::io::Result<()> {
-        let sanitized = sanitize_filename(book_id);
-        if self.base_dir.exists() {
-            for entry in std::fs::read_dir(&self.base_dir)? {
-                let entry = entry?;
-                if entry.file_type()?.is_dir() {
-                    let book_dir = entry.path().join(&sanitized);
-                    if book_dir.exists() {
-                        std::fs::remove_dir_all(&book_dir)?;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 /// Replace non-alphanumeric characters for safe filesystem usage.
@@ -103,27 +73,6 @@ fn sanitize_filename(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn cache_key_is_deterministic() {
-        let a = TtsCache::cache_key("voice1", "mp3", "hello");
-        let b = TtsCache::cache_key("voice1", "mp3", "hello");
-        assert_eq!(a, b);
-    }
-
-    #[test]
-    fn cache_key_differs_for_different_voice() {
-        let a = TtsCache::cache_key("voice1", "mp3", "hello");
-        let b = TtsCache::cache_key("voice2", "mp3", "hello");
-        assert_ne!(a, b);
-    }
-
-    #[test]
-    fn cache_key_differs_for_different_text() {
-        let a = TtsCache::cache_key("v1", "mp3", "hello");
-        let b = TtsCache::cache_key("v1", "mp3", "world");
-        assert_ne!(a, b);
-    }
 
     #[test]
     fn segment_path_uses_hierarchy() {

@@ -17,6 +17,14 @@ use super::txt::TxtParser;
 // ---------------------------------------------------------------------------
 
 fn build_epub(opf_body: &str, chapters: &[(&str, &str)]) -> Vec<u8> {
+    build_epub_with_files(opf_body, chapters, &[])
+}
+
+fn build_epub_with_files(
+    opf_body: &str,
+    chapters: &[(&str, &str)],
+    files: &[(&str, &[u8])],
+) -> Vec<u8> {
     let mut buf = Vec::new();
     {
         let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buf));
@@ -39,6 +47,11 @@ fn build_epub(opf_body: &str, chapters: &[(&str, &str)]) -> Vec<u8> {
         for (name, html) in chapters {
             zip.start_file(&format!("OEBPS/{}", name), opts).unwrap();
             zip.write_all(html.as_bytes()).unwrap();
+        }
+
+        for (name, bytes) in files {
+            zip.start_file(*name, opts).unwrap();
+            zip.write_all(bytes).unwrap();
         }
 
         zip.finish().unwrap();
@@ -479,4 +492,48 @@ fn epub_without_cover_parses() {
         .parse(tmp.path().to_str().unwrap())
         .unwrap();
     assert!(!result.content.is_empty());
+}
+
+#[test]
+fn epub_image_paths_are_normalized_and_deduplicated() {
+    let opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="2.0" xmlns="http://www.idpf.org/2007/opf">
+  <manifest>
+    <item id="ch1" href="Text/ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="img1" href="images/pic.jpg" media-type="image/jpeg"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>"#;
+
+    let html = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <p>Text.</p>
+    <img src="../images/pic.jpg#cover" alt="Cover A" />
+    <img src="../images/pic.jpg?version=1" alt="Cover B" />
+  </body>
+</html>"#;
+
+    let data = build_epub_with_files(
+        opf,
+        &[("Text/ch1.xhtml", html)],
+        &[("OEBPS/images/pic.jpg", b"fake-image-bytes")],
+    );
+    let tmp = write_temp_epub(&data);
+
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
+
+    assert_eq!(result.image_assets.len(), 1);
+    assert_eq!(result.image_assets[0].asset_path, "OEBPS/images/pic.jpg");
+    assert_eq!(result.image_assets[0].source_href, "../images/pic.jpg");
+    assert_eq!(result.chapter_image_blocks.len(), 1);
+    assert_eq!(result.chapter_image_blocks[0].len(), 2);
+    assert_eq!(
+        result.chapter_image_blocks[0][0].1.asset_id,
+        result.chapter_image_blocks[0][1].1.asset_id
+    );
 }

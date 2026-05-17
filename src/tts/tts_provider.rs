@@ -1,5 +1,5 @@
 use crate::tts::config::TtsConfig;
-use crate::tts::types::{TtsProviderKind, TtsRequest, TtsResponse, TtsVoice};
+use crate::tts::types::{TtsProviderKind, TtsRequest, TtsResponse};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -30,12 +30,6 @@ impl std::fmt::Display for TtsError {
 }
 
 impl TtsError {
-    #[allow(dead_code)]
-    /// Whether this error is retryable
-    pub fn is_retryable(&self) -> bool {
-        matches!(self, TtsError::HttpError(_) | TtsError::RateLimited { .. })
-    }
-
     /// Convert to an error code string (safe for logging, no secrets exposed)
     pub fn error_code(&self) -> &str {
         match self {
@@ -57,6 +51,5 @@ pub trait TtsProvider: Send + Sync {
     fn synthesize(&self, request: &TtsRequest, config: &TtsConfig)
     -> Result<TtsResponse, TtsError>;
     fn test_connection(&self, config: &TtsConfig) -> Result<(), TtsError>;
-    fn list_voices(&self, config: &TtsConfig) -> Result<Vec<TtsVoice>, TtsError>;
     fn max_text_length(&self) -> usize;
 }

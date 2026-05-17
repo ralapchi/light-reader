@@ -4,7 +4,7 @@ use base64::Engine as _;
 
 use crate::tts::config::TtsConfig;
 use crate::tts::tts_provider::{TtsError, TtsProvider};
-use crate::tts::types::{TtsProviderKind, TtsRequest, TtsResponse, TtsVoice};
+use crate::tts::types::{TtsProviderKind, TtsRequest, TtsResponse};
 
 const DEFAULT_BASE_URL: &str = "https://api.xiaomimimo.com/v1";
 const DEFAULT_MODEL: &str = "mimo-v2-tts";
@@ -156,39 +156,6 @@ impl TtsProvider for XiaomiTtsProvider {
             voice_id: config.voice_id.clone(),
         };
         self.synthesize(&request, config).map(|_| ())
-    }
-
-    fn list_voices(&self, _config: &TtsConfig) -> Result<Vec<TtsVoice>, TtsError> {
-        Ok(vec![
-            TtsVoice {
-                id: "default_en".to_string(),
-                display_name: "Default (English)".to_string(),
-                gender: None,
-                locale: Some("en".to_string()),
-                styles: vec![],
-            },
-            TtsVoice {
-                id: "default_zh".to_string(),
-                display_name: "默认女声 (中文)".to_string(),
-                gender: Some("female".to_string()),
-                locale: Some("zh-CN".to_string()),
-                styles: vec![],
-            },
-            TtsVoice {
-                id: "default_male".to_string(),
-                display_name: "默认男声".to_string(),
-                gender: Some("male".to_string()),
-                locale: None,
-                styles: vec![],
-            },
-            TtsVoice {
-                id: "gentle_female".to_string(),
-                display_name: "温柔女声".to_string(),
-                gender: Some("female".to_string()),
-                locale: Some("zh-CN".to_string()),
-                styles: vec![],
-            },
-        ])
     }
 
     fn max_text_length(&self) -> usize {

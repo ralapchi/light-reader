@@ -14,10 +14,6 @@ pub struct BookImageAsset {
     pub width_hint: Option<u32>,
     pub height_hint: Option<u32>,
     pub alt_text: Option<String>,
-    /// Raw image bytes extracted by the parser. Not serialized to JSON;
-    /// consumed by the asset/cache layer to write to disk.
-    #[serde(skip)]
-    pub image_bytes: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
