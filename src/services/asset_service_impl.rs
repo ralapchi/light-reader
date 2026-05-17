@@ -30,11 +30,7 @@ impl AssetServiceImpl {
         if let Some(ref bytes) = book.assets.cover_image_bytes {
             let ext = epub_assets::ext_from_media_type(book.assets.cover_media_type.as_deref());
             let cache_path = paths::cover_cache_path(book_id, ext);
-            if is_cached(&cache_path, bytes.len()) {
-                return;
-            }
-            let _ = std::fs::create_dir_all(cache_path.parent().unwrap());
-            let _ = std::fs::write(&cache_path, bytes);
+            write_cache_if_changed(&cache_path, bytes);
         }
     }
 
@@ -48,11 +44,7 @@ impl AssetServiceImpl {
     ) {
         let ext = cache_key.rsplit('.').next().unwrap_or("png");
         let cache_path = paths::image_cache_path(book_id, asset_id, ext);
-        if is_cached(&cache_path, bytes.len()) {
-            return;
-        }
-        let _ = std::fs::create_dir_all(cache_path.parent().unwrap());
-        let _ = std::fs::write(&cache_path, bytes);
+        write_cache_if_changed(&cache_path, bytes);
     }
 }
 
@@ -111,10 +103,7 @@ pub fn extract_and_cache_cover(
 
     // 6. Cache to disk
     let cache_path = paths::cover_cache_path(book_id, ext);
-    if !is_cached(&cache_path, bytes.len()) {
-        let _ = std::fs::create_dir_all(cache_path.parent().unwrap());
-        let _ = std::fs::write(&cache_path, &bytes);
-    }
+    write_cache_if_changed(&cache_path, &bytes);
     Some(cache_path)
 }
 
@@ -251,6 +240,17 @@ fn is_cached(path: &std::path::Path, expected_len: usize) -> bool {
         }
     }
     false
+}
+
+/// Best-effort cache write that avoids rewriting unchanged files.
+fn write_cache_if_changed(path: &std::path::Path, bytes: &[u8]) {
+    if is_cached(path, bytes.len()) {
+        return;
+    }
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(path, bytes);
 }
 
 /// Check if a file exists at any of the common image extensions.

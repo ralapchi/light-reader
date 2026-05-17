@@ -6,6 +6,8 @@ use crate::domain::theme_kind::ThemeKind;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ReaderSettings {
     pub theme: ThemeKind,
+    #[serde(default = "default_app_theme")]
+    pub app_theme: String,
     pub font_family: String,
     pub font_size: f32,
     pub line_height: f32,
@@ -28,6 +30,7 @@ impl Default for ReaderSettings {
     fn default() -> Self {
         Self {
             theme: ThemeKind::Light,
+            app_theme: "system".to_string(),
             font_family: "sans-serif".to_string(),
             font_size: 16.0,
             line_height: 1.6,
@@ -46,4 +49,8 @@ impl Default for ReaderSettings {
             auto_page_turn: false,
         }
     }
+}
+
+fn default_app_theme() -> String {
+    "system".to_string()
 }

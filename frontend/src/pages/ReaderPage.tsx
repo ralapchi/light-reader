@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { readerGetChapter, readerChapterImage, readerSaveProgress, searchInBook, bookmarkList, bookmarkAdd, bookmarkRemove, settingsSave, ttsStart, ttsPause, ttsResume, ttsStop, onTtsPlaying, onTtsPaused, onTtsStopped, onTtsBuffering, onTtsFinished, onTtsError } from '../services/api'
 import type { TocItemDto, ReaderBlockDto, SearchHitDto } from '../services/api'
+import { COMPACT_READER_FONTS, READER_THEMES, findReaderTheme, readerFontFamily } from '../utils/readerOptions'
 import './ReaderPage.css'
 
 function RenderBlock({ block, imageCache, paragraphStyle, highlight }: { block: ReaderBlockDto; imageCache: Record<string, string>; paragraphStyle?: React.CSSProperties; highlight?: boolean }) {
@@ -65,20 +66,6 @@ function findVisibleParagraphIndex(container: HTMLElement): number | null {
   }
   return null
 }
-
-// ── Theme / Font data ──
-
-const THEMES = [
-  { id: 'original', label: '原始', bg: '#FAF8F5', text: '#1A1A1A', accent: '#C8553D', border: '#E8E4DF', surface: '#FFFFFF', textSec: '#8A8680', textTer: '#B5AFA8', hover: '#F5F2EE', accentSoft: '#F2E0D9' },
-  { id: 'light', label: '亮色', bg: '#FAF8F5', text: '#1A1A1A', accent: '#C8553D', border: '#E8E4DF', surface: '#FFFFFF', textSec: '#8A8680', textTer: '#B5AFA8', hover: '#F5F2EE', accentSoft: '#F2E0D9' },
-  { id: 'dark', label: '深色', bg: '#181715', text: '#FAFAF5', accent: '#CC785C', border: '#2E2D2A', surface: '#222120', textSec: '#A09C96', textTer: '#6B6760', hover: '#2E2D2A', accentSoft: '#3D2A20' },
-  { id: 'sepia', label: '暖纸', bg: '#F5F0E8', text: '#2C2420', accent: '#B5624A', border: '#DDD5C8', surface: '#FAF6F0', textSec: '#7A7068', textTer: '#A89E94', hover: '#EDE5DA', accentSoft: '#E8D5C8' },
-]
-const FONTS = [
-  { id: 'sans-serif', label: '无衬线' },
-  { id: 'serif', label: '衬线' },
-  { id: 'monospace', label: '等宽' },
-]
 
 function ReaderPage() {
   const { bookId } = useParams<{ bookId: string }>()
@@ -419,7 +406,7 @@ function ReaderPage() {
   }, [settings, setSettings])
 
   const isOriginal = settings.theme === 'original'
-  const currentTheme = THEMES.find(t => t.id === settings.theme) ?? THEMES[0]
+  const currentTheme = findReaderTheme(settings.theme)
   const readerStyle: React.CSSProperties = {
     '--bg': currentTheme.bg,
     '--text-primary': currentTheme.text,
@@ -434,7 +421,7 @@ function ReaderPage() {
 
   // Original mode: no style overrides, let EPUB CSS take effect
   const contentStyle: React.CSSProperties = isOriginal ? {} : {
-    fontFamily: settings.font_family === 'serif' ? "'Noto Serif SC', serif" : settings.font_family === 'monospace' ? "'Courier New', monospace" : "'DM Sans', -apple-system, sans-serif",
+    fontFamily: readerFontFamily(settings.font_family),
     fontSize: `${settings.font_size}px`,
     lineHeight: settings.line_height,
   }
@@ -666,7 +653,7 @@ function ReaderPage() {
           <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
             {activePanel === 'theme' && (
               <div className="theme-options">
-                {THEMES.map(t => (
+                {READER_THEMES.map(t => (
                   <button
                     key={t.id}
                     className={`theme-swatch ${settings.theme === t.id ? 'active' : ''}`}
@@ -684,12 +671,12 @@ function ReaderPage() {
                 <div className="option-row">
                   <span className="option-label">字体</span>
                   <div className="option-group">
-                    {FONTS.map(f => (
+                    {COMPACT_READER_FONTS.map(f => (
                       <button
                         key={f.id}
                         className={`option-chip ${settings.font_family === f.id ? 'active' : ''}`}
                         onClick={() => updateAndSave({ font_family: f.id })}
-                      >{f.label}</button>
+                      >{f.compactLabel}</button>
                     ))}
                   </div>
                 </div>

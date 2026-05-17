@@ -280,7 +280,7 @@ function LibraryPage() {
         )}
 
         {/* All Books */}
-        <div className="section-title">{isSearching ? '搜索结果' : '全部书籍'}</div>
+        <div className="section-title">{isSearching ? '搜索结果' : '书籍'}</div>
         {books.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">

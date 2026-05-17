@@ -47,7 +47,9 @@ interface AppState {
 
   // Sidebar
   sidebarFooter: string
+  sidebarCollapsed: boolean
   setSidebarFooter: (text: string) => void
+  toggleSidebar: () => void
 
   // Opening transition
   opening: OpeningState
@@ -89,6 +91,7 @@ const defaultOpening: OpeningState = {
 
 const defaultSettings: ReaderSettings = {
   theme: 'original',
+  app_theme: 'system',
   font_family: 'sans-serif',
   font_size: 17,
   line_height: 1.85,
@@ -134,7 +137,9 @@ const defaultReader: ReaderState = {
 const useAppStore = create<AppState>((set) => ({
   books: [],
   sidebarFooter: '',
+  sidebarCollapsed: false,
   setSidebarFooter: (text) => set({ sidebarFooter: text }),
+  toggleSidebar: () => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   opening: { ...defaultOpening },
   reader: { ...defaultReader },
 

@@ -64,6 +64,7 @@ export interface TtsConfigDto {
 
 export interface ReaderSettings {
   theme: string
+  app_theme: string
   font_family: string
   font_size: number
   line_height: number

@@ -39,7 +39,7 @@ impl std::fmt::Debug for TtsConfig {
 impl Default for TtsConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             provider: TtsProviderKind::Xiaomi,
             api_key: None,
             base_url: None,

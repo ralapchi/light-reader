@@ -1,5 +1,5 @@
 .main-sidebar {
-  width: 220px;
+  width: 160px;
   flex-shrink: 0;
   background: var(--surface, #FFFFFF);
   border-right: 1px solid var(--border, #E8E4DF);
@@ -7,6 +7,23 @@
   flex-direction: column;
   padding: 16px 0;
   overflow-y: auto;
+  transition: width 0.2s ease;
+}
+
+.main-sidebar.collapsed {
+  width: 52px;
+}
+
+/* ── Top: brand + collapse button ── */
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px 12px;
+}
+
+.main-sidebar:not(.collapsed) .sidebar-top {
+  padding: 0 16px 16px;
 }
 
 .sidebar-brand {
@@ -14,11 +31,51 @@
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary, #1A1A1A);
-  padding: 0 16px 16px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
+.main-sidebar.collapsed .sidebar-brand {
+  display: none;
+}
+
+.sidebar-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary, #B5AFA8);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.sidebar-collapse-btn:hover {
+  background: var(--surface-hover, #F5F2EE);
+  color: var(--text-primary, #1A1A1A);
+}
+
+.sidebar-collapse-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.main-sidebar.collapsed .sidebar-collapse-btn {
+  margin: 0 auto 8px;
+}
+
+/* ── Section ── */
 .sidebar-section {
   padding: 0 8px;
+}
+
+.main-sidebar.collapsed .sidebar-section {
+  padding: 0 4px;
 }
 
 .sidebar-section-title {
@@ -28,8 +85,15 @@
   letter-spacing: 0.08em;
   color: var(--text-tertiary, #B5AFA8);
   padding: 8px 12px 4px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
+.main-sidebar.collapsed .sidebar-section-title {
+  display: none;
+}
+
+/* ── Item ── */
 .sidebar-item {
   display: flex;
   align-items: center;
@@ -40,6 +104,8 @@
   color: var(--text-secondary, #8A8680);
   cursor: pointer;
   transition: all 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .sidebar-item:hover {
@@ -64,6 +130,17 @@
   opacity: 1;
 }
 
+.main-sidebar.collapsed .sidebar-item {
+  justify-content: center;
+  padding: 8px 0;
+  gap: 0;
+}
+
+.main-sidebar.collapsed .sidebar-item-label {
+  display: none;
+}
+
+/* ── Footer ── */
 .sidebar-spacer {
   flex: 1;
 }
@@ -73,4 +150,10 @@
   border-top: 1px solid var(--border, #E8E4DF);
   font-size: 11px;
   color: var(--text-tertiary, #B5AFA8);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.main-sidebar.collapsed .sidebar-footer {
+  display: none;
 }
