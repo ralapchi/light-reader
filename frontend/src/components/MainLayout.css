@@ -1,0 +1,6 @@
+.main-layout {
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+  background: var(--bg, #FAF8F5);
+}
