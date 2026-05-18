@@ -1,15 +1,16 @@
 import { FONT_SIZE_RANGE, LINE_HEIGHT_RANGE, PARAGRAPH_SPACING_RANGE, READER_FONTS, READER_THEMES } from '../../utils/readerOptions'
 import type { ReaderSettings } from '../../services/api'
-import type { ReaderSettingsPanel } from './useReaderPage'
+
+export type SettingsPanel = 'theme' | 'font' | 'format' | null
 
 interface ReaderSettingsControlsProps {
-  activePanel: ReaderSettingsPanel
-  onPanelChange: (panel: ReaderSettingsPanel) => void
+  activePanel: SettingsPanel
+  onPanelChange: (panel: SettingsPanel) => void
   onUpdateSettings: (partial: Partial<ReaderSettings>) => void
   settings: ReaderSettings
 }
 
-function nextPanel(current: ReaderSettingsPanel, panel: Exclude<ReaderSettingsPanel, null>): ReaderSettingsPanel {
+function nextPanel(current: SettingsPanel, panel: NonNullable<SettingsPanel>): SettingsPanel {
   return current === panel ? null : panel
 }
 

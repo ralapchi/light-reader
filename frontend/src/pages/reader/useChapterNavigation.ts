@@ -1,6 +1,6 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { readerGetChapter, readerSaveProgress } from '../../services/api'
+import { readerChapterImage, readerGetChapter, readerSaveProgress } from '../../services/api'
 import type { ReaderBookDto, ReaderBlockDto, SearchHitDto } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import { scrollToOffset, scrollToParagraph } from './readerUtils'
@@ -10,7 +10,6 @@ export function useChapterNavigation(
   book: ReaderBookDto | null,
   contentRef: React.RefObject<HTMLDivElement | null>,
   handleCloseSearch: () => void,
-  loadChapterImages: (blocks: ReaderBlockDto[]) => void,
 ) {
   const navigate = useNavigate()
   const {
@@ -20,6 +19,35 @@ export function useChapterNavigation(
   } = useAppStore()
   const currentChapter = useAppStore(s => s.reader.currentChapter)
   const currentChapterIndex = useAppStore(s => s.reader.currentChapterIndex)
+
+  // ── Chapter image loading ──────────────────────────────
+
+  const [imageCache, setImageCache] = useState<Record<string, string>>({})
+  const loadedImageRef = useRef<Set<string>>(new Set())
+
+  const loadChapterImages = useCallback(async (blocks: ReaderBlockDto[]) => {
+    if (!bookId) return
+    const imageBlocks = blocks.filter(b => b.type === 'image')
+    if (imageBlocks.length === 0) return
+    const updates: Record<string, string> = {}
+    await Promise.allSettled(
+      imageBlocks.map(async (b) => {
+        if (b.type !== 'image') return
+        if (loadedImageRef.current.has(b.asset_id)) return
+        try {
+          const dataUri = await readerChapterImage(bookId, b.asset_id)
+          if (dataUri) updates[b.asset_id] = dataUri
+        } finally {
+          loadedImageRef.current.add(b.asset_id)
+        }
+      })
+    )
+    if (Object.keys(updates).length > 0) {
+      setImageCache(prev => ({ ...prev, ...updates }))
+    }
+  }, [bookId])
+
+  // ── Navigation ────────────────────────────────────────
 
   const goToChapter = useCallback(async (
     index: number,
@@ -68,7 +96,6 @@ export function useChapterNavigation(
     })
   }, [handleCloseSearch, goToChapter, contentRef])
 
-  // Mount effect: handle pending nav or load first chapter
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (!book) {
@@ -117,6 +144,7 @@ export function useChapterNavigation(
   return {
     goToChapter,
     handleSearchResultClick,
+    imageCache,
     goBackToLibrary: () => navigate('/'),
     goToPreviousChapter: () => currentChapterIndex > 0 && goToChapter(currentChapterIndex - 1),
     goToNextChapter: () => book && currentChapterIndex < book.chapter_count - 1 && goToChapter(currentChapterIndex + 1),
