@@ -49,3 +49,4 @@ jobs:
           releaseName: '轻看 v__VERSION__'
           releaseDraft: false
           prerelease: false
+          beforeBuildCommand: cd ${{ github.workspace }}/frontend && npm run build
