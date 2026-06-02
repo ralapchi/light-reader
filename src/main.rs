@@ -88,6 +88,7 @@ fn main() {
             reader_go_to_chapter,
             reader_save_progress,
             reader_get_progress,
+            reader_resolve_href,
             // Search / Bookmarks
             search_in_book,
             bookmark_list,

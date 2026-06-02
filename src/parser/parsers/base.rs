@@ -5,6 +5,7 @@
 */
 
 use crate::domain::book_metadata::BookMetadata;
+use crate::domain::paragraph::TextLink;
 use crate::domain::toc_item::TocItem;
 
 /// 解析结果结构体
@@ -31,6 +32,10 @@ pub struct ParseResult {
     pub image_assets: Vec<crate::domain::book_assets::BookImageAsset>,
     /// 每章节的图片块列表（与 content 索引对齐）
     pub chapter_image_blocks: Vec<Vec<(isize, crate::domain::chapter_block::InlineImageBlock)>>,
+    /// 每章节的段落内链接（与 content 索引对齐，每元素为一章，内层为每段落的链接列表）
+    pub chapter_links: Vec<Vec<Vec<TextLink>>>,
+    /// 每章节的锚点 (fragment, paragraph_index)（与 content 索引对齐）
+    pub chapter_anchors: Vec<Vec<(String, usize)>>,
 }
 
 /// 解析器 trait

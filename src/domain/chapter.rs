@@ -18,5 +18,7 @@ pub struct Chapter {
     pub char_count: usize,
     pub source_href: Option<String>,
     pub anchor: Option<String>,
+    /// 段内锚点列表 (fragment → paragraph_index)
+    pub anchors: Vec<(String, usize)>,
     pub warnings: Vec<String>,
 }

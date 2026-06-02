@@ -5,6 +5,7 @@ interface ReaderTocPanelProps {
   items: TocItemDto[]
   onClose: () => void
   onGoToChapter: (index: number) => void
+  onNavigateHref: (href: string, fallbackIndex: number | null) => void
   progressDisplay: string
   progressPercent: number
   visible: boolean
@@ -15,6 +16,7 @@ export default function ReaderTocPanel({
   items,
   onClose,
   onGoToChapter,
+  onNavigateHref,
   progressDisplay,
   progressPercent,
   visible,
@@ -38,7 +40,13 @@ export default function ReaderTocPanel({
               key={item.id || i}
               className={`toc-item ${item.chapter_index === currentChapterIndex ? 'active' : ''}`}
               style={{ paddingLeft: `${12 + item.depth * 12}px` }}
-              onClick={() => item.chapter_index != null && onGoToChapter(item.chapter_index)}
+              onClick={() => {
+                if (item.href) {
+                  onNavigateHref(item.href, item.chapter_index)
+                } else if (item.chapter_index != null) {
+                  onGoToChapter(item.chapter_index)
+                }
+              }}
             >
               <span className="chapter-num">{(item.chapter_index ?? i) + 1}</span>
               {item.title}

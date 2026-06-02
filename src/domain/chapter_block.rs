@@ -16,6 +16,8 @@ pub struct InlineImageBlock {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ChapterBlock {
     Paragraph(Paragraph),
+    Heading(Paragraph),
+    Quote(Paragraph),
     Image(InlineImageBlock),
     Separator,
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { LibraryBookCardDto, ReaderBookDto, ReaderChapterDto, BookmarkDto, ReaderSettings } from '../services/api'
+import type { LibraryBookCardDto, ReaderBookDto, ReaderChapterDto, BookmarkDto, ReaderSettings, ReaderAnchor } from '../services/api'
 
 // ── Opening state (for loading transition page) ─────────────
 
@@ -36,7 +36,7 @@ interface ReaderState {
   showToc: boolean
   showSearch: boolean
   bookmarks: BookmarkDto[]
-  pendingNavTarget: { chapter_index: number; paragraph_index: number | null; scroll_offset: number | null } | null
+  pendingNavTarget: { chapter_index: number; paragraph_index: number | null; scroll_offset: number | null; anchor?: ReaderAnchor | null } | null
   settings: ReaderSettings
   tts: TtsState
 }
@@ -73,7 +73,7 @@ interface AppState {
   closeToc: () => void
   closeSearch: () => void
   setBookmarks: (bookmarks: BookmarkDto[]) => void
-  setPendingNavTarget: (target: { chapter_index: number; paragraph_index: number | null; scroll_offset: number | null } | null) => void
+  setPendingNavTarget: (target: { chapter_index: number; paragraph_index: number | null; scroll_offset: number | null; anchor?: ReaderAnchor | null } | null) => void
   setSettings: (settings: Partial<ReaderSettings>) => void
   setTtsState: (partial: Partial<TtsState>) => void
   resetTts: () => void
@@ -95,10 +95,10 @@ const defaultSettings: ReaderSettings = {
   font_size: 17,
   line_height: 1.85,
   paragraph_spacing: 1.2,
-  content_width: 640,
+  content_width: 600,
   side_margin: 32,
   toc_width: 300,
-  reading_mode: 'scroll',
+  reading_mode: 'ChapterScroll',
   auto_save_progress: true,
   show_status_bar: true,
   show_chapter_progress: true,

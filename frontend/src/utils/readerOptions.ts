@@ -37,6 +37,24 @@ export const FONT_SIZE_RANGE = { min: 12, max: 28, step: 1 }
 export const LINE_HEIGHT_RANGE = { min: 1.2, max: 2.5, step: 0.05 }
 export const PARAGRAPH_SPACING_RANGE = { min: 0.4, max: 3.0, step: 0.1 }
 
+export const LINE_HEIGHT_PRESETS = [
+  { label: '紧凑', value: 1.4 },
+  { label: '适中', value: 1.8 },
+  { label: '舒适', value: 2.2 },
+]
+
+export const PARAGRAPH_SPACING_PRESETS = [
+  { label: '紧凑', value: 0.5 },
+  { label: '适中', value: 1.0 },
+  { label: '宽松', value: 2.0 },
+]
+
+export const CONTENT_WIDTH_PRESETS = [
+  { label: '窄', value: 480 },
+  { label: '适中', value: 600 },
+  { label: '宽', value: 720 },
+]
+
 export function findReaderTheme(themeId: string): ReaderThemeOption {
   return READER_THEMES.find(theme => theme.id === themeId) ?? READER_THEMES[0]
 }

@@ -537,3 +537,222 @@ fn epub_image_paths_are_normalized_and_deduplicated() {
         result.chapter_image_blocks[0][1].1.asset_id
     );
 }
+
+// ── Phase 2: Anchor & link tests ─────────────────────────────
+
+#[test]
+fn epub3_nav_href_with_anchor_maps_to_chapter() {
+    let opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf">
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="ch1" href="Text/ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>"#;
+    let nav = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<body><nav epub:type="toc"><ol>
+  <li><a href="Text/ch1.xhtml#s1">Section 1</a></li>
+</ol></nav></body></html>"#;
+    let ch1 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+  <h2 id="s1">Section One</h2><p>Hello</p>
+</body></html>"#;
+
+    let data = build_epub_with_files(
+        opf,
+        &[("Text/ch1.xhtml", ch1)],
+        &[("OEBPS/nav.xhtml", nav.as_bytes())],
+    );
+    let tmp = write_temp_epub(&data);
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
+
+    // TOC should contain href with fragment
+    let toc = result.toc.expect("should have TOC from nav");
+    assert_eq!(toc.len(), 1);
+    assert_eq!(toc[0].href.as_deref(), Some("OEBPS/Text/ch1.xhtml#s1"));
+    assert_eq!(toc[0].title, "Section 1");
+}
+
+#[test]
+fn epub2_ncx_href_with_anchor_maps_to_chapter() {
+    let opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="2.0" xmlns="http://www.idpf.org/2007/opf">
+  <manifest>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    <item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch2"/>
+  </spine>
+</package>"#;
+    let ncx = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <navMap>
+    <navPoint id="np1">
+      <navLabel><text>Note</text></navLabel>
+      <content src="ch2.xhtml#note"/>
+    </navPoint>
+  </navMap>
+</ncx>"#;
+    let ch2 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+  <p id="note">Footnote text</p><p>Body</p>
+</body></html>"#;
+
+    let data = build_epub_with_files(
+        opf,
+        &[("ch2.xhtml", ch2)],
+        &[("OEBPS/toc.ncx", ncx.as_bytes())],
+    );
+    let tmp = write_temp_epub(&data);
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
+
+    let toc = result.toc.expect("should have TOC from ncx");
+    assert_eq!(toc.len(), 1);
+    assert_eq!(toc[0].href.as_deref(), Some("OEBPS/ch2.xhtml#note"));
+}
+
+#[test]
+fn epub_internal_footnote_link_is_preserved() {
+    let opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf">
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>"#;
+    let ch1 = r###"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+  <p>Text with a <a href="#note-1">1</a> footnote link.</p>
+  <p id="note-1">This is the footnote.</p>
+</body></html>"###;
+
+    let data = build_epub(opf, &[("ch1.xhtml", ch1)]);
+    let tmp = write_temp_epub(&data);
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
+
+    // Links should be extracted for the first paragraph
+    assert!(!result.chapter_links.is_empty());
+    let links = &result.chapter_links[0];
+    // First paragraph (index 0) should have the footnote link
+    let para_links = &links[0];
+    assert_eq!(para_links.len(), 1);
+    assert_eq!(para_links[0].href, "#note-1");
+}
+
+#[test]
+fn cover_xhtml_is_not_rendered_as_chapter_text() {
+    let opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf">
+  <manifest>
+    <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="cover"/>
+    <itemref idref="ch1"/>
+  </spine>
+</package>"#;
+    let cover_html = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+  <p>Cover</p>
+</body></html>"#;
+    let ch1 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+  <h1>Chapter One</h1><p>Actual text.</p>
+</body></html>"#;
+
+    let data = build_epub(opf, &[("cover.xhtml", cover_html), ("ch1.xhtml", ch1)]);
+    let tmp = write_temp_epub(&data);
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
+
+    // cover.xhtml should be skipped, only ch1 content should appear
+    assert_eq!(result.content.len(), 1);
+    assert!(result.content[0].contains("Actual text"));
+    assert!(!result.content[0].contains("Cover"));
+}
+
+#[test]
+fn svg_xml_noise_is_filtered() {
+    let opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf">
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>"#;
+    let ch1 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+  <p>Real paragraph.</p>
+  <p><?xml version="1.0" encoding="UTF-8"?></p>
+  <p><svg xmlns="http://www.w3.org/2000/svg" width="100"></svg></p>
+  <p>Another real paragraph.</p>
+</body></html>"#;
+
+    let data = build_epub(opf, &[("ch1.xhtml", ch1)]);
+    let tmp = write_temp_epub(&data);
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
+
+    // XML/SVG noise paragraphs should be filtered out
+    assert_eq!(result.content.len(), 1);
+    let text = &result.content[0];
+    assert!(text.contains("Real paragraph"));
+    assert!(text.contains("Another real paragraph"));
+    assert!(!text.contains("<?xml"));
+    assert!(!text.contains("<svg"));
+}
+
+#[test]
+fn non_cover_inline_image_is_preserved() {
+    let opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf">
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="img1" href="images/illustration.jpg" media-type="image/jpeg"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>"#;
+    let ch1 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+  <h1>Illustrated Chapter</h1>
+  <p>Before the image.</p>
+  <img src="images/illustration.jpg" alt="An illustration" />
+  <p>After the image.</p>
+</body></html>"#;
+
+    let data = build_epub_with_files(
+        opf,
+        &[("ch1.xhtml", ch1)],
+        &[("OEBPS/images/illustration.jpg", b"fake-jpeg")],
+    );
+    let tmp = write_temp_epub(&data);
+    let result = EpubParser::new()
+        .parse(tmp.path().to_str().unwrap())
+        .unwrap();
+
+    // Image should be preserved in the chapter
+    assert_eq!(result.chapter_image_blocks.len(), 1);
+    assert!(!result.chapter_image_blocks[0].is_empty());
+    assert_eq!(result.image_assets.len(), 1);
+    assert!(result.image_assets[0].asset_path.contains("illustration"));
+}

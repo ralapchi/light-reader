@@ -33,6 +33,7 @@ pub struct TocItemDto {
     pub id: String,
     pub title: String,
     pub chapter_index: Option<usize>,
+    pub href: Option<String>,
     pub depth: usize,
     pub children: Vec<TocItemDto>,
 }
@@ -46,12 +47,21 @@ pub struct ReaderChapterDto {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ReaderAnchorDto {
+    pub chapter_id: String,
+    pub block_id: String,
+    pub char_offset: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SaveProgressDto {
     pub book_id: String,
     pub chapter_index: usize,
     pub progress_percent: f32,
     pub paragraph_index: Option<usize>,
     pub scroll_offset: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<ReaderAnchorDto>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -64,23 +74,63 @@ pub struct SearchHitDto {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ReaderTextLinkDto {
+    pub start: usize,
+    pub end: usize,
+    pub href: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ReaderBlockDto {
     #[serde(rename = "paragraph")]
     Paragraph {
         index: usize,
+        block_id: String,
         text: String,
         kind: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        links: Vec<ReaderTextLinkDto>,
+    },
+    #[serde(rename = "heading")]
+    Heading {
+        index: usize,
+        block_id: String,
+        text: String,
+        kind: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        links: Vec<ReaderTextLinkDto>,
+    },
+    #[serde(rename = "quote")]
+    Quote {
+        index: usize,
+        block_id: String,
+        text: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        links: Vec<ReaderTextLinkDto>,
     },
     #[serde(rename = "image")]
     Image {
         index: usize,
+        block_id: String,
         asset_id: String,
         alt_text: Option<String>,
         caption: Option<String>,
     },
     #[serde(rename = "separator")]
-    Separator,
+    Separator {
+        block_id: String,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ReaderResolvedLinkDto {
+    pub chapter_index: usize,
+    pub paragraph_index: Option<usize>,
+    pub block_index: Option<usize>,
+    pub scroll_offset: Option<f32>,
 }
 
 // ── TTS DTOs ────────────────────────────────────────────────

@@ -216,6 +216,8 @@ impl BookParser for TxtParser {
             cover_media_type: None,
             image_assets: Vec::new(),
             chapter_image_blocks: Vec::new(),
+            chapter_links: Vec::new(),
+            chapter_anchors: Vec::new(),
         })
     }
 }

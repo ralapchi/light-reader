@@ -5,6 +5,7 @@ EPUB 解析器模块
 */
 
 use crate::domain::book_metadata::BookMetadata;
+use crate::domain::paragraph::TextLink;
 use crate::domain::toc_item::TocItem;
 use crate::parser::epub_assets;
 use crate::parser::parsers::base::{BookParser, ParseResult};
@@ -14,6 +15,59 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use zip::ZipArchive;
+
+/// 判断标签是否为图片元素
+fn is_img_tag(name_lower: &[u8]) -> bool {
+    name_lower.starts_with(b"img")
+        || name_lower.ends_with(b":img")
+        || name_lower.ends_with(b"image")
+}
+
+/// 从标签属性中读取图片的 src 和 alt
+fn read_img_attrs(attrs: quick_xml::events::attributes::Attributes) -> (String, Option<String>) {
+    let mut src = String::new();
+    let mut alt = None;
+    for attr in attrs {
+        if let Ok(attr) = attr {
+            let an = attr.key.as_ref();
+            let an_lower = an.to_ascii_lowercase();
+            if an_lower.starts_with(b"src") || an_lower.starts_with(b"xlink:href") {
+                if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                    src = v.to_string();
+                }
+            } else if an_lower.starts_with(b"alt") {
+                if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                    if !v.trim().is_empty() {
+                        alt = Some(v.to_string());
+                    }
+                }
+            }
+        }
+    }
+    (src, alt)
+}
+
+/// 从元素属性中提取 id/name 锚点
+fn record_anchor(
+    attrs: quick_xml::events::attributes::Attributes,
+    anchors: &mut Vec<(String, usize)>,
+    para_index: usize,
+) {
+    for attr in attrs {
+        if let Ok(attr) = attr {
+            let an = attr.key.as_ref();
+            let an_lower = an.to_ascii_lowercase();
+            if an_lower.starts_with(b"id") || an_lower == b"name" {
+                if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                    let v = v.trim().to_string();
+                    if !v.is_empty() {
+                        anchors.push((v, para_index));
+                    }
+                }
+            }
+        }
+    }
+}
 
 /// EPUB 解析器
 ///
@@ -317,18 +371,30 @@ impl EpubParser {
         }
     }
 
-    /// 单次遍历 HTML，同时提取段落文本和图片位置。
-    /// 返回 (paragraphs, images_with_pos)，其中 pos == -1 表示图片在所有段落之前，
-    /// pos == N 表示图片在第 N 段之后。
+    /// 单次遍历 HTML，同时提取段落文本、图片位置、链接片段和锚点。
+    /// 返回 (paragraphs, images, paragraph_links, anchors)。
     fn extract_html_with_positions(
         &self,
         html: &str,
-    ) -> (Vec<String>, Vec<(isize, String, Option<String>)>) {
+    ) -> (
+        Vec<String>,
+        Vec<(isize, String, Option<String>)>,
+        Vec<Vec<TextLink>>,
+        Vec<(String, usize)>,
+    ) {
         let mut paragraphs: Vec<String> = Vec::new();
         let mut current_para = String::new();
         let mut text_indent = false;
         let mut images: Vec<(isize, String, Option<String>)> = Vec::new();
         let mut para_count: isize = 0;
+
+        let mut paragraph_links: Vec<Vec<TextLink>> = Vec::new();
+        let mut current_links: Vec<TextLink> = Vec::new();
+        let mut anchors: Vec<(String, usize)> = Vec::new();
+        let mut in_link = false;
+        let mut link_href = String::new();
+        let mut link_title: Option<String> = None;
+        let mut link_start: usize = 0;
 
         let mut reader = Reader::from_str(html);
         reader.config_mut().trim_text(true);
@@ -339,9 +405,15 @@ impl EpubParser {
                 Ok(Event::Start(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    if name.starts_with(&b"p"[..]) || name.starts_with(&b"div"[..]) {
+                    let name_lower = name.to_ascii_lowercase();
+
+                    // 提取锚点 id/name
+                    record_anchor(e.attributes(), &mut anchors, paragraphs.len());
+
+                    if name_lower == b"p" || name_lower == b"div" || name_lower == b"li" {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(current_para.clone());
+                            paragraph_links.push(std::mem::take(&mut current_links));
                         }
                         current_para.clear();
                         for attr in e.attributes() {
@@ -356,68 +428,124 @@ impl EpubParser {
                                 }
                             }
                         }
-                    } else if name.starts_with(&b"br"[..]) {
+                    } else if name_lower == b"br" || name_lower == b"hr" {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(current_para.clone());
+                            paragraph_links.push(std::mem::take(&mut current_links));
                         }
                         current_para.clear();
                         text_indent = false;
                         para_count += 1;
+                    } else if name_lower == b"a" {
+                        link_href.clear();
+                        link_title = None;
+                        for attr in e.attributes() {
+                            if let Ok(attr) = attr {
+                                let an = attr.key.as_ref();
+                                let an_lower = an.to_ascii_lowercase();
+                                if an_lower == b"href" {
+                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                                        let v = v.trim();
+                                        if !v.is_empty()
+                                            && !v.starts_with("javascript:")
+                                            && !v.starts_with("mailto:")
+                                            && !v.starts_with("http://")
+                                            && !v.starts_with("https://")
+                                        {
+                                            link_href = v.to_string();
+                                        }
+                                    }
+                                } else if an_lower == b"title" {
+                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                                        link_title = Some(v.trim().to_string());
+                                    }
+                                }
+                            }
+                        }
+                        if !link_href.is_empty() {
+                            in_link = true;
+                            link_start = current_para.chars().count();
+                        }
                     }
                 }
                 Ok(Event::Empty(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    let is_img = {
-                        let lower = name.to_ascii_lowercase();
-                        lower.starts_with(&b"img"[..])
-                            || lower.ends_with(&b":img"[..])
-                            || lower.ends_with(&b"image"[..])
-                    };
-                    if is_img {
-                        let mut src = String::new();
-                        let mut alt = None;
-                        for attr in e.attributes() {
-                            if let Ok(attr) = attr {
-                                let an = attr.key.as_ref();
-                                let an_lower = an.to_ascii_lowercase();
-                                if an_lower.starts_with(&b"src"[..])
-                                    || an_lower.starts_with(&b"xlink:href"[..])
-                                {
-                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
-                                        src = v.to_string();
-                                    }
-                                } else if an_lower.starts_with(&b"alt"[..]) {
-                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
-                                        if !v.trim().is_empty() {
-                                            alt = Some(v.to_string());
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    let name_lower = name.to_ascii_lowercase();
+
+                    // 提取锚点 id/name
+                    record_anchor(e.attributes(), &mut anchors, paragraphs.len());
+
+                    if is_img_tag(&name_lower) {
+                        let (src, alt) = read_img_attrs(e.attributes());
                         if !src.is_empty() {
                             images.push((para_count - 1, src, alt));
                         }
-                    } else if name.starts_with(&b"br"[..]) {
+                    } else if name_lower == b"br" || name_lower == b"hr" {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(current_para.clone());
+                            paragraph_links.push(std::mem::take(&mut current_links));
                         }
                         current_para.clear();
                         text_indent = false;
                         para_count += 1;
+                    } else if name_lower == b"a" {
+                        link_href.clear();
+                        link_title = None;
+                        for attr in e.attributes() {
+                            if let Ok(attr) = attr {
+                                let an = attr.key.as_ref();
+                                let an_lower = an.to_ascii_lowercase();
+                                if an_lower == b"href" {
+                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                                        let v = v.trim();
+                                        if !v.is_empty()
+                                            && !v.starts_with("javascript:")
+                                            && !v.starts_with("mailto:")
+                                            && !v.starts_with("http://")
+                                            && !v.starts_with("https://")
+                                        {
+                                            link_href = v.to_string();
+                                        }
+                                    }
+                                } else if an_lower == b"title" {
+                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                                        link_title = Some(v.trim().to_string());
+                                    }
+                                }
+                            }
+                        }
+                        if !link_href.is_empty() {
+                            in_link = true;
+                            link_start = current_para.chars().count();
+                        }
                     }
                 }
                 Ok(Event::End(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    if name.starts_with(&b"p"[..]) || name.starts_with(&b"div"[..]) {
+                    let name_lower = name.to_ascii_lowercase();
+                    if name_lower == b"p" || name_lower == b"div" || name_lower == b"li" {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(current_para.clone());
+                            paragraph_links.push(std::mem::take(&mut current_links));
                         }
                         current_para.clear();
                         text_indent = false;
                         para_count += 1;
+                    } else if name_lower == b"a" && in_link {
+                        let end = current_para.chars().count();
+                        if end > link_start {
+                            current_links.push(TextLink {
+                                start: link_start,
+                                end,
+                                href: link_href.clone(),
+                                title: link_title.clone(),
+                            });
+                        }
+                        in_link = false;
+                        link_href.clear();
+                        link_title = None;
                     }
                 }
                 Ok(Event::Text(ref e)) => {
@@ -437,18 +565,13 @@ impl EpubParser {
 
         if !current_para.trim().is_empty() {
             paragraphs.push(current_para);
+            paragraph_links.push(std::mem::take(&mut current_links));
         }
 
-        (paragraphs, images)
+        (paragraphs, images, paragraph_links, anchors)
     }
 
     /// 从 HTML 内容中提取标题
-    ///
-    /// # 参数
-    /// * `html` - HTML 内容
-    ///
-    /// # 返回值
-    /// * `String` - 提取的标题
     fn extract_title(&self, html: &str) -> String {
         let mut reader = Reader::from_str(html);
         reader.config_mut().trim_text(true);
@@ -926,6 +1049,75 @@ impl EpubParser {
         }
         current
     }
+
+    /// 判断 spine 项是否应被过滤（非正文内容）
+    fn is_non_body_spine_item(href: &str) -> bool {
+        let lower = href.to_lowercase();
+        let filename = lower.rsplit('/').next().unwrap_or(&lower);
+        let non_body_patterns = [
+            "nav.xhtml",
+            "nav.html",
+            "toc.xhtml",
+            "toc.html",
+            "toc.ncx",
+            "cover.xhtml",
+            "cover.html",
+            "coverpage.xhtml",
+            "cover-page.xhtml",
+            "titlepage.xhtml",
+            "title-page.xhtml",
+            "titlepage.html",
+            "title-page.html",
+            "copyright.xhtml",
+            "copyright-page.xhtml",
+            "imprint.xhtml",
+        ];
+        non_body_patterns.iter().any(|p| filename == *p)
+    }
+
+    /// 判断段落是否为 XML/SVG 噪声
+    fn is_xml_noise(text: &str) -> bool {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return false;
+        }
+        if trimmed.starts_with("<?xml")
+            || trimmed.starts_with("<svg")
+            || trimmed.starts_with("<html")
+            || trimmed.starts_with("<body")
+            || trimmed.starts_with("<metadata")
+        {
+            return true;
+        }
+        let tag_count = trimmed.matches('<').count();
+        let total = trimmed.chars().count();
+        if total > 0 && tag_count > 0 {
+            let ratio = tag_count as f64 / total as f64;
+            if ratio > 0.08 && total < 200 {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// 判断提取的文本是否为仅含孤立封面标记的空内容
+    fn is_cover_only_text(text: &str) -> bool {
+        let trimmed = text.trim();
+        let cover_labels = ["Cover", "COVER", "封面", "COVER PAGE"];
+        let is_only_cover_label = cover_labels.iter().any(|l| trimmed == *l);
+        if is_only_cover_label {
+            return true;
+        }
+        // 如果所有段落都是 XML 噪声，也视为空
+        if !trimmed.is_empty()
+            && trimmed
+                .split("\n\n")
+                .all(|p| p.trim().is_empty() || Self::is_xml_noise(p))
+        {
+            return true;
+        }
+        false
+    }
 }
 
 impl BookParser for EpubParser {
@@ -1030,10 +1222,17 @@ impl BookParser for EpubParser {
         let mut chapter_image_blocks: Vec<
             Vec<(isize, crate::domain::chapter_block::InlineImageBlock)>,
         > = Vec::new();
+        let mut chapter_links: Vec<Vec<Vec<TextLink>>> = Vec::new();
+        let mut chapter_anchors: Vec<Vec<(String, usize)>> = Vec::new();
         let mut image_asset_ids_by_path: HashMap<String, String> = HashMap::new();
 
         for idref in &spine_ids {
             if let Some(href) = manifest.get(idref.as_str()) {
+                // 过滤非正文 spine 项（nav, cover, titlepage 等）
+                if Self::is_non_body_spine_item(href) {
+                    warnings.push(format!("跳过非正文项: {}", href));
+                    continue;
+                }
                 let full_path = self.get_full_path(&opf_base_path, href);
                 // Read HTML content (release borrow on archive before image extraction)
                 let html_content = {
@@ -1044,12 +1243,45 @@ impl BookParser for EpubParser {
                     content
                 };
                 if !html_content.is_empty() {
-                    let (paragraphs, images_with_pos) =
+                    let (paragraphs, images_with_pos, paragraph_links, raw_anchors) =
                         self.extract_html_with_positions(&html_content);
-                    let text_content = paragraphs.join("\n\n");
-                    if !text_content.is_empty() {
+                    // 过滤 XML/SVG 噪声段落，同步更新链接和锚点索引
+                    let keep: Vec<bool> =
+                        paragraphs.iter().map(|p| !Self::is_xml_noise(p)).collect();
+                    let mut reindex: Vec<Option<usize>> = vec![None; paragraphs.len()];
+                    let mut next = 0usize;
+                    for (i, &k) in keep.iter().enumerate() {
+                        if k {
+                            reindex[i] = Some(next);
+                            next += 1;
+                        }
+                    }
+                    let filtered_paragraphs: Vec<String> = paragraphs
+                        .into_iter()
+                        .enumerate()
+                        .filter(|(i, _)| keep[*i])
+                        .map(|(_, p)| p)
+                        .collect();
+                    let filtered_links: Vec<Vec<TextLink>> = paragraph_links
+                        .into_iter()
+                        .enumerate()
+                        .filter(|(i, _)| keep[*i])
+                        .map(|(_, links)| links)
+                        .collect();
+                    let filtered_anchors: Vec<(String, usize)> = raw_anchors
+                        .into_iter()
+                        .filter_map(|(frag, old_idx)| {
+                            reindex
+                                .get(old_idx)
+                                .and_then(|&new_idx| new_idx.map(|n| (frag, n)))
+                        })
+                        .collect();
+                    let text_content = filtered_paragraphs.join("\n\n");
+                    if !text_content.is_empty() && !Self::is_cover_only_text(&text_content) {
                         content.push(text_content);
                         spine_hrefs.push(href.clone());
+                        chapter_links.push(filtered_links);
+                        chapter_anchors.push(filtered_anchors);
 
                         // Build image blocks from single-pass extraction
                         let mut img_blocks: Vec<(
@@ -1195,6 +1427,8 @@ impl BookParser for EpubParser {
             cover_media_type,
             image_assets,
             chapter_image_blocks,
+            chapter_links,
+            chapter_anchors,
         })
     }
 }

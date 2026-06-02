@@ -9,6 +9,7 @@ use crate::domain::book_load_info::BookLoadInfo;
 use crate::domain::book_metadata::BookMetadata;
 use crate::domain::chapter_builder::*;
 use crate::domain::error_codes;
+use crate::domain::paragraph::TextLink;
 use crate::domain::reading_progress::ReadingProgress;
 use crate::domain::toc_item::TocItem;
 use crate::parser::ParserFactory;
@@ -57,7 +58,18 @@ impl ReaderServiceImpl {
                     .get(index)
                     .cloned()
                     .unwrap_or_default();
-                build_chapter(index, &title, text, &img_blocks)
+                let href = result.spine_hrefs.get(index).map(|s| s.as_str());
+                let links: &[Vec<TextLink>] = result
+                    .chapter_links
+                    .get(index)
+                    .map(|l| l.as_slice())
+                    .unwrap_or(&[]);
+                let anchors = result
+                    .chapter_anchors
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_default();
+                build_chapter(index, &title, text, &img_blocks, href, links, anchors)
             })
             .collect::<Vec<_>>();
 

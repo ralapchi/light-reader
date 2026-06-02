@@ -66,6 +66,7 @@ export function useLoadingPage() {
           chapter_index: clamped,
           paragraph_index: saved?.paragraph_index ?? null,
           scroll_offset: saved?.scroll_offset ?? null,
+          anchor: saved?.anchor ?? null,
         })
       }
 

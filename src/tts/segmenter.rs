@@ -86,6 +86,7 @@ mod tests {
             kind: ParagraphKind::Body,
             indent_level: 0,
             source_line_hint: None,
+            links: Vec::new(),
         }];
         let segments = segment_chapter(0, &paras, 1000);
         assert_eq!(segments.len(), 1);
@@ -102,6 +103,7 @@ mod tests {
                 kind: ParagraphKind::Body,
                 indent_level: 0,
                 source_line_hint: None,
+                links: Vec::new(),
             },
             Paragraph {
                 index: 1,
@@ -109,6 +111,7 @@ mod tests {
                 kind: ParagraphKind::Body,
                 indent_level: 0,
                 source_line_hint: None,
+                links: Vec::new(),
             },
         ];
         let segments = segment_chapter(0, &paras, 100);
@@ -125,6 +128,7 @@ mod tests {
                 kind: ParagraphKind::Body,
                 indent_level: 0,
                 source_line_hint: None,
+                links: Vec::new(),
             },
             Paragraph {
                 index: 1,
@@ -132,6 +136,7 @@ mod tests {
                 kind: ParagraphKind::Body,
                 indent_level: 0,
                 source_line_hint: None,
+                links: Vec::new(),
             },
         ];
         let segments = segment_chapter(0, &paras, 40);
@@ -149,6 +154,7 @@ mod tests {
                 kind: ParagraphKind::Body,
                 indent_level: 0,
                 source_line_hint: None,
+                links: Vec::new(),
             },
             Paragraph {
                 index: 1,
@@ -156,6 +162,7 @@ mod tests {
                 kind: ParagraphKind::Body,
                 indent_level: 0,
                 source_line_hint: None,
+                links: Vec::new(),
             },
             Paragraph {
                 index: 2,
@@ -163,6 +170,7 @@ mod tests {
                 kind: ParagraphKind::Body,
                 indent_level: 0,
                 source_line_hint: None,
+                links: Vec::new(),
             },
             Paragraph {
                 index: 3,
@@ -170,6 +178,7 @@ mod tests {
                 kind: ParagraphKind::Body,
                 indent_level: 0,
                 source_line_hint: None,
+                links: Vec::new(),
             },
         ];
         let segments = segment_chapter(0, &paras, 100);
@@ -185,6 +194,7 @@ mod tests {
             kind: ParagraphKind::Body,
             indent_level: 0,
             source_line_hint: None,
+            links: Vec::new(),
         }];
         let segments = segment_chapter(0, &paras, 1000);
         assert_eq!(segments[0].char_count, 4);

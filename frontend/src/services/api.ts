@@ -36,14 +36,31 @@ export interface TocItemDto {
   id: string
   title: string
   chapter_index: number | null
+  href: string | null
   depth: number
   children: TocItemDto[]
 }
 
+export interface ReaderTextLinkDto {
+  start: number
+  end: number
+  href: string
+  title: string | null
+}
+
 export type ReaderBlockDto =
-  | { type: 'paragraph'; index: number; text: string; kind: string }
-  | { type: 'image'; index: number; asset_id: string; alt_text: string | null; caption: string | null }
-  | { type: 'separator' }
+  | { type: 'paragraph'; index: number; block_id: string; text: string; kind: string; links?: ReaderTextLinkDto[] }
+  | { type: 'heading'; index: number; block_id: string; text: string; kind: string; links?: ReaderTextLinkDto[] }
+  | { type: 'quote'; index: number; block_id: string; text: string; links?: ReaderTextLinkDto[] }
+  | { type: 'image'; index: number; block_id: string; asset_id: string; alt_text: string | null; caption: string | null }
+  | { type: 'separator'; block_id: string }
+
+export interface ReaderResolvedLinkDto {
+  chapter_index: number
+  paragraph_index: number | null
+  block_index: number | null
+  scroll_offset: number | null
+}
 
 export interface ReaderChapterDto {
   chapter_index: number
@@ -60,6 +77,12 @@ export interface TtsConfigDto {
   base_url: string | null
   model: string | null
   voice_id: string | null
+}
+
+export interface ReaderAnchor {
+  chapterId: string
+  blockId: string
+  charOffset: number
 }
 
 export interface ReaderSettings {
@@ -129,6 +152,7 @@ export interface SaveProgressDto {
   progress_percent: number
   paragraph_index?: number | null
   scroll_offset?: number | null
+  anchor?: ReaderAnchor | null
 }
 
 export function readerSaveProgress(progress: SaveProgressDto): Promise<void> {
@@ -137,6 +161,13 @@ export function readerSaveProgress(progress: SaveProgressDto): Promise<void> {
 
 export function readerGetProgress(bookId: string): Promise<SaveProgressDto | null> {
   return invoke('reader_get_progress', { bookId })
+}
+
+export function readerResolveHref(
+  href: string,
+  fromChapterIndex?: number,
+): Promise<ReaderResolvedLinkDto | null> {
+  return invoke('reader_resolve_href', { href, fromChapterIndex: fromChapterIndex ?? null })
 }
 
 // ── Search / Bookmarks ─────────────────────────────────────
@@ -293,4 +324,30 @@ export function onTtsError(cb: (p: TtsErrorEvent) => void): Promise<UnlistenFn> 
 export function assetUrl(path: string): string {
   if (!path) return ''
   return convertFileSrc(path)
+}
+
+// ── Block / Anchor Utilities ─────────────────────────────────
+
+/** Derive a stable block identifier from its type and index. */
+export function blockId(block: ReaderBlockDto): string {
+  if (block.type === 'separator') return 'separator'
+  return `${block.type}-${block.index}`
+}
+
+/** Serialize a ReaderAnchor to a compact cache key. */
+export function anchorKey(anchor: ReaderAnchor): string {
+  return `${anchor.chapterId}::${anchor.blockId}::${anchor.charOffset}`
+}
+
+/** Parse an anchor key back into a ReaderAnchor. */
+export function parseAnchorKey(key: string): ReaderAnchor | null {
+  const parts = key.split('::')
+  if (parts.length !== 3) return null
+  const charOffset = Number(parts[2])
+  if (!Number.isInteger(charOffset) || charOffset < 0) return null
+  return {
+    chapterId: parts[0],
+    blockId: parts[1],
+    charOffset,
+  }
 }

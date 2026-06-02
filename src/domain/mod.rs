@@ -12,6 +12,7 @@ pub mod core_state;
 pub mod library_item;
 pub mod paragraph;
 pub mod paragraph_kind;
+pub mod reader_anchor;
 pub mod reader_settings;
 pub mod reading_mode;
 pub mod reading_progress;

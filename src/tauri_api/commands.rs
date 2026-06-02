@@ -107,6 +107,7 @@ fn toc_to_dto(toc: &crate::domain::toc_item::TocItem) -> TocItemDto {
         id: toc.id.clone(),
         title: toc.title.clone(),
         chapter_index: toc.chapter_index,
+        href: toc.href.clone(),
         depth: toc.depth as usize,
         children: toc.children.iter().map(toc_to_dto).collect(),
     }
@@ -114,21 +115,66 @@ fn toc_to_dto(toc: &crate::domain::toc_item::TocItem) -> TocItemDto {
 
 fn block_to_dto(
     block: &crate::domain::chapter_block::ChapterBlock,
-    index: usize,
+    block_index: usize,
 ) -> ReaderBlockDto {
     match block {
         crate::domain::chapter_block::ChapterBlock::Paragraph(p) => ReaderBlockDto::Paragraph {
-            index,
+            index: p.index,
+            block_id: format!("p-{}", p.index),
             text: p.text.clone(),
             kind: format!("{:?}", p.kind).to_lowercase(),
+            links: p
+                .links
+                .iter()
+                .map(|l| ReaderTextLinkDto {
+                    start: l.start,
+                    end: l.end,
+                    href: l.href.clone(),
+                    title: l.title.clone(),
+                })
+                .collect(),
+        },
+        crate::domain::chapter_block::ChapterBlock::Heading(p) => ReaderBlockDto::Heading {
+            index: p.index,
+            block_id: format!("h-{}", p.index),
+            text: p.text.clone(),
+            kind: format!("{:?}", p.kind).to_lowercase(),
+            links: p
+                .links
+                .iter()
+                .map(|l| ReaderTextLinkDto {
+                    start: l.start,
+                    end: l.end,
+                    href: l.href.clone(),
+                    title: l.title.clone(),
+                })
+                .collect(),
+        },
+        crate::domain::chapter_block::ChapterBlock::Quote(p) => ReaderBlockDto::Quote {
+            index: p.index,
+            block_id: format!("q-{}", p.index),
+            text: p.text.clone(),
+            links: p
+                .links
+                .iter()
+                .map(|l| ReaderTextLinkDto {
+                    start: l.start,
+                    end: l.end,
+                    href: l.href.clone(),
+                    title: l.title.clone(),
+                })
+                .collect(),
         },
         crate::domain::chapter_block::ChapterBlock::Image(img) => ReaderBlockDto::Image {
-            index,
+            index: img.index,
+            block_id: format!("img-{}", img.index),
             asset_id: img.asset_id.clone(),
             alt_text: img.alt_text.clone(),
             caption: img.caption.clone(),
         },
-        crate::domain::chapter_block::ChapterBlock::Separator => ReaderBlockDto::Separator,
+        crate::domain::chapter_block::ChapterBlock::Separator => ReaderBlockDto::Separator {
+            block_id: format!("sep-{}", block_index),
+        },
     }
 }
 
@@ -434,6 +480,112 @@ pub fn reader_get_chapter(
     })
 }
 
+/// Resolve an EPUB href (optionally with fragment) to chapter_index and paragraph_index.
+#[tauri::command]
+pub fn reader_resolve_href(
+    href: String,
+    from_chapter_index: Option<usize>,
+    state: tauri::State<'_, ReaderSession>,
+) -> Result<Option<ReaderResolvedLinkDto>, String> {
+    let guard = state.lock().map_err(|e| e.to_string())?;
+    let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
+    let (file_part, fragment) = match href.split_once('#') {
+        Some((f, frag)) => (f.to_string(), Some(frag.to_string())),
+        None => (href.clone(), None),
+    };
+
+    if file_part.is_empty() {
+        let chapter_index = from_chapter_index.unwrap_or(0);
+        if chapter_index >= book.chapters.len() {
+            return Ok(None);
+        }
+        let paragraph_index = fragment.as_ref().and_then(|fragment| {
+            book.chapters[chapter_index]
+                .anchors
+                .iter()
+                .find(|(id, _)| id == fragment)
+                .map(|(_, pi)| *pi)
+        });
+        return Ok(Some(ReaderResolvedLinkDto {
+            chapter_index,
+            paragraph_index,
+            block_index: paragraph_index,
+            scroll_offset: None,
+        }));
+    }
+
+    // Normalize file part: take just the filename for matching
+    let target_file = file_part.rsplit('/').next().unwrap_or(&file_part);
+    // Guard against bare "/" or empty file paths
+    if target_file.is_empty() {
+        return Ok(None);
+    }
+
+    // 1. Find the chapter by matching source_href ending
+    let chapter_index = book.chapters.iter().position(|ch| {
+        ch.source_href
+            .as_ref()
+            .map(|h| {
+                h == &file_part || h.ends_with(&format!("/{}", target_file)) || h == target_file
+            })
+            .unwrap_or(false)
+    });
+
+    let chapter_index = match chapter_index {
+        Some(ci) => ci,
+        None => {
+            // Fallback: match by href filename only (for EPUBs where paths are inconsistent)
+            match book.chapters.iter().position(|ch| {
+                ch.source_href
+                    .as_ref()
+                    .map(|h| {
+                        let ch_file = h.rsplit('/').next().unwrap_or(h);
+                        ch_file == target_file
+                    })
+                    .unwrap_or(false)
+            }) {
+                Some(ci) => ci,
+                None => {
+                    // Try from_chapter_index as base for fragment-only hrefs
+                    if file_part.is_empty() || href.starts_with('#') {
+                        from_chapter_index.unwrap_or(0)
+                    } else {
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+    };
+
+    // 2. If no fragment, just return chapter_index
+    let fragment = match fragment {
+        Some(f) => f,
+        None => {
+            return Ok(Some(ReaderResolvedLinkDto {
+                chapter_index,
+                paragraph_index: None,
+                block_index: None,
+                scroll_offset: None,
+            }));
+        }
+    };
+
+    // 3. Look up the anchor within the chapter
+    let chapter = &book.chapters[chapter_index];
+    let paragraph_index = chapter
+        .anchors
+        .iter()
+        .find(|(id, _)| id == &fragment)
+        .map(|(_, pi)| *pi);
+
+    Ok(Some(ReaderResolvedLinkDto {
+        chapter_index,
+        paragraph_index,
+        block_index: paragraph_index, // blocks are 1:1 with paragraphs in current model
+        scroll_offset: None,
+    }))
+}
+
 /// Get a chapter image as a base64 data URI by its asset_id.
 /// On cache miss, extracts from EPUB on-demand.
 #[tauri::command]
@@ -597,6 +749,11 @@ pub fn reader_save_progress(progress: SaveProgressDto) -> Result<(), String> {
             .map(|p| p.session_read_seconds)
             .unwrap_or(0),
         total_read_seconds: existing.as_ref().map(|p| p.total_read_seconds).unwrap_or(0),
+        anchor: progress.anchor.map(|a| crate::domain::reader_anchor::ReaderAnchor {
+            chapter_id: a.chapter_id,
+            block_id: a.block_id,
+            char_offset: a.char_offset,
+        }),
     };
     ReaderServiceImpl::persist_progress(&rp.book_id, &rp, None, 0);
 
@@ -624,6 +781,11 @@ pub fn reader_get_progress(book_id: String) -> Option<SaveProgressDto> {
         progress_percent: rp.progress_percent,
         paragraph_index: rp.paragraph_index,
         scroll_offset: Some(rp.scroll_offset),
+        anchor: rp.anchor.map(|a| ReaderAnchorDto {
+            chapter_id: a.chapter_id,
+            block_id: a.block_id,
+            char_offset: a.char_offset,
+        }),
     })
 }
 
