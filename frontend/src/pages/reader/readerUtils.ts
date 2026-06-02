@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react'
 import type { TocItemDto, ReaderBlockDto, ReaderAnchor } from '../../services/api'
 import type { TwoPageNav } from './ReaderContent'
 
@@ -167,56 +166,3 @@ export function scrollToAnchor(container: HTMLElement, anchor: ReaderAnchor): vo
   container.style.scrollBehavior = prev
 }
 
-/** Return the height of the text layer (.pg-l .tx) for pagination measurements. */
-export function getUsableHeight(container: HTMLElement): number {
-  const textLayer = container.querySelector('.pg-l .tx') as HTMLElement | null
-  if (!textLayer) return container.clientHeight - 80 // fallback
-  return textLayer.getBoundingClientRect().height
-}
-
-/**
- * Imperatively measure a single block's rendered height in pixels.
- *
- * Creates an off-screen DOM node, applies all text-affecting CSS,
- * renders the block content, and reads getBoundingClientRect().height.
- * Returns 0 if called outside a browser environment.
- */
-export function measureBlockHeight(
-  block: ReaderBlockDto,
-  contentStyle: CSSProperties,
-  paragraphStyle: CSSProperties,
-  textLayerWidth: number,
-): number {
-  if (typeof document === 'undefined') return 0
-
-  if (block.type === 'separator') return 32
-  if (block.type === 'image') return 260
-
-  const text = 'text' in block ? block.text : ''
-  if (!text) return 0
-
-  // Replicate the real DOM structure: .tx > .reader-paragraph
-  // CSS classes apply real styles (text-align:justify etc.) automatically
-  const tx = document.createElement('div')
-  tx.className = 'tx'
-  Object.assign(tx.style, contentStyle, {
-    position: 'absolute',
-    left: '-9999px',
-    top: '0',
-    width: `${textLayerWidth}px`,
-    visibility: 'hidden',
-  })
-
-  const para = document.createElement('div')
-  para.className = block.type === 'heading' ? 'reader-heading' : 'reader-paragraph'
-  Object.assign(para.style, paragraphStyle)
-  para.textContent = text
-
-  tx.appendChild(para)
-  document.body.appendChild(tx)
-
-  const height = tx.getBoundingClientRect().height
-
-  document.body.removeChild(tx)
-  return height
-}
