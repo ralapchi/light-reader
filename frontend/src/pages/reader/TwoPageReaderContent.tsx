@@ -285,12 +285,14 @@ export default function TwoPageReaderContent({
       setExtraChapters([])
       setSpreadIndex(0)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapter?.chapter_index])
 
   useEffect(() => {
     totalSpreadsRef.current = totalSpreads
     if (spreadIndex < totalSpreads) return
     requestAnimationFrame(() => setSpreadIndex(Math.max(0, totalSpreads - 1)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalSpreads])
 
   useEffect(() => {
