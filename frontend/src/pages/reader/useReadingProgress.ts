@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { readerSaveProgress } from '../../services/api'
-import type { ReaderBookDto, ReaderAnchor } from '../../services/api'
+import type { ReaderBookDto, ReaderAnchor, ReadingMode } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import { findVisibleParagraphIndex, findVisibleParagraphTwoPage, captureReaderAnchor } from './readerUtils'
-import type { TwoPageNav } from './ReaderContent'
+import type { TwoPageNav } from './TwoPageReaderContent'
 
 export function useReadingProgress(
   bookId: string | undefined,
   book: ReaderBookDto | null,
   currentChapterIndex: number,
   contentRef: React.RefObject<HTMLDivElement | null>,
-  readingMode?: string,
+  readingMode?: ReadingMode,
+  twoPageNavRef?: React.RefObject<TwoPageNav | null>,
 ) {
   const { setProgressPercent } = useAppStore()
   const progressPercent = useAppStore(s => s.reader.progressPercent)
@@ -38,7 +39,7 @@ export function useReadingProgress(
 
     if (twoPage) {
       paraIndex = findVisibleParagraphTwoPage(el)
-      const nav = (el as HTMLDivElement & { __twoPageNav?: TwoPageNav }).__twoPageNav
+      const nav = twoPageNavRef?.current ?? null
       const spreadIdx = nav ? nav.spreadIndex : 0
       const totalSpreads = nav ? nav.spreadCount : 1
       const visibleChapterIndex = nav?.currentChapterIndex ?? currentChapterIndex

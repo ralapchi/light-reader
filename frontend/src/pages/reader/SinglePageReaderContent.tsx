@@ -35,9 +35,9 @@ export default function SinglePageReaderContent({
 
   return (
     <div className="reader-content" ref={contentRef} onScroll={handleScroll}>
-      <div className="book" style={{ maxWidth: `${contentWidth}px` }}>
-        <div className="pg pg-l">
-          <div className="tx" style={contentStyle}>
+      <div className="reader-book" style={{ maxWidth: `${contentWidth}px` }}>
+        <div className="reader-page reader-page-l">
+          <div className="reader-page-text" style={contentStyle}>
             {chapter && <h1 className="chapter-title">{chapter.title}</h1>}
             {(chapter?.blocks ?? []).map((block, i) => (
               <div className="reader-block-shell" key={blockKey(block, i)}>

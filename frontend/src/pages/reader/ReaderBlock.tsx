@@ -1,13 +1,8 @@
 import type { CSSProperties } from 'react'
 import type { ReaderBlockDto, ReaderTextLinkDto } from '../../services/api'
 
-type ReaderBlockViewDto = ReaderBlockDto & {
-  __fragmentIsStart?: boolean
-  __fragmentIsEnd?: boolean
-}
-
 interface ReaderBlockProps {
-  block: ReaderBlockViewDto
+  block: ReaderBlockDto
   imageCache: Record<string, string>
   paragraphStyle?: CSSProperties
   highlight?: boolean
@@ -86,14 +81,9 @@ export default function ReaderBlock({ block, imageCache, paragraphStyle, highlig
     )
   }
 
-  const paragraphClass = block.__fragmentIsStart === false ? 'continuation' : 'indent'
-  const cls = `reader-paragraph ${paragraphClass}${highlight ? ' tts-highlight' : ''}`
-  const style = {
-    ...paragraphStyle,
-    ...(block.__fragmentIsEnd === false ? { marginBottom: 0 } : {}),
-  }
+  const cls = `reader-paragraph indent${highlight ? ' tts-highlight' : ''}`
   return (
-    <p className={cls} style={style} data-para-index={block.index}>
+    <p className={cls} style={paragraphStyle} data-para-index={block.index}>
       {renderLinkedText(block.text, block.links ?? [], onLinkClick)}
     </p>
   )

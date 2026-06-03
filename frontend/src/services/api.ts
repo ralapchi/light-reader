@@ -85,6 +85,8 @@ export interface ReaderAnchor {
   charOffset: number
 }
 
+export type ReadingMode = 'ChapterScroll' | 'TwoPage'
+
 export interface ReaderSettings {
   theme: string
   app_theme: string
@@ -95,7 +97,7 @@ export interface ReaderSettings {
   content_width: number
   side_margin: number
   toc_width: number
-  reading_mode: string
+  reading_mode: ReadingMode
   auto_save_progress: boolean
   show_status_bar: boolean
   show_chapter_progress: boolean

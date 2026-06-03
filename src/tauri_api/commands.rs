@@ -716,7 +716,8 @@ pub fn reader_go_to_chapter(
 }
 
 #[tauri::command]
-pub fn reader_save_progress(progress: SaveProgressDto) -> Result<(), String> {
+pub fn reader_save_progress(mut progress: SaveProgressDto) -> Result<(), String> {
+    progress.progress_percent = progress.progress_percent.clamp(0.0, 1.0);
     log::info!(
         "保存进度: book={}, ch={}, pct={:.0}%",
         progress.book_id,
@@ -988,14 +989,18 @@ pub fn tts_config_save(config: TtsConfigDto) -> Result<(), String> {
 #[tauri::command]
 pub fn asset_read_file(path: String) -> Result<Option<String>, String> {
     let requested = std::path::Path::new(&path);
-    if !requested.exists() {
-        return Ok(None);
-    }
-    let canonical = std::fs::canonicalize(requested).map_err(|e| e.to_string())?;
+    let canonical = match std::fs::canonicalize(requested) {
+        Ok(p) => p,
+        Err(_) => return Ok(None),
+    };
     crate::storage::paths::ensure_dirs().map_err(|e| e.to_string())?;
     let app_data = crate::storage::paths::app_data_dir();
     let allowed_root = std::fs::canonicalize(&app_data).map_err(|e| e.to_string())?;
-    if !canonical.starts_with(&allowed_root) {
+    let canon_comps: Vec<_> = canonical.components().collect();
+    let root_comps: Vec<_> = allowed_root.components().collect();
+    if canon_comps.len() < root_comps.len()
+        || canon_comps[..root_comps.len()] != root_comps[..]
+    {
         return Err("不允许读取应用数据目录之外的文件".to_string());
     }
     read_file_to_data_uri(canonical.to_str().unwrap_or(""))

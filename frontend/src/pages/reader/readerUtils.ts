@@ -1,5 +1,5 @@
 import type { TocItemDto, ReaderBlockDto, ReaderAnchor } from '../../services/api'
-import type { TwoPageNav } from './ReaderContent'
+import type { TwoPageNav } from './TwoPageReaderContent'
 
 export function flattenToc(items: TocItemDto[]): TocItemDto[] {
   const out: TocItemDto[] = []
@@ -63,8 +63,7 @@ export function findVisibleParagraphTwoPage(container: HTMLElement): number | nu
 }
 
 /** Two-page mode: navigate to the spread containing the paragraph. */
-export function scrollToParagraphTwoPage(container: HTMLElement, paraIndex: number) {
-  const nav = (container as HTMLDivElement & { __twoPageNav?: TwoPageNav }).__twoPageNav
+export function scrollToParagraphTwoPage(_container: HTMLElement, paraIndex: number, nav?: TwoPageNav | null) {
   if (nav) {
     nav.recalcSpreads()
     const spread = nav.findSpreadByParagraph(paraIndex)

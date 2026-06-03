@@ -10,7 +10,6 @@ pub struct AudioPlayer {
     sink: Sink,
 }
 
-#[allow(dead_code)]
 impl AudioPlayer {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let (stream, stream_handle) = OutputStream::try_default()?;
@@ -65,6 +64,7 @@ impl AudioPlayer {
     }
 
     /// Number of audio sources still queued.
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.sink.len()
     }

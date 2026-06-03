@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
-import { findReaderTheme, readerFontFamily } from '../utils/readerOptions'
 import { useSettingsPersistence } from '../hooks/useSettingsPersistence'
 import type { ReaderSettings } from '../services/api'
 import { useReaderSearch } from './reader/useReaderSearch'
@@ -9,8 +8,12 @@ import { useChapterNavigation } from './reader/useChapterNavigation'
 import { useReadingProgress } from './reader/useReadingProgress'
 import { useBookmarks } from './reader/useBookmarks'
 import { useTtsReader } from './reader/useTtsReader'
-import { captureVisibleParagraph, flattenToc, scrollToParagraph, scrollToParagraphTwoPage } from './reader/readerUtils'
+import { captureVisibleParagraph, flattenToc } from './reader/readerUtils'
+import { useReaderKeyboard } from './reader/useReaderKeyboard'
+import { useReaderStyles } from './reader/useReaderStyles'
+import { usePreservePositionOnModeChange } from './reader/usePreservePositionOnModeChange'
 import ReaderContent from './reader/ReaderContent'
+import type { TwoPageNav } from './reader/TwoPageReaderContent'
 import ReaderSearchPanel from './reader/ReaderSearchPanel'
 import ReaderSettingsControls, { type SettingsPanel } from './reader/ReaderSettingsControls'
 import ReaderStatusBar from './reader/ReaderStatusBar'
@@ -23,8 +26,8 @@ const TWO_PAGE_MIN_WIDTH = 960
 function ReaderPage() {
   const { bookId } = useParams<{ bookId: string }>()
   const contentRef = useRef<HTMLDivElement>(null)
+  const twoPageNavRef = useRef<TwoPageNav | null>(null)
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null)
-  const [layoutAnchorParagraph, setLayoutAnchorParagraph] = useState<number | null>(null)
   const [winW, setWinW] = useState(() => window.innerWidth)
 
   const { reader, toggleToc, closeToc } = useAppStore()
@@ -40,30 +43,11 @@ function ReaderPage() {
   const isTwoPageAvailable = winW >= TWO_PAGE_MIN_WIDTH
   const effectiveReadingMode = isTwoPageAvailable ? settings.reading_mode : 'ChapterScroll'
 
-  // Preserve reading position when layout mode changes due to resize
-  const prevModeRef = useRef(effectiveReadingMode)
-  useEffect(() => {
-    const prev = prevModeRef.current
-    prevModeRef.current = effectiveReadingMode
-    if (prev === effectiveReadingMode) return
-    const el = contentRef.current
-    if (!el) return
-    const captured = layoutAnchorParagraph ?? captureVisibleParagraph(el, prev === 'TwoPage')
-    if (captured == null) return
-    if (!layoutAnchorParagraph) setLayoutAnchorParagraph(captured)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const el2 = contentRef.current
-        if (!el2) return
-        if (effectiveReadingMode === 'TwoPage') scrollToParagraphTwoPage(el2, captured)
-        else scrollToParagraph(el2, captured)
-      })
-    })
-  }, [effectiveReadingMode, layoutAnchorParagraph])
+  const { layoutAnchorParagraph, setLayoutAnchorParagraph } = usePreservePositionOnModeChange(effectiveReadingMode, contentRef, twoPageNavRef)
 
   const search = useReaderSearch()
-  const navigation = useChapterNavigation(bookId, book, contentRef, search.handleClose, effectiveReadingMode)
-  const progress = useReadingProgress(bookId, book, currentChapterIndex, contentRef, effectiveReadingMode)
+  const navigation = useChapterNavigation(bookId, book, contentRef, search.handleClose, effectiveReadingMode, twoPageNavRef)
+  const progress = useReadingProgress(bookId, book, currentChapterIndex, contentRef, effectiveReadingMode, twoPageNavRef)
   const bookmarks = useBookmarks(bookId, currentChapterIndex, contentRef)
   const { toggleBookmark } = bookmarks
   const ttsReader = useTtsReader(contentRef)
@@ -78,44 +62,14 @@ function ReaderPage() {
     updateAndSave(partial)
   }
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
-        e.preventDefault()
-        toggleBookmark()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [toggleBookmark])
+  useReaderKeyboard(toggleBookmark)
 
   const flatToc = useMemo(() => book ? flattenToc(book.toc) : [], [book])
   const chapterTitle = currentChapter?.title ?? ''
   const progressDisplay = `${Math.round(progressPercent * 100)}%`
 
   const isOriginal = settings.theme === 'original'
-  const currentTheme = findReaderTheme(settings.theme)
-  const readerStyle = useMemo(() => ({
-    '--bg': currentTheme.bg,
-    '--text-primary': currentTheme.text,
-    '--accent': currentTheme.accent,
-    '--border': currentTheme.border,
-    '--surface': currentTheme.surface,
-    '--text-secondary': currentTheme.textSec,
-    '--text-tertiary': currentTheme.textTer,
-    '--surface-hover': currentTheme.hover,
-    '--accent-soft': currentTheme.accentSoft,
-  } as CSSProperties), [currentTheme])
-
-  const contentStyle = useMemo<CSSProperties>(() => isOriginal ? {} : {
-    fontFamily: readerFontFamily(settings.font_family),
-    fontSize: `${settings.font_size}px`,
-    lineHeight: settings.line_height,
-  }, [isOriginal, settings.font_family, settings.font_size, settings.line_height])
-
-  const paragraphStyle = useMemo<CSSProperties>(() => isOriginal ? {} : {
-    marginBottom: `${settings.paragraph_spacing}em`,
-  }, [isOriginal, settings.paragraph_spacing])
+  const { readerStyle, contentStyle, paragraphStyle } = useReaderStyles(settings, isOriginal)
 
   const handleLinkClick = (href: string) => {
     navigation.navigateToHref(href)
@@ -173,6 +127,7 @@ function ReaderPage() {
         highlightedParagraphIndex={tts.paragraph_indices[0]}
         imageCache={navigation.imageCache}
         initialParagraphIndex={layoutAnchorParagraph}
+        twoPageNavRef={twoPageNavRef}
         onScroll={progress.handleScroll}
         onLinkClick={handleLinkClick}
         paragraphStyle={paragraphStyle}

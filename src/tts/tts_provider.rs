@@ -2,7 +2,7 @@ use crate::tts::config::TtsConfig;
 use crate::tts::types::{TtsProviderKind, TtsRequest, TtsResponse};
 
 #[derive(Debug)]
-#[allow(dead_code)]
+#[allow(dead_code)] // RateLimited, TextTooLong, AudioDecodeError are future-proofing for multi-provider support
 pub enum TtsError {
     HttpError(String),
     AuthError(String),
@@ -44,7 +44,7 @@ impl TtsError {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] // max_text_length not yet wired up (hardcoded in commands.rs); validate_config not yet called from service
 pub trait TtsProvider: Send + Sync {
     fn kind(&self) -> TtsProviderKind;
     fn validate_config(&self, config: &TtsConfig) -> Result<(), Vec<String>>;

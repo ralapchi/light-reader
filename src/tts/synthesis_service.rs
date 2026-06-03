@@ -18,10 +18,10 @@ fn provider_cache_label(config: &TtsConfig) -> String {
 
 pub struct TtsSynthesisService {
     providers: Vec<Box<dyn TtsProvider>>,
+    #[allow(dead_code)] // instance-based synthesize() not yet wired up; currently using static synthesize_blocking()
     cache: Arc<TtsCache>,
 }
 
-#[allow(dead_code)]
 impl TtsSynthesisService {
     pub fn new(cache_dir: PathBuf) -> Self {
         Self {
@@ -45,6 +45,7 @@ impl TtsSynthesisService {
 
     // ── Config validation ────────────────────────────────────
 
+    #[allow(dead_code)]
     pub fn validate_config(&self, config: &TtsConfig) -> Result<(), Vec<String>> {
         let provider = self
             .get_provider(config.provider.clone())
@@ -86,6 +87,7 @@ impl TtsSynthesisService {
         Ok(resp)
     }
 
+    #[allow(dead_code)] // not yet wired up; currently using static synthesize_blocking()
     pub fn synthesize(
         &self,
         request: &TtsRequest,
