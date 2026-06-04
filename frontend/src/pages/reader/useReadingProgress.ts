@@ -44,7 +44,7 @@ export function useReadingProgress(
       const totalSpreads = nav ? nav.spreadCount : 1
       const visibleChapterIndex = nav?.currentChapterIndex ?? currentChapterIndex
       spreadIndexRef.current = spreadIdx
-      const chapterPct = totalSpreads > 1 ? spreadIdx / (totalSpreads - 1) : 0
+      const chapterPct = nav?.currentChapterProgress ?? (totalSpreads > 1 ? spreadIdx / (totalSpreads - 1) : 0)
       bookPct = Math.min(1, (visibleChapterIndex + chapterPct) / book.chapter_count)
       scrollOffset = null
       saveProgress(bookPct, true, paraIndex, scrollOffset, visibleChapterIndex)
@@ -59,7 +59,7 @@ export function useReadingProgress(
       scrollOffset = scrollTop
     }
 
-    const anchor = readingMode !== 'TwoPage' ? captureReaderAnchor(el, currentChapterIndex) : null
+    const anchor = captureReaderAnchor(el, currentChapterIndex)
     saveProgress(bookPct, true, paraIndex, scrollOffset, currentChapterIndex, anchor)
   }, [book, currentChapterIndex, saveProgress, contentRef, readingMode])
 

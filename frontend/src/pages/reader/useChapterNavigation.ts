@@ -26,6 +26,12 @@ export function useChapterNavigation(
     closeToc,
   } = useAppStore()
   const currentChapterIndex = useAppStore(s => s.reader.currentChapterIndex)
+  const getNavigationChapterIndex = useCallback(() => {
+    if (readingMode === 'TwoPage') {
+      return twoPageNavRef?.current?.currentChapterIndex ?? currentChapterIndex
+    }
+    return currentChapterIndex
+  }, [currentChapterIndex, readingMode, twoPageNavRef])
 
   // ── Chapter image loading ──────────────────────────────
   const { imageCache, loadChapterImages } = useChapterImages(bookId)
@@ -97,8 +103,14 @@ export function useChapterNavigation(
   usePendingNavigationTarget(bookId, book, contentRef, readingMode, goToChapter, twoPageNavRef)
 
   const goBackToLibrary = useCallback(() => navigate('/'), [navigate])
-  const goToPreviousChapter = useCallback(() => currentChapterIndex > 0 && goToChapter(currentChapterIndex - 1), [currentChapterIndex, goToChapter])
-  const goToNextChapter = useCallback(() => book && currentChapterIndex < book.chapter_count - 1 && goToChapter(currentChapterIndex + 1), [book, currentChapterIndex, goToChapter])
+  const goToPreviousChapter = useCallback(() => {
+    const index = getNavigationChapterIndex()
+    if (index > 0) goToChapter(index - 1)
+  }, [getNavigationChapterIndex, goToChapter])
+  const goToNextChapter = useCallback(() => {
+    const index = getNavigationChapterIndex()
+    if (book && index < book.chapter_count - 1) goToChapter(index + 1)
+  }, [book, getNavigationChapterIndex, goToChapter])
 
   return {
     goToChapter,

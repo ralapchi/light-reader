@@ -20,6 +20,7 @@ interface ReaderContentProps {
   onScroll: () => void
   onLinkClick?: (href: string) => void
   onNavigate?: () => void
+  saveCurrentPosition?: () => void
   paragraphStyle: CSSProperties
   readingMode?: ReadingMode
 }
@@ -40,6 +41,7 @@ export default function ReaderContent(props: ReaderContentProps) {
         onPreviousChapter={props.onPreviousChapter}
         onLinkClick={props.onLinkClick}
         onNavigate={props.onNavigate}
+        saveCurrentPosition={props.saveCurrentPosition}
         paragraphStyle={props.paragraphStyle}
       />
     )

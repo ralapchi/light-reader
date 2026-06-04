@@ -451,6 +451,14 @@
   line-height: 1.4;
 }
 
+/* Align heading to line-height grid in two-page mode to prevent column clipping */
+.reader-content.two-page .reader-heading {
+  font-weight: 700;
+  line-height: 1.85;
+  margin-top: 0;
+  margin-bottom: 1.85em;
+}
+
 .reader-paragraph {
   color: var(--text-primary, #1A1A1A);
   text-align: justify;
@@ -501,7 +509,7 @@
 
 /* ── Bottom Status Bar ── */
 .status-bar {
-  height: 32px;
+  height: var(--status-bar-height, 32px);
   flex-shrink: 0;
   background: color-mix(in srgb, var(--bg, #FAF8F5) 88%, transparent);
   backdrop-filter: blur(8px);

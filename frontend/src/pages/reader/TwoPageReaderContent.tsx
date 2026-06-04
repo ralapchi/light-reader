@@ -1,4 +1,4 @@
-import { useCallback, type CSSProperties, type RefObject } from 'react'
+import { useCallback, useEffect, type CSSProperties, type RefObject } from 'react'
 import type { ReaderChapterDto } from '../../services/api'
 import ReaderBlock from './ReaderBlock'
 import { blockKey, blockParagraphIndex } from './readerUtils'
@@ -13,11 +13,12 @@ export interface TwoPageNav {
   spreadIndex: number
   spreadCount: number
   currentChapterIndex: number
+  currentChapterProgress: number
   innerRef: React.RefObject<HTMLDivElement | null>
 }
 
-const breakBeforeColumn = { breakBefore: 'column' } as CSSProperties
 const columnFillAuto = { columnFill: 'auto' } as CSSProperties
+const chapterGroupStyle = { height: '100%', overflow: 'hidden', flexShrink: 0 } as CSSProperties
 
 interface TwoPageReaderContentProps {
   chapter: ReaderChapterDto | null
@@ -32,6 +33,7 @@ interface TwoPageReaderContentProps {
   onPreviousChapter?: () => void
   onLinkClick?: (href: string) => void
   onNavigate?: () => void
+  saveCurrentPosition?: () => void
   paragraphStyle: CSSProperties
 }
 
@@ -48,6 +50,7 @@ export default function TwoPageReaderContent({
   onPreviousChapter,
   onLinkClick,
   onNavigate,
+  saveCurrentPosition,
   paragraphStyle,
 }: TwoPageReaderContentProps) {
   // ── Hooks ──────────────────────────────────────────────────
@@ -55,17 +58,24 @@ export default function TwoPageReaderContent({
   const { flowChapters, loadNextChapter, hasNextChapter, setExtraChapters } =
     useAdjacentChapterPreload(chapter, chapterCount)
 
-  const { scrollRef, chapterRefs, pageHeight, pageWidth, spineGap, chapterGaps, totalSpreads, totalSpreadsRef } =
+  const { scrollRef, chapterRefs, pageHeight, pageWidth, spineGap, chapterPageCounts, chapterContentPageCounts, chapterSpreadStarts, totalSpreads, totalSpreadsRef, statusBarHeight, isReady } =
     useTwoPageLayout(contentRef, contentStyle, flowChapters)
+
+  useEffect(() => {
+    const appEl = contentRef.current?.closest('.reader-app') as HTMLElement | null
+    if (!appEl) return
+    appEl.style.setProperty('--status-bar-height', `${statusBarHeight}px`)
+    return () => { appEl.style.setProperty('--status-bar-height', '32px') }
+  }, [statusBarHeight, contentRef])
 
   const { nextSpread, prevSpread } = useTwoPageNavigation(
     contentRef, scrollRef, totalSpreadsRef, pageWidth, spineGap, totalSpreads,
-    flowChapters, chapter, hasNextChapter, loadNextChapter,
+    flowChapters, chapter, chapterSpreadStarts, chapterContentPageCounts, hasNextChapter, loadNextChapter,
     setExtraChapters, twoPageNavRef,
-    onNextChapter, onPreviousChapter, onNavigate, initialParagraphIndex,
+    onNextChapter, onPreviousChapter, onNavigate, initialParagraphIndex, saveCurrentPosition,
   )
-
-  // ── Render ─────────────────────────────────────────────────
+  const spreadViewportWidth = pageWidth * 2 + spineGap
+  const spreadStep = (pageWidth + spineGap) * 2
 
   const handleSpreadClick = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.reader-link')) return
@@ -75,44 +85,66 @@ export default function TwoPageReaderContent({
     else if (x > rect.width * 0.8) nextSpread()
   }, [prevSpread, nextSpread])
 
+  if (!isReady) return (
+    <div className="reader-content two-page" ref={contentRef} onClick={handleSpreadClick}>
+      <div ref={scrollRef} style={{ width: `${spreadViewportWidth}px`, maxWidth: '100%', alignSelf: 'stretch', overflow: 'hidden' }} />
+    </div>
+  )
+
   return (
     <div className="reader-content two-page" ref={contentRef} onClick={handleSpreadClick}>
       <div
         ref={scrollRef}
-        style={{ flex: 1, alignSelf: 'stretch', overflow: 'hidden' }}
+        style={{ width: `${spreadViewportWidth}px`, maxWidth: '100%', alignSelf: 'stretch', overflow: 'hidden' }}
       >
         <div
-          className="reader-page-text"
+          className="reader-page-flow"
           style={{
-            ...contentStyle,
-            columnWidth: `${pageWidth}px`,
-            columnGap: `${spineGap}px`,
-            ...columnFillAuto,
+            display: 'flex',
+            alignItems: 'stretch',
             height: pageHeight,
-            overflow: 'visible',
+            width: `${Math.max(1, totalSpreads) * spreadStep}px`,
           }}
         >
           {flowChapters.map((ch, ci) => {
-            const needSpacer = ci > 0 && chapterGaps[ci - 1] != null && chapterGaps[ci - 1] > pageHeight
+            const pageCount = chapterPageCounts[ci] ?? 2
+            const chapterWidth = Math.max(1, pageCount) * (pageWidth + spineGap)
+            const chapterTextWidth = Math.max(1, pageCount) * pageWidth + Math.max(0, pageCount - 1) * spineGap
             return (
-            <div
-              key={ch.chapter_index}
-              ref={(el) => { chapterRefs.current[ci] = el }}
-              style={ci > 0 ? breakBeforeColumn : undefined}
-            >
-              {needSpacer && <div style={{ height: pageHeight }} />}
-              {ch.blocks.map((block, i) => (
-                <div className="reader-block-shell" key={blockKey(block, i)}>
-                  <ReaderBlock
-                    block={block}
-                    imageCache={imageCache}
-                    paragraphStyle={paragraphStyle}
-                    highlight={blockParagraphIndex(block) === highlightedParagraphIndex}
-                    onLinkClick={onLinkClick}
-                  />
+              <div
+                key={ch.chapter_index}
+                ref={(el) => { chapterRefs.current[ci] = el }}
+                data-chapter-index={ch.chapter_index}
+                style={{
+                  ...chapterGroupStyle,
+                  width: `${chapterWidth}px`,
+                }}
+              >
+                <div
+                  className="reader-page-text"
+                  style={{
+                    ...contentStyle,
+                    columnWidth: `${pageWidth}px`,
+                    columnGap: `${spineGap}px`,
+                    ...columnFillAuto,
+                    height: pageHeight,
+                    width: `${chapterTextWidth}px`,
+                    overflow: 'visible',
+                  }}
+                >
+                {ch.blocks.map((block, i) => (
+                  <div className="reader-block-shell" key={blockKey(block, i)}>
+                    <ReaderBlock
+                      block={block}
+                      imageCache={imageCache}
+                      paragraphStyle={paragraphStyle}
+                      highlight={blockParagraphIndex(block) === highlightedParagraphIndex}
+                      onLinkClick={onLinkClick}
+                    />
+                  </div>
+                ))}
                 </div>
-              ))}
-            </div>
+              </div>
             )
           })}
         </div>
