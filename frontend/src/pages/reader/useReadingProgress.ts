@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { readerSaveProgress } from '../../services/api'
 import type { ReaderBookDto, ReaderAnchor, ReadingMode } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
-import { findVisibleParagraphIndex, findVisibleParagraphTwoPage, captureReaderAnchor } from './readerUtils'
+import { findVisibleParagraphIndex, captureReaderAnchor } from './readerUtils'
 import type { TwoPageNav } from './TwoPageReaderContent'
 
 export function useReadingProgress(
@@ -15,7 +15,6 @@ export function useReadingProgress(
 ) {
   const { setProgressPercent } = useAppStore()
   const progressPercent = useAppStore(s => s.reader.progressPercent)
-  const spreadIndexRef = useRef(0)
 
   const saveProgress = useCallback((pct?: number, _force?: boolean, paragraphIndex?: number | null, scrollOffset?: number | null, chapterIndex?: number, anchor?: ReaderAnchor | null) => {
     if (!bookId) return
@@ -38,16 +37,14 @@ export function useReadingProgress(
     let scrollOffset: number | null
 
     if (twoPage) {
-      paraIndex = findVisibleParagraphTwoPage(el)
       const nav = twoPageNavRef?.current ?? null
       const spreadIdx = nav ? nav.spreadIndex : 0
       const totalSpreads = nav ? nav.spreadCount : 1
       const visibleChapterIndex = nav?.currentChapterIndex ?? currentChapterIndex
-      spreadIndexRef.current = spreadIdx
-      const chapterPct = nav?.currentChapterProgress ?? (totalSpreads > 1 ? spreadIdx / (totalSpreads - 1) : 0)
+      const chapterPct = totalSpreads > 1 ? spreadIdx / (totalSpreads - 1) : 0
       bookPct = Math.min(1, (visibleChapterIndex + chapterPct) / book.chapter_count)
-      scrollOffset = null
-      saveProgress(bookPct, true, paraIndex, scrollOffset, visibleChapterIndex)
+      console.log(`[saveCurrentPos] TwoPage visCh=${visibleChapterIndex} spread=${spreadIdx}/${totalSpreads} bookPct=${bookPct.toFixed(4)}`)
+      saveProgress(bookPct, true, null, null, visibleChapterIndex)
       return
     } else {
       const scrollTop = el.scrollTop
@@ -67,11 +64,20 @@ export function useReadingProgress(
   useEffect(() => { saveRef.current = saveCurrentPosition }, [saveCurrentPosition])
 
   useEffect(() => {
-    const onVisibility = () => { if (document.hidden) saveRef.current() }
-    const onBeforeUnload = () => saveRef.current()
+    const onVisibility = () => {
+      if (document.hidden) {
+        console.log(`[visibilitychange] hidden → save`)
+        saveRef.current()
+      }
+    }
+    const onBeforeUnload = () => {
+      console.log(`[beforeunload] → save`)
+      saveRef.current()
+    }
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => {
+      console.log(`[cleanup] unmount → save`)
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('beforeunload', onBeforeUnload)
       saveRef.current()
@@ -80,6 +86,7 @@ export function useReadingProgress(
 
   const handleScroll = useCallback(() => {
     if (readingMode === 'TwoPage') return
+    console.log(`[handleScroll] called in ${readingMode} mode — this should NOT happen in TwoPage`)
     const el = contentRef.current
     if (!el) return
     const scrollTop = el.scrollTop

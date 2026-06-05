@@ -135,7 +135,6 @@ function ReaderPage() {
         onNextChapter={navigation.goToNextChapter}
         onPreviousChapter={navigation.goToPreviousChapter}
         onNavigate={navigation.clearFootnoteReturn}
-        saveCurrentPosition={progress.saveCurrentPosition}
       />
 
       {navigation.footnoteReturn && (
