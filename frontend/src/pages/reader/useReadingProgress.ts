@@ -3,6 +3,7 @@ import { readerSaveProgress } from '../../services/api'
 import type { ReaderBookDto, ReadingMode } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import type { TwoPageNav } from './TwoPageReaderContent'
+import { chapterProgressPercent } from './readerProgressUtils'
 
 export function useReadingProgress(
   bookId: string | undefined,
@@ -15,11 +16,6 @@ export function useReadingProgress(
   const { setProgressPercent } = useAppStore()
   const progressPercent = useAppStore(s => s.reader.progressPercent)
 
-  const getChapterBookProgress = useCallback((chapterIndex: number, chapterCount: number) => {
-    if (chapterCount <= 0) return 0
-    return Math.min(1, Math.max(0, chapterIndex) / chapterCount)
-  }, [])
-
   const saveProgress = useCallback((pct?: number, _force?: boolean, _paragraphIndex?: number | null, _scrollOffset?: number | null, chapterIndex?: number) => {
     if (!bookId) return
     readerSaveProgress({
@@ -29,6 +25,7 @@ export function useReadingProgress(
       paragraph_index: null,
       scroll_offset: null,
       anchor: null,
+      clear_position: true,
     }).catch(() => { /* non-critical */ })
   }, [bookId, currentChapterIndex, progressPercent])
 
@@ -41,15 +38,15 @@ export function useReadingProgress(
     if (twoPage) {
       const nav = twoPageNavRef?.current ?? null
       const visibleChapterIndex = nav?.currentChapterIndex ?? currentChapterIndex
-      bookPct = getChapterBookProgress(visibleChapterIndex, book.chapter_count)
+      bookPct = chapterProgressPercent(visibleChapterIndex, book.chapter_count)
       saveProgress(bookPct, true, null, null, visibleChapterIndex)
       return
     } else {
-      bookPct = getChapterBookProgress(currentChapterIndex, book.chapter_count)
+      bookPct = chapterProgressPercent(currentChapterIndex, book.chapter_count)
     }
 
     saveProgress(bookPct, true, null, null, currentChapterIndex)
-  }, [book, currentChapterIndex, saveProgress, contentRef, readingMode, getChapterBookProgress])
+  }, [book, currentChapterIndex, saveProgress, contentRef, readingMode])
 
   const saveRef = useRef(saveCurrentPosition)
   useEffect(() => { saveRef.current = saveCurrentPosition }, [saveCurrentPosition])

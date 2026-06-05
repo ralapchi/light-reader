@@ -24,12 +24,13 @@ export function usePreservePositionOnModeChange(
     const captured = anchorRef.current ?? captureVisibleParagraph(el, prev === 'TwoPage')
     if (captured == null) return
     if (!anchorRef.current) setLayoutAnchorParagraph(captured)
-    afterLayoutSettled(() => {
+    const cancel = afterLayoutSettled(() => {
       const el2 = contentRef.current
       if (!el2) return
       if (effectiveReadingMode === 'TwoPage') scrollToParagraphTwoPage(el2, captured, twoPageNavRef.current)
       else scrollToParagraph(el2, captured)
     })
+    return cancel
   }, [effectiveReadingMode, contentRef, twoPageNavRef])
 
   return { layoutAnchorParagraph, setLayoutAnchorParagraph }

@@ -19,6 +19,7 @@ export function usePendingNavigationTarget(
   const currentChapterIndex = useAppStore(s => s.reader.currentChapterIndex)
 
   useEffect(() => {
+    const cancels: (() => void)[] = []
     const timer = window.setTimeout(() => {
       if (!book) {
         navigate(`/loading/${bookId}`)
@@ -32,46 +33,46 @@ export function usePendingNavigationTarget(
         if (alreadyLoaded) {
           if (readingMode === 'TwoPage') {
             if (pending.paragraph_index != null) {
-              afterNextPaint(() => {
+              cancels.push(afterNextPaint(() => {
                 const content = contentRef.current
                 if (!content) return
                 scrollToParagraphTwoPage(content, pending.paragraph_index!, twoPageNavRef?.current)
-              })
+              }))
             }
           } else if (pending.anchor) {
-            afterNextPaint(() => {
+            cancels.push(afterNextPaint(() => {
               const el = contentRef.current
               if (!el) return
               scrollToAnchor(el, pending.anchor!)
-            })
+            }))
           } else if (pending.scroll_offset && pending.scroll_offset > 0) {
-            afterLayoutSettled(() => {
+            cancels.push(afterLayoutSettled(() => {
               const el = contentRef.current
               if (!el) return
               scrollToOffset(el, pending.scroll_offset!)
-            })
+            }))
           } else if (pending.paragraph_index != null) {
-            afterNextPaint(() => {
+            cancels.push(afterNextPaint(() => {
               const content = contentRef.current
               if (!content) return
               scrollToParagraph(content, pending.paragraph_index!)
-            })
+            }))
           }
         } else {
           goToChapter(targetChapter, pending.scroll_offset, { saveProgress: false }).then(() => {
             if (pending.anchor && readingMode !== 'TwoPage') {
-              afterNextPaint(() => {
+              cancels.push(afterNextPaint(() => {
                 const content = contentRef.current
                 if (!content) return
                 scrollToAnchor(content, pending.anchor!)
-              })
+              }))
             } else if (pending.paragraph_index != null && (!pending.scroll_offset || pending.scroll_offset <= 0)) {
-              afterNextPaint(() => {
+              cancels.push(afterNextPaint(() => {
                 const content = contentRef.current
                 if (!content) return
                 if (readingMode === 'TwoPage') scrollToParagraphTwoPage(content, pending.paragraph_index!, twoPageNavRef?.current)
                 else scrollToParagraph(content, pending.paragraph_index!)
-              })
+              }))
             }
           })
         }
@@ -79,6 +80,9 @@ export function usePendingNavigationTarget(
         goToChapter(currentChapterIndex)
       }
     }, 0)
-    return () => window.clearTimeout(timer)
+    return () => {
+      window.clearTimeout(timer)
+      cancels.forEach(fn => fn())
+    }
   }, [book, bookId, currentChapter, currentChapterIndex, goToChapter, navigate, contentRef, readingMode])
 }

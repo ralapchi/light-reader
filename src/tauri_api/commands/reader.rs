@@ -369,20 +369,27 @@ pub fn reader_save_progress(mut progress: SaveProgressDto) -> Result<(), String>
     let same_chapter_existing = existing
         .as_ref()
         .filter(|p| p.chapter_index == progress.chapter_index);
+    let clear = progress.clear_position.unwrap_or(false);
     let no_position_supplied =
-        progress.paragraph_index.is_none() && progress.scroll_offset.is_none();
+        !clear && progress.paragraph_index.is_none() && progress.scroll_offset.is_none();
     let rp = ReadingProgress {
         book_id: progress.book_id.clone(),
         chapter_index: progress.chapter_index,
-        paragraph_index: if no_position_supplied {
+        paragraph_index: if clear {
+            None
+        } else if no_position_supplied {
             same_chapter_existing.and_then(|p| p.paragraph_index)
         } else {
             progress.paragraph_index
         },
-        scroll_offset: progress
-            .scroll_offset
-            .or_else(|| same_chapter_existing.map(|p| p.scroll_offset))
-            .unwrap_or(0.0),
+        scroll_offset: if clear {
+            0.0
+        } else {
+            progress
+                .scroll_offset
+                .or_else(|| same_chapter_existing.map(|p| p.scroll_offset))
+                .unwrap_or(0.0)
+        },
         progress_percent: progress.progress_percent,
         last_read_at: chrono::Utc::now().to_rfc3339(),
         session_read_seconds: existing
@@ -390,11 +397,15 @@ pub fn reader_save_progress(mut progress: SaveProgressDto) -> Result<(), String>
             .map(|p| p.session_read_seconds)
             .unwrap_or(0),
         total_read_seconds: existing.as_ref().map(|p| p.total_read_seconds).unwrap_or(0),
-        anchor: progress.anchor.map(|a| crate::domain::reader_anchor::ReaderAnchor {
-            chapter_id: a.chapter_id,
-            block_id: a.block_id,
-            char_offset: a.char_offset,
-        }),
+        anchor: if clear {
+            None
+        } else {
+            progress.anchor.map(|a| crate::domain::reader_anchor::ReaderAnchor {
+                chapter_id: a.chapter_id,
+                block_id: a.block_id,
+                char_offset: a.char_offset,
+            })
+        },
     };
     ReaderServiceImpl::persist_progress(&rp.book_id, &rp, None, 0);
 
@@ -427,5 +438,6 @@ pub fn reader_get_progress(book_id: String) -> Option<SaveProgressDto> {
             block_id: a.block_id,
             char_offset: a.char_offset,
         }),
+        clear_position: None,
     })
 }

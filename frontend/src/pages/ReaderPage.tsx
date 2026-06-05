@@ -66,11 +66,17 @@ function ReaderPage() {
   const ttsReader = useTtsReader(contentRef)
   const updateAndSave = useSettingsPersistence()
 
-  const handleUpdateSettings = (partial: Partial<ReaderSettings>) => {
+  const handleUpdateSettings = async (partial: Partial<ReaderSettings>) => {
     if (partial.reading_mode && partial.reading_mode !== effectiveReadingMode) {
       const el = contentRef.current
       setLayoutAnchorParagraph(el ? captureVisibleParagraph(el, effectiveReadingMode === 'TwoPage') : null)
       progress.saveCurrentPosition()
+      if (effectiveReadingMode === 'TwoPage' && partial.reading_mode === 'ChapterScroll') {
+        const visibleChapterIndex = twoPageNavRef.current?.currentChapterIndex ?? currentChapterIndex
+        if (visibleChapterIndex !== currentChapterIndex) {
+          await navigation.goToChapter(visibleChapterIndex, null, { saveProgress: false })
+        }
+      }
     }
     updateAndSave(partial)
   }

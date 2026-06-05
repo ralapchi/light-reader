@@ -19,6 +19,7 @@ export function useLoadingPage() {
   const [stageText, setStageText] = useState('准备中...')
   const [fallbackCover, setFallbackCover] = useState<string | null>(null)
   const openingRef = useRef(false)
+  const cancelledRef = useRef(false)
 
   useTauriEvent<BookOpeningProgress>('book-opening-progress', (payload) => {
     if (payload.book_id === bookId && payload.progress_text) {
@@ -35,6 +36,7 @@ export function useLoadingPage() {
   const openBook = useCallback(async () => {
     if (!bookId || openingRef.current) return
     openingRef.current = true
+    cancelledRef.current = false
 
     const book = books.find(b => b.book_id === bookId)
     if (opening.status === 'idle') {
@@ -48,13 +50,20 @@ export function useLoadingPage() {
         readerGetProgress(bookId),
       ])
 
+      if (cancelledRef.current) return
+
       const elapsed = Date.now() - startTime
       const remaining = Math.max(0, 600 - elapsed)
       if (remaining > 0) await new Promise(r => setTimeout(r, remaining))
 
+      if (cancelledRef.current) return
+
       const resumeChapter = saved?.chapter_index ?? 0
       const clamped = Math.min(resumeChapter, readerBook.chapter_count - 1)
       const chapter = await readerGetChapter(clamped)
+
+      if (cancelledRef.current) return
+
       setCurrentChapter(clamped, chapter)
       if (saved) {
         setProgressPercent(saved.progress_percent)
@@ -73,8 +82,10 @@ export function useLoadingPage() {
       setReaderBook(readerBook)
       navigate(`/reader/${bookId}`)
     } catch (e: unknown) {
-      setOpeningError(errorMessage(e))
-      openingRef.current = false
+      if (!cancelledRef.current) {
+        setOpeningError(errorMessage(e))
+        openingRef.current = false
+      }
     }
   }, [bookId, books, opening.status, startOpening, setOpeningError, setReaderBook, setCurrentChapter, setProgressPercent, navigate])
 
@@ -82,13 +93,17 @@ export function useLoadingPage() {
     const timer = window.setTimeout(() => {
       void openBook()
     }, 0)
-    return () => window.clearTimeout(timer)
+    return () => {
+      cancelledRef.current = true
+      window.clearTimeout(timer)
+    }
   }, [openBook])
 
   useEffect(() => {
     if (!opening.coverUrl && bookId) {
-      libraryCover(bookId).then(uri => {
-        if (uri) setFallbackCover(uri)
+      const currentBookId = bookId
+      libraryCover(currentBookId).then(uri => {
+        if (uri && bookId === currentBookId) setFallbackCover(uri)
       }).catch(() => {})
     }
   }, [bookId, opening.coverUrl])

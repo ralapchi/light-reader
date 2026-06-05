@@ -62,6 +62,10 @@ pub struct SaveProgressDto {
     pub scroll_offset: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anchor: Option<ReaderAnchorDto>,
+    /// When true, explicitly clear paragraph_index/scroll_offset/anchor
+    /// instead of falling back to existing saved values.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clear_position: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

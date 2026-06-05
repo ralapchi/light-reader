@@ -81,6 +81,7 @@ export function useTwoPageLayout(
 
   useEffect(() => {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
+    let cancelRaf: (() => void) | null = null
     const debouncedMeasure = () => {
       if (debounceTimer) clearTimeout(debounceTimer)
       debounceTimer = setTimeout(measureLayout, 100)
@@ -88,7 +89,7 @@ export function useTwoPageLayout(
 
     const initTimer = window.setTimeout(() => {
       document.fonts.ready.then(() => {
-        afterNextPaint(measureLayout)
+        cancelRaf = afterNextPaint(measureLayout)
       })
     }, 0)
 
@@ -99,6 +100,7 @@ export function useTwoPageLayout(
     return () => {
       window.clearTimeout(initTimer)
       if (debounceTimer) clearTimeout(debounceTimer)
+      cancelRaf?.()
       observer?.disconnect()
       window.removeEventListener('resize', debouncedMeasure)
     }

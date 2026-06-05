@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { readerGetChapter, readerSaveProgress } from '../../services/api'
@@ -28,6 +28,8 @@ export function useChapterNavigation(
     closeToc,
   } = useAppStore()
   const currentChapterIndex = useAppStore(s => s.reader.currentChapterIndex)
+  const rafCancelsRef = useRef<(() => void)[]>([])
+  useEffect(() => () => { rafCancelsRef.current.forEach(fn => fn()); rafCancelsRef.current = [] }, [])
   const getNavigationChapterIndex = useCallback(() => {
     if (readingMode === 'TwoPage') {
       return twoPageNavRef?.current?.currentChapterIndex ?? currentChapterIndex
@@ -59,7 +61,7 @@ export function useChapterNavigation(
           buildChapterOnlyProgress(bookId, index, book?.chapter_count ?? 0),
         ).catch(() => { /* non-critical */ })
       }
-      afterNextPaint(() => {
+      rafCancelsRef.current.push(afterNextPaint(() => {
         const el = contentRef.current
         if (!el) return
         if (readingMode === 'TwoPage' && scrollOffset == null) {
@@ -69,7 +71,7 @@ export function useChapterNavigation(
         } else {
           scrollToOffset(el, 0)
         }
-      })
+      }))
     } catch (e) {
       console.error('加载章节失败:', e)
     }
@@ -80,12 +82,12 @@ export function useChapterNavigation(
     handleCloseSearch()
     goToChapter(hit.chapter_index, null, { saveProgress: false }).then(() => {
       if (hit.paragraph_index != null) {
-        afterNextPaint(() => {
+        rafCancelsRef.current.push(afterNextPaint(() => {
           const content = contentRef.current
           if (!content) return
           if (readingMode === 'TwoPage') scrollToParagraphTwoPage(content, hit.paragraph_index, twoPageNavRef?.current)
           else scrollToParagraph(content, hit.paragraph_index)
-        })
+        }))
       }
     })
   }, [handleCloseSearch, goToChapter, contentRef, readingMode])

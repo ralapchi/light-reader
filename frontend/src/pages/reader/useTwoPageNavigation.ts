@@ -3,6 +3,7 @@ import { readerSaveProgress } from '../../services/api'
 import type { ReaderChapterDto } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import type { TwoPageNav, TwoPageVisibleChapter } from './TwoPageReaderContent'
+import { afterNextPaint } from './rafUtils'
 import { getChapterBookProgress, findFlowIndexForSpread, findNearestFilledSpread, buildFilledSpreadIndexes } from './twoPageCalcUtils'
 
 export function useTwoPageNavigation(
@@ -35,10 +36,6 @@ export function useTwoPageNavigation(
 
   const [currentChapterFlowIndex, setCurrentChapterFlowIndex] = useState(0)
   const currentChapterFlowIndexRef = useRef(0)
-  const setVisibleFlowIndex = useCallback((index: number) => {
-    currentChapterFlowIndexRef.current = index
-    setCurrentChapterFlowIndex(index)
-  }, [])
 
   const spreadIndexRef = useRef(spreadIndex)
   useEffect(() => { spreadIndexRef.current = spreadIndex }, [spreadIndex])
@@ -50,6 +47,26 @@ export function useTwoPageNavigation(
   useEffect(() => { flowChaptersRef.current = flowChapters }, [flowChapters])
   const chapterRef = useRef(chapter)
   useEffect(() => { chapterRef.current = chapter }, [chapter])
+
+  const getChapterIndexForFlowIndex = useCallback((index: number) => {
+    const chapters = flowChaptersRef.current
+    return chapters[index]?.chapter_index ?? chapterRef.current?.chapter_index ?? 0
+  }, [])
+
+  const syncNavVisibleChapter = useCallback((index: number) => {
+    const nav = twoPageNavRef.current
+    if (!nav) return
+    twoPageNavRef.current = {
+      ...nav,
+      currentChapterIndex: getChapterIndexForFlowIndex(index),
+    }
+  }, [getChapterIndexForFlowIndex, twoPageNavRef])
+
+  const setVisibleFlowIndex = useCallback((index: number) => {
+    currentChapterFlowIndexRef.current = index
+    syncNavVisibleChapter(index)
+    setCurrentChapterFlowIndex(index)
+  }, [syncNavVisibleChapter])
 
   const boundedSpreadIndex = Math.min(spreadIndex, totalSpreads - 1)
   const spreadStep = pageWidth * 2 + spineGap * 2
@@ -131,6 +148,7 @@ export function useTwoPageNavigation(
       paragraph_index: null,
       scroll_offset: null,
       anchor: null,
+      clear_position: true,
     }).catch(() => { /* non-critical */ })
   }, [])
 
@@ -225,6 +243,7 @@ export function useTwoPageNavigation(
     totalSpreadsRef.current = totalSpreads
     if (clampRafRef.current != null) cancelAnimationFrame(clampRafRef.current)
     clampRafRef.current = requestAnimationFrame(() => {
+      clampRafRef.current = null
       const freshTotal = totalSpreadsRef.current
       if (needsResetRef.current) {
         needsResetRef.current = false
@@ -235,6 +254,12 @@ export function useTwoPageNavigation(
         })
       }
     })
+    return () => {
+      if (clampRafRef.current != null) {
+        cancelAnimationFrame(clampRafRef.current)
+        clampRafRef.current = null
+      }
+    }
   }, [findNearestFilledSpreadLocal, totalSpreads, totalSpreadsRef])
 
   // ── Advance spread after next chapter loads ─────────────────
@@ -259,7 +284,8 @@ export function useTwoPageNavigation(
 
   useEffect(() => {
     if (totalSpreads - spreadIndex > 2 || !hasNextChapter) return
-    requestAnimationFrame(() => { loadNextChapter() })
+    const cancel = afterNextPaint(() => { loadNextChapter() })
+    return cancel
   }, [hasNextChapter, loadNextChapter, spreadIndex, totalSpreads])
 
   // ── Keyboard + wheel ───────────────────────────────────────
@@ -298,7 +324,7 @@ export function useTwoPageNavigation(
 
   useEffect(() => {
     if (initialParagraphIndex == null || totalSpreads <= 1) return
-    requestAnimationFrame(() => {
+    const cancel = afterNextPaint(() => {
       const spread = findSpreadByParagraph(initialParagraphIndex)
       if (spread != null) {
         currentChapterFlowIndexRef.current = findFlowIndexForSpreadLocal(spread)
@@ -308,6 +334,7 @@ export function useTwoPageNavigation(
         setSpreadIndex(0)
       }
     })
+    return cancel
   }, [initialParagraphIndex, totalSpreads, findSpreadByParagraph, goToSpread, findFlowIndexForSpreadLocal])
 
   return {

@@ -155,6 +155,7 @@ export interface SaveProgressDto {
   paragraph_index?: number | null
   scroll_offset?: number | null
   anchor?: ReaderAnchor | null
+  clear_position?: boolean
 }
 
 export function readerSaveProgress(progress: SaveProgressDto): Promise<void> {

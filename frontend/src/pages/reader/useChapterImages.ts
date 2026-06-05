@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { readerChapterImage } from '../../services/api'
 import type { ReaderBlockDto } from '../../services/api'
 
@@ -8,6 +8,17 @@ type ImageState = 'loading' | 'loaded' | 'failed'
 export function useChapterImages(bookId: string | undefined) {
   const [imageCache, setImageCache] = useState<Record<string, string>>({})
   const imageStateRef = useRef<Map<string, ImageState>>(new Map())
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+
+  useEffect(() => {
+    setImageCache({})
+    imageStateRef.current.clear()
+  }, [bookId])
 
   const loadChapterImages = useCallback(async (blocks: ReaderBlockDto[]) => {
     if (!bookId) return
@@ -58,7 +69,7 @@ export function useChapterImages(bookId: string | undefined) {
       tryStart()
     })
 
-    if (Object.keys(updates).length > 0) {
+    if (mountedRef.current && Object.keys(updates).length > 0) {
       setImageCache(prev => ({ ...prev, ...updates }))
     }
   }, [bookId])

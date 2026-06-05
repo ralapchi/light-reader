@@ -19,5 +19,6 @@ export function buildChapterOnlyProgress(
     paragraph_index: null,
     scroll_offset: null,
     anchor: null,
+    clear_position: true,
   }
 }

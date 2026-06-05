@@ -1,8 +1,5 @@
-/** Chapter-level book progress fraction (pure). */
-export function getChapterBookProgress(chapterIndex: number, chapterCount: number): number {
-  if (chapterCount <= 0) return 0
-  return Math.min(1, Math.max(0, chapterIndex) / chapterCount)
-}
+/** Re-export from the single source of truth. */
+export { chapterProgressPercent as getChapterBookProgress } from './readerProgressUtils'
 
 /** Find which flow chapter a given global spread belongs to (pure). */
 export function findFlowIndexForSpread(spread: number, chapterSpreadStarts: number[]): number {
