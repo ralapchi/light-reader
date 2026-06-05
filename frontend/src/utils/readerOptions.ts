@@ -36,6 +36,7 @@ export const READER_FONTS: ReaderFontOption[] = [
 export const FONT_SIZE_RANGE = { min: 12, max: 28, step: 1 }
 export const LINE_HEIGHT_RANGE = { min: 1.2, max: 2.5, step: 0.05 }
 export const PARAGRAPH_SPACING_RANGE = { min: 0.4, max: 3.0, step: 0.1 }
+export const CONTENT_WIDTH_RANGE = { min: 400, max: 800, step: 10 }
 
 export const LINE_HEIGHT_PRESETS = [
   { label: '紧凑', value: 1.4 },

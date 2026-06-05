@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type CSSProperties, type RefObject } from 'react'
+import { useCallback, type CSSProperties, type RefObject } from 'react'
 import type { ReaderChapterDto } from '../../services/api'
 import ReaderBlock from './ReaderBlock'
 import { blockKey, blockParagraphIndex } from './readerUtils'
@@ -62,15 +62,8 @@ export default function TwoPageReaderContent({
   const { flowChapters, loadNextChapter, hasNextChapter, setExtraChapters } =
     useAdjacentChapterPreload(chapter, chapterCount)
 
-  const { scrollRef, chapterRefs, pageHeight, pageWidth, spineGap, chapterPageCounts, chapterContentPageCounts, chapterSpreadStarts, totalSpreads, totalSpreadsRef, statusBarHeight, isReady } =
+  const { scrollRef, chapterRefs, pageHeight, pageWidth, spineGap, chapterPageCounts, chapterContentPageCounts, chapterSpreadStarts, totalSpreads, totalSpreadsRef, isReady } =
     useTwoPageLayout(contentRef, contentStyle, flowChapters)
-
-  useEffect(() => {
-    const appEl = contentRef.current?.closest('.reader-app') as HTMLElement | null
-    if (!appEl) return
-    appEl.style.setProperty('--status-bar-height', `${statusBarHeight}px`)
-    return () => { appEl.style.setProperty('--status-bar-height', '32px') }
-  }, [statusBarHeight, contentRef])
 
   const { nextSpread, prevSpread } = useTwoPageNavigation(
     contentRef, scrollRef, totalSpreadsRef, pageWidth, spineGap, totalSpreads,

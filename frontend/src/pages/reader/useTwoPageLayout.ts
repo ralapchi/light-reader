@@ -56,9 +56,7 @@ export function useTwoPageLayout(
     const totalPadding = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
     const horizontalPadding = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
     const available = window.innerHeight - totalPadding
-    const minStatusBar = DEFAULT_STATUS_BAR_HEIGHT
-    const N = Math.max(4, Math.floor((available - minStatusBar) / linePx))
-    const newStatusBarHeight = available - N * linePx
+    const N = Math.max(4, Math.floor((available - DEFAULT_STATUS_BAR_HEIGHT) / linePx))
     const alignedH = N * linePx
 
     const usableWidth = Math.max(360, rect.width - horizontalPadding)
@@ -69,10 +67,10 @@ export function useTwoPageLayout(
     const colW = (usableWidth - gap * 2) / 2
 
     setMetrics(prev => {
-      if (prev.pageHeight === alignedH && prev.pageWidth === colW && prev.spineGap === gap && prev.statusBarHeight === newStatusBarHeight) {
+      if (prev.pageHeight === alignedH && prev.pageWidth === colW && prev.spineGap === gap) {
         return prev
       }
-      return { pageHeight: alignedH, pageWidth: colW, spineGap: gap, statusBarHeight: newStatusBarHeight }
+      return { pageHeight: alignedH, pageWidth: colW, spineGap: gap, statusBarHeight: DEFAULT_STATUS_BAR_HEIGHT }
     })
     setIsReady(true)
   }, [contentStyle, contentRef])

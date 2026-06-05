@@ -1,4 +1,4 @@
-import { FONT_SIZE_RANGE, LINE_HEIGHT_PRESETS, PARAGRAPH_SPACING_PRESETS, CONTENT_WIDTH_PRESETS, READER_FONTS, READER_THEMES } from '../../utils/readerOptions'
+import { FONT_SIZE_RANGE, LINE_HEIGHT_RANGE, PARAGRAPH_SPACING_RANGE, CONTENT_WIDTH_RANGE, READER_FONTS, READER_THEMES } from '../../utils/readerOptions'
 import type { ReaderSettings } from '../../services/api'
 
 export type SettingsPanel = 'theme' | 'font' | 'format' | null
@@ -102,46 +102,31 @@ export default function ReaderSettingsControls({
                 </div>
                 <div className="option-row">
                   <span className="option-label">行距</span>
-                  <div className="option-chips">
-                    {LINE_HEIGHT_PRESETS.map(p => (
-                      <button
-                        key={p.value}
-                        className={`option-chip ${Math.abs(settings.line_height - p.value) < 0.01 ? 'active' : ''}`}
-                        onClick={() => onUpdateSettings({ line_height: p.value })}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
+                  <input
+                    type="range" min={LINE_HEIGHT_RANGE.min} max={LINE_HEIGHT_RANGE.max} step={LINE_HEIGHT_RANGE.step}
+                    value={settings.line_height}
+                    onChange={e => onUpdateSettings({ line_height: Number(e.target.value) })}
+                    className="option-slider"
+                  />
                 </div>
                 <div className="option-row">
                   <span className="option-label">段间距</span>
-                  <div className="option-chips">
-                    {PARAGRAPH_SPACING_PRESETS.map(p => (
-                      <button
-                        key={p.value}
-                        className={`option-chip ${Math.abs(settings.paragraph_spacing - p.value) < 0.01 ? 'active' : ''}`}
-                        onClick={() => onUpdateSettings({ paragraph_spacing: p.value })}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
+                  <input
+                    type="range" min={PARAGRAPH_SPACING_RANGE.min} max={PARAGRAPH_SPACING_RANGE.max} step={PARAGRAPH_SPACING_RANGE.step}
+                    value={settings.paragraph_spacing}
+                    onChange={e => onUpdateSettings({ paragraph_spacing: Number(e.target.value) })}
+                    className="option-slider"
+                  />
                 </div>
                 {settings.reading_mode === 'ChapterScroll' && (
                   <div className="option-row">
                     <span className="option-label">页宽</span>
-                    <div className="option-chips">
-                      {CONTENT_WIDTH_PRESETS.map(p => (
-                        <button
-                          key={p.value}
-                          className={`option-chip ${settings.content_width === p.value ? 'active' : ''}`}
-                          onClick={() => onUpdateSettings({ content_width: p.value })}
-                        >
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
+                    <input
+                      type="range" min={CONTENT_WIDTH_RANGE.min} max={CONTENT_WIDTH_RANGE.max} step={CONTENT_WIDTH_RANGE.step}
+                      value={settings.content_width}
+                      onChange={e => onUpdateSettings({ content_width: Number(e.target.value) })}
+                      className="option-slider"
+                    />
                   </div>
                 )}
               </div>
