@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import type { ReaderBookDto, ReadingMode } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import type { TwoPageNav } from './TwoPageReaderContent'
+import { afterNextPaint, afterLayoutSettled } from './rafUtils'
 import { scrollToAnchor, scrollToOffset, scrollToParagraph, scrollToParagraphTwoPage } from './readerUtils'
 
 export function usePendingNavigationTarget(
@@ -31,28 +32,26 @@ export function usePendingNavigationTarget(
         if (alreadyLoaded) {
           if (readingMode === 'TwoPage') {
             if (pending.paragraph_index != null) {
-              requestAnimationFrame(() => {
+              afterNextPaint(() => {
                 const content = contentRef.current
                 if (!content) return
                 scrollToParagraphTwoPage(content, pending.paragraph_index!, twoPageNavRef?.current)
               })
             }
           } else if (pending.anchor) {
-            requestAnimationFrame(() => {
+            afterNextPaint(() => {
               const el = contentRef.current
               if (!el) return
               scrollToAnchor(el, pending.anchor!)
             })
           } else if (pending.scroll_offset && pending.scroll_offset > 0) {
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                const el = contentRef.current
-                if (!el) return
-                scrollToOffset(el, pending.scroll_offset!)
-              })
+            afterLayoutSettled(() => {
+              const el = contentRef.current
+              if (!el) return
+              scrollToOffset(el, pending.scroll_offset!)
             })
           } else if (pending.paragraph_index != null) {
-            requestAnimationFrame(() => {
+            afterNextPaint(() => {
               const content = contentRef.current
               if (!content) return
               scrollToParagraph(content, pending.paragraph_index!)
@@ -61,13 +60,13 @@ export function usePendingNavigationTarget(
         } else {
           goToChapter(targetChapter, pending.scroll_offset, { saveProgress: false }).then(() => {
             if (pending.anchor && readingMode !== 'TwoPage') {
-              requestAnimationFrame(() => {
+              afterNextPaint(() => {
                 const content = contentRef.current
                 if (!content) return
                 scrollToAnchor(content, pending.anchor!)
               })
             } else if (pending.paragraph_index != null && (!pending.scroll_offset || pending.scroll_offset <= 0)) {
-              requestAnimationFrame(() => {
+              afterNextPaint(() => {
                 const content = contentRef.current
                 if (!content) return
                 if (readingMode === 'TwoPage') scrollToParagraphTwoPage(content, pending.paragraph_index!, twoPageNavRef?.current)

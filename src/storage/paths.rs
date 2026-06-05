@@ -1,12 +1,19 @@
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 const APP_DIR_NAME: &str = "light-reader";
 
+static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
 pub(crate) fn app_data_dir() -> PathBuf {
-    dirs::data_dir()
-        .or_else(|| dirs::home_dir().map(|h| h.join(".local/share")))
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(APP_DIR_NAME)
+    APP_DATA_DIR
+        .get_or_init(|| {
+            dirs::data_dir()
+                .or_else(|| dirs::home_dir().map(|h| h.join(".local/share")))
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(APP_DIR_NAME)
+        })
+        .clone()
 }
 
 pub fn ensure_dirs() -> std::io::Result<()> {

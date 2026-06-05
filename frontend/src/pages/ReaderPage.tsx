@@ -31,8 +31,16 @@ function ReaderPage() {
   const [winW, setWinW] = useState(() => window.innerWidth)
   const [twoPageVisibleChapter, setTwoPageVisibleChapter] = useState<TwoPageVisibleChapter | null>(null)
 
-  const { reader, toggleToc, closeToc } = useAppStore()
-  const { book, currentChapterIndex, currentChapter, progressPercent, showToc, showSearch, settings, tts } = reader
+  const toggleToc = useAppStore(s => s.toggleToc)
+  const closeToc = useAppStore(s => s.closeToc)
+  const book = useAppStore(s => s.reader.book)
+  const currentChapterIndex = useAppStore(s => s.reader.currentChapterIndex)
+  const currentChapter = useAppStore(s => s.reader.currentChapter)
+  const progressPercent = useAppStore(s => s.reader.progressPercent)
+  const showToc = useAppStore(s => s.reader.showToc)
+  const showSearch = useAppStore(s => s.reader.showSearch)
+  const settings = useAppStore(s => s.reader.settings)
+  const tts = useAppStore(s => s.reader.tts)
 
 
   useEffect(() => {

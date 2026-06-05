@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { ReaderChapterDto } from '../../services/api'
+import { afterNextPaint } from './rafUtils'
 
 const DEFAULT_STATUS_BAR_HEIGHT = 32
 const MIN_CHAPTER_PAGE_COUNT = 2
+
+interface LayoutMetrics {
+  pageHeight: number
+  pageWidth: number
+  spineGap: number
+  statusBarHeight: number
+}
 
 interface PageModel {
   key: string
@@ -20,14 +28,15 @@ export function useTwoPageLayout(
   contentStyle: CSSProperties,
   flowChapters: ReaderChapterDto[],
 ) {
-  const [pageHeight, setPageHeight] = useState(600)
-  const [pageWidth, setPageWidth] = useState(400)
-  const [spineGap, setSpineGap] = useState(32)
-  const [statusBarHeight, setStatusBarHeight] = useState(DEFAULT_STATUS_BAR_HEIGHT)
+  const [metrics, setMetrics] = useState<LayoutMetrics>({
+    pageHeight: 600, pageWidth: 400, spineGap: 32, statusBarHeight: DEFAULT_STATUS_BAR_HEIGHT,
+  })
   const [isReady, setIsReady] = useState(false)
   const [pageModel, setPageModel] = useState<PageModel>({ key: '', pageCounts: [], contentPageCounts: [] })
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const chapterRefs = useRef<(HTMLDivElement | null)[]>([])
+
+  const { pageHeight, pageWidth, spineGap, statusBarHeight } = metrics
 
   // ── measureLayout ──────────────────────────────────────────
 
@@ -59,10 +68,12 @@ export function useTwoPageLayout(
 
     const colW = (usableWidth - gap * 2) / 2
 
-    setStatusBarHeight(prev => prev === newStatusBarHeight ? prev : newStatusBarHeight)
-    setPageHeight(prev => prev === alignedH ? prev : alignedH)
-    setPageWidth(prev => prev === colW ? prev : colW)
-    setSpineGap(prev => prev === gap ? prev : gap)
+    setMetrics(prev => {
+      if (prev.pageHeight === alignedH && prev.pageWidth === colW && prev.spineGap === gap && prev.statusBarHeight === newStatusBarHeight) {
+        return prev
+      }
+      return { pageHeight: alignedH, pageWidth: colW, spineGap: gap, statusBarHeight: newStatusBarHeight }
+    })
     setIsReady(true)
   }, [contentStyle, contentRef])
 
@@ -75,9 +86,9 @@ export function useTwoPageLayout(
       debounceTimer = setTimeout(measureLayout, 100)
     }
 
-    const t = window.setTimeout(() => {
+    const initTimer = window.setTimeout(() => {
       document.fonts.ready.then(() => {
-        requestAnimationFrame(measureLayout)
+        afterNextPaint(measureLayout)
       })
     }, 0)
 
@@ -86,7 +97,7 @@ export function useTwoPageLayout(
     if (el) observer?.observe(el)
     window.addEventListener('resize', debouncedMeasure)
     return () => {
-      window.clearTimeout(t)
+      window.clearTimeout(initTimer)
       if (debounceTimer) clearTimeout(debounceTimer)
       observer?.disconnect()
       window.removeEventListener('resize', debouncedMeasure)

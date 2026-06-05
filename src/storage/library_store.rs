@@ -37,6 +37,5 @@ pub fn save(index: &LibraryIndex) -> Result<(), std::io::Error> {
     let path = paths::library_index_path();
     let mut index = index.clone();
     index.version = LIBRARY_VERSION;
-    let data = serde_json::to_string_pretty(&index)?;
-    std::fs::write(&path, data)
+    crate::storage::util::write_json_atomic(&path, &index)
 }

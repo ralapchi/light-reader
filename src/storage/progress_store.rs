@@ -53,6 +53,5 @@ pub fn save(book_id: &str, progress: &ReadingProgress) -> Result<(), String> {
         version: PROGRESS_VERSION,
         progress: progress.clone(),
     };
-    let data = serde_json::to_string_pretty(&file).map_err(|e| e.to_string())?;
-    std::fs::write(&path, data).map_err(|e| e.to_string())
+    crate::storage::util::write_json_atomic(&path, &file).map_err(|e| e.to_string())
 }

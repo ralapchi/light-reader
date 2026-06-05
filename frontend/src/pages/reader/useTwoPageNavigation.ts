@@ -3,6 +3,7 @@ import { readerSaveProgress } from '../../services/api'
 import type { ReaderChapterDto } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import type { TwoPageNav, TwoPageVisibleChapter } from './TwoPageReaderContent'
+import { getChapterBookProgress, findFlowIndexForSpread, findNearestFilledSpread, buildFilledSpreadIndexes } from './twoPageCalcUtils'
 
 export function useTwoPageNavigation(
   contentRef: RefObject<HTMLDivElement | null>,
@@ -53,47 +54,21 @@ export function useTwoPageNavigation(
   const boundedSpreadIndex = Math.min(spreadIndex, totalSpreads - 1)
   const spreadStep = pageWidth * 2 + spineGap * 2
 
-  const getChapterBookProgress = useCallback((chapterIndex: number, chapterCount: number) => {
-    if (chapterCount <= 0) return 0
-    return Math.min(1, Math.max(0, chapterIndex) / chapterCount)
-  }, [])
+  const filledSpreadIndexes = useMemo(
+    () => buildFilledSpreadIndexes(chapterSpreadStarts, chapterContentPageCounts, flowChapters.length),
+    [chapterContentPageCounts, chapterSpreadStarts, flowChapters.length],
+  )
 
-  const filledSpreadIndexes = useMemo(() => {
-    const indexes = new Set<number>()
-    for (let i = 0; i < flowChapters.length; i++) {
-      const start = chapterSpreadStarts[i] ?? 0
-      const contentSpreads = Math.max(1, Math.ceil((chapterContentPageCounts[i] ?? 1) / 2))
-      for (let offset = 0; offset < contentSpreads; offset++) {
-        indexes.add(start + offset)
-      }
-    }
-    return indexes
-  }, [chapterContentPageCounts, chapterSpreadStarts, flowChapters.length])
+  const findNearestFilledSpreadLocal = useCallback(
+    (target: number, delta: number) => findNearestFilledSpread(target, delta, filledSpreadIndexes, totalSpreads),
+    [filledSpreadIndexes, totalSpreads],
+  )
+  const activeSpreadIndex = findNearestFilledSpreadLocal(boundedSpreadIndex, 1)
 
-  const findNearestFilledSpread = useCallback((target: number, delta: number) => {
-    const bounded = Math.max(0, Math.min(totalSpreads - 1, target))
-    if (filledSpreadIndexes.has(bounded)) return bounded
-    const step = delta >= 0 ? 1 : -1
-    for (let i = bounded + step; i >= 0 && i < totalSpreads; i += step) {
-      if (filledSpreadIndexes.has(i)) return i
-    }
-    for (let i = bounded - step; i >= 0 && i < totalSpreads; i -= step) {
-      if (filledSpreadIndexes.has(i)) return i
-    }
-    return bounded
-  }, [filledSpreadIndexes, totalSpreads])
-  const activeSpreadIndex = findNearestFilledSpread(boundedSpreadIndex, 1)
-
-  // ── Helper: find flowIndex for a given global spread ────────
-
-  const findFlowIndexForSpread = useCallback((spread: number): number => {
-    let flowIndex = 0
-    for (let i = 0; i < chapterSpreadStarts.length; i++) {
-      if (chapterSpreadStarts[i] <= spread) flowIndex = i
-      else break
-    }
-    return flowIndex
-  }, [chapterSpreadStarts])
+  const findFlowIndexForSpreadLocal = useCallback(
+    (spread: number): number => findFlowIndexForSpread(spread, chapterSpreadStarts),
+    [chapterSpreadStarts],
+  )
 
   // ── Scroll to current spread ───────────────────────────────
 
@@ -113,8 +88,8 @@ export function useTwoPageNavigation(
   }, [totalSpreads, totalSpreadsRef])
 
   const goToSpread = useCallback((index: number) => {
-    setSpreadIndex(current => findNearestFilledSpread(index, index >= current ? 1 : -1))
-  }, [findNearestFilledSpread])
+    setSpreadIndex(current => findNearestFilledSpreadLocal(index, index >= current ? 1 : -1))
+  }, [findNearestFilledSpreadLocal])
 
   const findSpreadByParagraph = useCallback((paragraphIndex: number): number | null => {
     const el = scrollRef.current
@@ -144,11 +119,7 @@ export function useTwoPageNavigation(
     const bookIdent = bookData?.book_id
     if (!bookData || !bookIdent) return
     const starts = chapterSpreadStartsRef.current
-    let flowIdx = 0
-    for (let i = 0; i < starts.length; i++) {
-      if (starts[i] <= spread) flowIdx = i
-      else break
-    }
+    const flowIdx = findFlowIndexForSpread(spread, starts)
     const chapters = flowChaptersRef.current
     const visChapterIndex = chapters[flowIdx]?.chapter_index ?? chapterRef.current?.chapter_index ?? 0
     const bookPct = getChapterBookProgress(visChapterIndex, bookData.chapter_count)
@@ -161,7 +132,7 @@ export function useTwoPageNavigation(
       scroll_offset: null,
       anchor: null,
     }).catch(() => { /* non-critical */ })
-  }, [getChapterBookProgress])
+  }, [])
 
   const turnSpread = useCallback((delta: number) => {
     onNavigate?.()
@@ -184,15 +155,15 @@ export function useTwoPageNavigation(
       onPreviousChapter?.()
       return
     }
-    const newSpread = findNearestFilledSpread(current + delta, delta)
+    const newSpread = findNearestFilledSpreadLocal(current + delta, delta)
     const previousFlowIndex = currentChapterFlowIndexRef.current
-    const nextFlowIndex = findFlowIndexForSpread(newSpread)
+    const nextFlowIndex = findFlowIndexForSpreadLocal(newSpread)
     setVisibleFlowIndex(nextFlowIndex)
     goToSpread(newSpread)
     if (nextFlowIndex !== previousFlowIndex) {
       saveProgressForSpread(newSpread)
     }
-  }, [goToSpread, recalcSpreads, onNextChapter, onPreviousChapter, onNavigate, hasNextChapter, loadNextChapter, totalSpreadsRef, spreadIndexRef, findNearestFilledSpread, findFlowIndexForSpread, saveProgressForSpread, setVisibleFlowIndex])
+  }, [goToSpread, recalcSpreads, onNextChapter, onPreviousChapter, onNavigate, hasNextChapter, loadNextChapter, totalSpreadsRef, spreadIndexRef, findNearestFilledSpreadLocal, findFlowIndexForSpreadLocal, saveProgressForSpread, setVisibleFlowIndex])
 
   const nextSpread = useCallback(() => turnSpread(1), [turnSpread])
   const prevSpread = useCallback(() => turnSpread(-1), [turnSpread])
@@ -260,11 +231,11 @@ export function useTwoPageNavigation(
         setSpreadIndex(0)
       } else {
         setSpreadIndex(s => {
-          return findNearestFilledSpread(s < freshTotal ? s : Math.max(0, freshTotal - 1), -1)
+          return findNearestFilledSpreadLocal(s < freshTotal ? s : Math.max(0, freshTotal - 1), -1)
         })
       }
     })
-  }, [findNearestFilledSpread, totalSpreads, totalSpreadsRef])
+  }, [findNearestFilledSpreadLocal, totalSpreads, totalSpreadsRef])
 
   // ── Advance spread after next chapter loads ─────────────────
   // Waits until totalSpreads has actually increased (useLayoutEffect measured new columns)
@@ -276,13 +247,13 @@ export function useTwoPageNavigation(
     needsNextSpreadRef.current = false
     const newSpread = Math.min(spreadIndexRef.current + 1, totalSpreads - 1)
     const previousFlowIndex = currentChapterFlowIndexRef.current
-    const flowIdx = findFlowIndexForSpread(newSpread)
+    const flowIdx = findFlowIndexForSpreadLocal(newSpread)
     setVisibleFlowIndex(flowIdx)
     setSpreadIndex(newSpread)
     if (flowIdx !== previousFlowIndex) {
       saveProgressForSpread(newSpread)
     }
-  }, [flowChapters, totalSpreads, findFlowIndexForSpread, saveProgressForSpread, setVisibleFlowIndex])
+  }, [flowChapters, totalSpreads, findFlowIndexForSpreadLocal, saveProgressForSpread, setVisibleFlowIndex])
 
   // ── Auto preload adjacent chapters ─────────────────────────
 
@@ -330,14 +301,14 @@ export function useTwoPageNavigation(
     requestAnimationFrame(() => {
       const spread = findSpreadByParagraph(initialParagraphIndex)
       if (spread != null) {
-        currentChapterFlowIndexRef.current = findFlowIndexForSpread(spread)
+        currentChapterFlowIndexRef.current = findFlowIndexForSpreadLocal(spread)
         setCurrentChapterFlowIndex(currentChapterFlowIndexRef.current)
         goToSpread(spread)
       } else {
         setSpreadIndex(0)
       }
     })
-  }, [initialParagraphIndex, totalSpreads, findSpreadByParagraph, goToSpread, findFlowIndexForSpread])
+  }, [initialParagraphIndex, totalSpreads, findSpreadByParagraph, goToSpread, findFlowIndexForSpreadLocal])
 
   return {
     spreadIndex,

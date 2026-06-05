@@ -5,6 +5,8 @@ import { readerGetChapter, readerSaveProgress } from '../../services/api'
 import type { ReaderBookDto, ReadingMode, SearchHitDto } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import type { TwoPageNav } from './TwoPageReaderContent'
+import { buildChapterOnlyProgress } from './readerProgressUtils'
+import { afterNextPaint } from './rafUtils'
 import { scrollToOffset, scrollToParagraph, scrollToParagraphTwoPage } from './readerUtils'
 import { useChapterImages } from './useChapterImages'
 import { useFootnoteReturn } from './useFootnoteReturn'
@@ -53,16 +55,11 @@ export function useChapterNavigation(
       const bookPct = book ? Math.min(1, index / book.chapter_count) : 0
       setProgressPercent(bookPct)
       if (bookId && options?.saveProgress !== false) {
-        readerSaveProgress({
-          book_id: bookId,
-          chapter_index: index,
-          progress_percent: bookPct,
-          paragraph_index: null,
-          scroll_offset: null,
-          anchor: null,
-        }).catch(() => { /* non-critical */ })
+        readerSaveProgress(
+          buildChapterOnlyProgress(bookId, index, book?.chapter_count ?? 0),
+        ).catch(() => { /* non-critical */ })
       }
-      requestAnimationFrame(() => {
+      afterNextPaint(() => {
         const el = contentRef.current
         if (!el) return
         if (readingMode === 'TwoPage' && scrollOffset == null) {
@@ -83,7 +80,7 @@ export function useChapterNavigation(
     handleCloseSearch()
     goToChapter(hit.chapter_index, null, { saveProgress: false }).then(() => {
       if (hit.paragraph_index != null) {
-        requestAnimationFrame(() => {
+        afterNextPaint(() => {
           const content = contentRef.current
           if (!content) return
           if (readingMode === 'TwoPage') scrollToParagraphTwoPage(content, hit.paragraph_index, twoPageNavRef?.current)

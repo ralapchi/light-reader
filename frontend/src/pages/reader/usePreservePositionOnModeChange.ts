@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import type { ReadingMode } from '../../services/api'
 import type { TwoPageNav } from './TwoPageReaderContent'
+import { afterLayoutSettled } from './rafUtils'
 import { captureVisibleParagraph, scrollToParagraph, scrollToParagraphTwoPage } from './readerUtils'
 
 export function usePreservePositionOnModeChange(
@@ -23,13 +24,11 @@ export function usePreservePositionOnModeChange(
     const captured = anchorRef.current ?? captureVisibleParagraph(el, prev === 'TwoPage')
     if (captured == null) return
     if (!anchorRef.current) setLayoutAnchorParagraph(captured)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const el2 = contentRef.current
-        if (!el2) return
-        if (effectiveReadingMode === 'TwoPage') scrollToParagraphTwoPage(el2, captured, twoPageNavRef.current)
-        else scrollToParagraph(el2, captured)
-      })
+    afterLayoutSettled(() => {
+      const el2 = contentRef.current
+      if (!el2) return
+      if (effectiveReadingMode === 'TwoPage') scrollToParagraphTwoPage(el2, captured, twoPageNavRef.current)
+      else scrollToParagraph(el2, captured)
     })
   }, [effectiveReadingMode, contentRef, twoPageNavRef])
 

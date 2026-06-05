@@ -55,8 +55,7 @@ pub fn save(book_id: &str, bookmarks: &[Bookmark]) -> Result<(), String> {
         book_id: book_id.to_string(),
         items: bookmarks.to_vec(),
     };
-    let data = serde_json::to_string_pretty(&file).map_err(|e| e.to_string())?;
-    std::fs::write(&path, data).map_err(|e| e.to_string())
+    crate::storage::util::write_json_atomic(&path, &file).map_err(|e| e.to_string())
 }
 
 pub fn load_all() -> Vec<Bookmark> {

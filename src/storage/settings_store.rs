@@ -81,8 +81,7 @@ pub fn load() -> SettingsFile {
 
 pub fn save(settings: &SettingsFile) -> Result<(), String> {
     let path = paths::settings_path();
-    let data = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
-    std::fs::write(&path, data).map_err(|e| e.to_string())
+    crate::storage::util::write_json_atomic(&path, settings).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

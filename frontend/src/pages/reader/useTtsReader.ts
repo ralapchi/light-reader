@@ -34,6 +34,7 @@ export function useTtsReader(contentRef: React.RefObject<HTMLDivElement | null>)
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     const unsubs: (() => void)[] = []
     Promise.all([
       onTtsPlaying(p => setTtsState({ status: 'playing', paragraph_indices: p.paragraph_indices, segment_index: p.segment_index, total_segments: p.total_segments, error: null })),
@@ -42,8 +43,17 @@ export function useTtsReader(contentRef: React.RefObject<HTMLDivElement | null>)
       onTtsBuffering(p => setTtsState({ status: 'buffering', segment_index: p.segment_index })),
       onTtsFinished(() => setTtsState({ status: 'finished', paragraph_indices: [] })),
       onTtsError(p => setTtsState({ status: 'error', error: p.error_message })),
-    ]).then(fns => unsubs.push(...fns.map(u => u)))
-    return () => unsubs.forEach(u => u())
+    ]).then(fns => {
+      if (cancelled) {
+        fns.forEach(u => u())
+      } else {
+        unsubs.push(...fns.map(u => u))
+      }
+    })
+    return () => {
+      cancelled = true
+      unsubs.forEach(u => u())
+    }
   }, [setTtsState, resetTts])
 
   const prevSegRef = useRef(-1)
