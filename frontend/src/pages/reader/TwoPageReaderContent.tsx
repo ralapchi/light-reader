@@ -16,6 +16,11 @@ export interface TwoPageNav {
   innerRef: React.RefObject<HTMLDivElement | null>
 }
 
+export interface TwoPageVisibleChapter {
+  chapterIndex: number
+  title: string
+}
+
 const columnFillAuto = { columnFill: 'auto' } as CSSProperties
 const chapterGroupStyle = { height: '100%', overflow: 'hidden', flexShrink: 0 } as CSSProperties
 
@@ -32,6 +37,7 @@ interface TwoPageReaderContentProps {
   onPreviousChapter?: () => void
   onLinkClick?: (href: string) => void
   onNavigate?: () => void
+  onVisibleChapterChange?: (visible: TwoPageVisibleChapter | null) => void
   paragraphStyle: CSSProperties
 }
 
@@ -48,6 +54,7 @@ export default function TwoPageReaderContent({
   onPreviousChapter,
   onLinkClick,
   onNavigate,
+  onVisibleChapterChange,
   paragraphStyle,
 }: TwoPageReaderContentProps) {
   // ── Hooks ──────────────────────────────────────────────────
@@ -69,7 +76,7 @@ export default function TwoPageReaderContent({
     contentRef, scrollRef, totalSpreadsRef, pageWidth, spineGap, totalSpreads,
     flowChapters, chapter, chapterSpreadStarts, chapterContentPageCounts, hasNextChapter, loadNextChapter,
     setExtraChapters, twoPageNavRef,
-    onNextChapter, onPreviousChapter, onNavigate, initialParagraphIndex,
+    onNextChapter, onPreviousChapter, onNavigate, initialParagraphIndex, onVisibleChapterChange,
   )
   const spreadViewportWidth = pageWidth * 2 + spineGap
   const spreadStep = (pageWidth + spineGap) * 2

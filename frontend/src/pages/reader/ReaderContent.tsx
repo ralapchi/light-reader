@@ -1,7 +1,7 @@
 import type { CSSProperties, RefObject } from 'react'
 import type { ReaderChapterDto, ReadingMode } from '../../services/api'
 import SinglePageReaderContent from './SinglePageReaderContent'
-import TwoPageReaderContent, { type TwoPageNav } from './TwoPageReaderContent'
+import TwoPageReaderContent, { type TwoPageNav, type TwoPageVisibleChapter } from './TwoPageReaderContent'
 
 export type { TwoPageNav }
 
@@ -20,6 +20,7 @@ interface ReaderContentProps {
   onScroll: () => void
   onLinkClick?: (href: string) => void
   onNavigate?: () => void
+  onVisibleChapterChange?: (visible: TwoPageVisibleChapter | null) => void
   paragraphStyle: CSSProperties
   readingMode?: ReadingMode
 }
@@ -40,6 +41,7 @@ export default function ReaderContent(props: ReaderContentProps) {
         onPreviousChapter={props.onPreviousChapter}
         onLinkClick={props.onLinkClick}
         onNavigate={props.onNavigate}
+        onVisibleChapterChange={props.onVisibleChapterChange}
         paragraphStyle={props.paragraphStyle}
       />
     )
@@ -53,6 +55,8 @@ export default function ReaderContent(props: ReaderContentProps) {
       contentWidth={props.contentWidth}
       highlightedParagraphIndex={props.highlightedParagraphIndex}
       imageCache={props.imageCache}
+      onNextChapter={props.onNextChapter}
+      onPreviousChapter={props.onPreviousChapter}
       onScroll={props.onScroll}
       onLinkClick={props.onLinkClick}
       onNavigate={props.onNavigate}

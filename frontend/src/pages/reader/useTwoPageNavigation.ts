@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { readerSaveProgress } from '../../services/api'
 import type { ReaderChapterDto } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
-import type { TwoPageNav } from './TwoPageReaderContent'
+import type { TwoPageNav, TwoPageVisibleChapter } from './TwoPageReaderContent'
 
 export function useTwoPageNavigation(
   contentRef: RefObject<HTMLDivElement | null>,
@@ -23,17 +23,21 @@ export function useTwoPageNavigation(
   onPreviousChapter: (() => void) | undefined,
   onNavigate: (() => void) | undefined,
   initialParagraphIndex: number | null | undefined,
+  onVisibleChapterChange: ((visible: TwoPageVisibleChapter | null) => void) | undefined,
 ) {
   const [spreadIndex, setSpreadIndex] = useState(0)
   const needsResetRef = useRef(false)
   const needsNextSpreadRef = useRef(false)
+  const preLoadTotalSpreadsRef = useRef(0)
   const clampRafRef = useRef<number | null>(null)
   const innerRef = useRef<HTMLDivElement | null>(null)
 
-
-  // Track which chapter the user is viewing (index into flowChapters).
-  // This is the source of truth for visibleChapterIndex — NOT derived from spreadIndex.
+  const [currentChapterFlowIndex, setCurrentChapterFlowIndex] = useState(0)
   const currentChapterFlowIndexRef = useRef(0)
+  const setVisibleFlowIndex = useCallback((index: number) => {
+    currentChapterFlowIndexRef.current = index
+    setCurrentChapterFlowIndex(index)
+  }, [])
 
   const spreadIndexRef = useRef(spreadIndex)
   useEffect(() => { spreadIndexRef.current = spreadIndex }, [spreadIndex])
@@ -48,6 +52,11 @@ export function useTwoPageNavigation(
 
   const boundedSpreadIndex = Math.min(spreadIndex, totalSpreads - 1)
   const spreadStep = pageWidth * 2 + spineGap * 2
+
+  const getChapterBookProgress = useCallback((chapterIndex: number, chapterCount: number) => {
+    if (chapterCount <= 0) return 0
+    return Math.min(1, Math.max(0, chapterIndex) / chapterCount)
+  }, [])
 
   const filledSpreadIndexes = useMemo(() => {
     const indexes = new Set<number>()
@@ -134,74 +143,56 @@ export function useTwoPageNavigation(
     const bookData = useAppStore.getState().reader.book
     const bookIdent = bookData?.book_id
     if (!bookData || !bookIdent) return
-    const flowIdx = currentChapterFlowIndexRef.current
+    const starts = chapterSpreadStartsRef.current
+    let flowIdx = 0
+    for (let i = 0; i < starts.length; i++) {
+      if (starts[i] <= spread) flowIdx = i
+      else break
+    }
     const chapters = flowChaptersRef.current
     const visChapterIndex = chapters[flowIdx]?.chapter_index ?? chapterRef.current?.chapter_index ?? 0
-    const starts = chapterSpreadStartsRef.current
-    const total = totalSpreadsRef.current
-    const chStart = starts[flowIdx] ?? 0
-    const chNextStart = starts[flowIdx + 1] ?? total
-    const chSpreadCount = Math.max(1, chNextStart - chStart)
-    const chProgress = Math.max(0, Math.min(1, (spread - chStart) / chSpreadCount))
-    const bookPct = Math.min(1, (visChapterIndex + chProgress) / bookData.chapter_count)
-    console.log(`[progress] SAVE spread=${spread} flowIdx=${flowIdx} visCh=${visChapterIndex} starts=[${starts}] chStart=${chStart} bookPct=${bookPct.toFixed(4)}`)
+    const bookPct = getChapterBookProgress(visChapterIndex, bookData.chapter_count)
     useAppStore.getState().setProgressPercent(bookPct)
     readerSaveProgress({
       book_id: bookIdent,
       chapter_index: visChapterIndex,
       progress_percent: bookPct,
+      paragraph_index: null,
+      scroll_offset: null,
+      anchor: null,
     }).catch(() => { /* non-critical */ })
-  }, [])
+  }, [getChapterBookProgress])
 
   const turnSpread = useCallback((delta: number) => {
     onNavigate?.()
     recalcSpreads()
     const current = spreadIndexRef.current
     const total = totalSpreadsRef.current
-    console.log(`[turnSpread] delta=${delta} current=${current} total=${total} flowChLen=${flowChaptersRef.current.length} starts=[${chapterSpreadStartsRef.current}]`)
     if (delta > 0 && current >= total - 1) {
       if (hasNextChapter) {
-        console.log(`[turnSpread] → loadNextChapter (at boundary)`)
         needsNextSpreadRef.current = true
+        preLoadTotalSpreadsRef.current = total
         loadNextChapter().then(loaded => {
-          console.log(`[turnSpread] loadNextChapter done, loaded=${loaded}`)
-          if (!loaded) {
-            needsNextSpreadRef.current = false
-          } else {
-            // Chapter may have loaded synchronously (from preload).
-            // Cancel any pending clampEffect RAF and schedule our own
-            // to ensure we use fresh ref values, not stale closures.
-            if (clampRafRef.current != null) cancelAnimationFrame(clampRafRef.current)
-            clampRafRef.current = requestAnimationFrame(() => {
-              needsNextSpreadRef.current = false
-              const freshTotal = totalSpreadsRef.current
-              const prev = spreadIndexRef.current
-              const newSpread = Math.min(prev + 1, freshTotal - 1)
-              const flowIdx = findFlowIndexForSpread(newSpread)
-              currentChapterFlowIndexRef.current = flowIdx
-              console.log(`[turnSpread-advance] ${prev} → ${newSpread} freshTotal=${freshTotal} flowIdx=${flowIdx}`)
-              setSpreadIndex(newSpread)
-              saveProgressForSpread(newSpread)
-            })
-          }
+          if (!loaded) needsNextSpreadRef.current = false
         })
         return
       }
-      console.log(`[turnSpread] → onNextChapter`)
       onNextChapter?.()
       return
     }
     if (delta < 0 && current === 0) {
-      console.log(`[turnSpread] → onPreviousChapter`)
       onPreviousChapter?.()
       return
     }
     const newSpread = findNearestFilledSpread(current + delta, delta)
-    currentChapterFlowIndexRef.current = findFlowIndexForSpread(newSpread)
-    console.log(`[turnSpread] → goToSpread(${newSpread}) flowIdx=${currentChapterFlowIndexRef.current}`)
+    const previousFlowIndex = currentChapterFlowIndexRef.current
+    const nextFlowIndex = findFlowIndexForSpread(newSpread)
+    setVisibleFlowIndex(nextFlowIndex)
     goToSpread(newSpread)
-    saveProgressForSpread(newSpread)
-  }, [goToSpread, recalcSpreads, onNextChapter, onPreviousChapter, onNavigate, hasNextChapter, loadNextChapter, totalSpreadsRef, spreadIndexRef, findNearestFilledSpread, findFlowIndexForSpread, saveProgressForSpread])
+    if (nextFlowIndex !== previousFlowIndex) {
+      saveProgressForSpread(newSpread)
+    }
+  }, [goToSpread, recalcSpreads, onNextChapter, onPreviousChapter, onNavigate, hasNextChapter, loadNextChapter, totalSpreadsRef, spreadIndexRef, findNearestFilledSpread, findFlowIndexForSpread, saveProgressForSpread, setVisibleFlowIndex])
 
   const nextSpread = useCallback(() => turnSpread(1), [turnSpread])
   const prevSpread = useCallback(() => turnSpread(-1), [turnSpread])
@@ -210,9 +201,25 @@ export function useTwoPageNavigation(
 
   const visibleChapterIndex = useMemo(() => {
     if (flowChapters.length === 0) return chapter?.chapter_index ?? 0
-    const idx = currentChapterFlowIndexRef.current
+    const idx = currentChapterFlowIndex
     return flowChapters[idx]?.chapter_index ?? chapter?.chapter_index ?? 0
-  }, [flowChapters, chapter])
+  }, [flowChapters, chapter, currentChapterFlowIndex])
+
+  const visibleChapterTitle = useMemo(() => {
+    const idx = currentChapterFlowIndex
+    return flowChapters[idx]?.title ?? chapter?.title ?? ''
+  }, [flowChapters, chapter, currentChapterFlowIndex])
+
+  useEffect(() => {
+    if (flowChapters.length === 0) {
+      onVisibleChapterChange?.(null)
+      return
+    }
+    onVisibleChapterChange?.({
+      chapterIndex: visibleChapterIndex,
+      title: visibleChapterTitle,
+    })
+  }, [flowChapters.length, onVisibleChapterChange, visibleChapterIndex, visibleChapterTitle])
 
   // ── Export TwoPageNav to parent ────────────────────────────
 
@@ -231,47 +238,51 @@ export function useTwoPageNavigation(
   // ── Chapter reset ──────────────────────────────────────────
 
   useEffect(() => {
-    console.log(`[chapterReset] ch=${chapter?.chapter_index} totalSpreads=${totalSpreads}`)
     totalSpreadsRef.current = totalSpreads
-    currentChapterFlowIndexRef.current = 0
+    setVisibleFlowIndex(0)
     needsNextSpreadRef.current = false
+    preLoadTotalSpreadsRef.current = 0
     setExtraChapters([])
     setSpreadIndex(0)
     needsResetRef.current = true
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset on chapter change, not when extra chapters are added
-  }, [chapter?.chapter_index])
+  }, [chapter?.chapter_index, setVisibleFlowIndex])
 
-  // ── Clamp spread when total shrinks + advance after loadNext ─
+  // ── Clamp spread when total shrinks ────────────────────────
 
   useEffect(() => {
     totalSpreadsRef.current = totalSpreads
-    console.log(`[clampEffect] totalSpreads=${totalSpreads} needsReset=${needsResetRef.current} needsNext=${needsNextSpreadRef.current} starts=[${chapterSpreadStarts}]`)
     if (clampRafRef.current != null) cancelAnimationFrame(clampRafRef.current)
     clampRafRef.current = requestAnimationFrame(() => {
-      // Use refs (not closure) to avoid stale values when multiple RAFs queue up
       const freshTotal = totalSpreadsRef.current
       if (needsResetRef.current) {
         needsResetRef.current = false
         setSpreadIndex(0)
-      } else if (needsNextSpreadRef.current) {
-        needsNextSpreadRef.current = false
-        const prevSpread = spreadIndexRef.current
-        const newSpread = Math.min(prevSpread + 1, freshTotal - 1)
-        const flowIdx = findFlowIndexForSpread(newSpread)
-        currentChapterFlowIndexRef.current = flowIdx
-        console.log(`[clampEffect] ADVANCE ${prevSpread} → ${newSpread} freshTotal=${freshTotal} flowIdx=${flowIdx}`)
-        setSpreadIndex(newSpread)
-        saveProgressForSpread(newSpread)
       } else {
         setSpreadIndex(s => {
-          const clamped = findNearestFilledSpread(s < freshTotal ? s : Math.max(0, freshTotal - 1), -1)
-          if (clamped !== s) console.log(`[clampEffect] CLAMPED ${s} → ${clamped}`)
-          return clamped
+          return findNearestFilledSpread(s < freshTotal ? s : Math.max(0, freshTotal - 1), -1)
         })
-        // Do NOT update currentChapterFlowIndexRef here — chapter stays the same
       }
     })
-  }, [findNearestFilledSpread, totalSpreads, totalSpreadsRef, findFlowIndexForSpread, saveProgressForSpread])
+  }, [findNearestFilledSpread, totalSpreads, totalSpreadsRef])
+
+  // ── Advance spread after next chapter loads ─────────────────
+  // Waits until totalSpreads has actually increased (useLayoutEffect measured new columns)
+  // before clearing the flag and saving progress.
+
+  useEffect(() => {
+    if (!needsNextSpreadRef.current) return
+    if (totalSpreads <= preLoadTotalSpreadsRef.current) return
+    needsNextSpreadRef.current = false
+    const newSpread = Math.min(spreadIndexRef.current + 1, totalSpreads - 1)
+    const previousFlowIndex = currentChapterFlowIndexRef.current
+    const flowIdx = findFlowIndexForSpread(newSpread)
+    setVisibleFlowIndex(flowIdx)
+    setSpreadIndex(newSpread)
+    if (flowIdx !== previousFlowIndex) {
+      saveProgressForSpread(newSpread)
+    }
+  }, [flowChapters, totalSpreads, findFlowIndexForSpread, saveProgressForSpread, setVisibleFlowIndex])
 
   // ── Auto preload adjacent chapters ─────────────────────────
 
@@ -320,6 +331,7 @@ export function useTwoPageNavigation(
       const spread = findSpreadByParagraph(initialParagraphIndex)
       if (spread != null) {
         currentChapterFlowIndexRef.current = findFlowIndexForSpread(spread)
+        setCurrentChapterFlowIndex(currentChapterFlowIndexRef.current)
         goToSpread(spread)
       } else {
         setSpreadIndex(0)

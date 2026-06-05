@@ -10,6 +10,8 @@ interface SinglePageReaderContentProps {
   contentWidth: number
   highlightedParagraphIndex?: number
   imageCache: Record<string, string>
+  onNextChapter?: () => void
+  onPreviousChapter?: () => void
   onScroll: () => void
   onLinkClick?: (href: string) => void
   onNavigate?: () => void
@@ -23,6 +25,8 @@ export default function SinglePageReaderContent({
   contentWidth,
   highlightedParagraphIndex,
   imageCache,
+  onNextChapter,
+  onPreviousChapter,
   onScroll,
   onLinkClick,
   onNavigate,
@@ -33,12 +37,19 @@ export default function SinglePageReaderContent({
     onNavigate?.()
   }, [onScroll, onNavigate])
 
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.reader-link')) return
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = e.clientX - rect.left
+    if (x < rect.width * 0.2) onPreviousChapter?.()
+    else if (x > rect.width * 0.8) onNextChapter?.()
+  }, [onNextChapter, onPreviousChapter])
+
   return (
-    <div className="reader-content" ref={contentRef} onScroll={handleScroll}>
+    <div className="reader-content" ref={contentRef} onScroll={handleScroll} onClick={handleClick}>
       <div className="reader-book" style={{ maxWidth: `${contentWidth}px` }}>
         <div className="reader-page reader-page-l">
           <div className="reader-page-text" style={contentStyle}>
-            {chapter && <h1 className="chapter-title">{chapter.title}</h1>}
             {(chapter?.blocks ?? []).map((block, i) => (
               <div className="reader-block-shell" key={blockKey(block, i)}>
                 <ReaderBlock

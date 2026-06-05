@@ -43,7 +43,6 @@ export function useChapterNavigation(
     options?: { saveProgress?: boolean },
   ) => {
     try {
-      console.log(`[goToChapter] index=${index} saveProgress=${options?.saveProgress}`)
       const chapter = await readerGetChapter(index)
       flushSync(() => {
         setCurrentChapter(index, chapter)
@@ -53,14 +52,14 @@ export function useChapterNavigation(
       loadChapterImages(chapter.blocks)
       const bookPct = book ? Math.min(1, index / book.chapter_count) : 0
       setProgressPercent(bookPct)
-      console.log(`[goToChapter] → SAVE ch=${index} bookPct=${bookPct.toFixed(4)}`)
       if (bookId && options?.saveProgress !== false) {
         readerSaveProgress({
           book_id: bookId,
           chapter_index: index,
           progress_percent: bookPct,
           paragraph_index: null,
-          scroll_offset: 0,
+          scroll_offset: null,
+          anchor: null,
         }).catch(() => { /* non-critical */ })
       }
       requestAnimationFrame(() => {

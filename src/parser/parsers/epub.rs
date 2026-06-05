@@ -395,6 +395,7 @@ impl EpubParser {
         let mut link_href = String::new();
         let mut link_title: Option<String> = None;
         let mut link_start: usize = 0;
+        let mut in_title_tag = false;
 
         let mut reader = Reader::from_str(html);
         reader.config_mut().trim_text(true);
@@ -406,6 +407,9 @@ impl EpubParser {
                     let qname = e.name();
                     let name = qname.as_ref();
                     let name_lower = name.to_ascii_lowercase();
+                    if name_lower == b"title" {
+                        in_title_tag = true;
+                    }
 
                     // 提取锚点 id/name
                     record_anchor(e.attributes(), &mut anchors, paragraphs.len());
@@ -525,6 +529,11 @@ impl EpubParser {
                     let qname = e.name();
                     let name = qname.as_ref();
                     let name_lower = name.to_ascii_lowercase();
+                    if name_lower == b"title" {
+                        in_title_tag = false;
+                        // Discard any title text that leaked into current_para
+                        current_para.clear();
+                    }
                     if name_lower == b"p" || name_lower == b"div" || name_lower == b"li" {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(current_para.clone());
@@ -547,6 +556,9 @@ impl EpubParser {
                         link_href.clear();
                         link_title = None;
                     }
+                }
+                Ok(Event::Text(ref _e)) if in_title_tag => {
+                    // Skip text inside <title> tag — it's metadata, not content
                 }
                 Ok(Event::Text(ref e)) => {
                     if let Ok(text) = e.unescape() {

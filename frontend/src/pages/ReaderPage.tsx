@@ -13,7 +13,7 @@ import { useReaderKeyboard } from './reader/useReaderKeyboard'
 import { useReaderStyles } from './reader/useReaderStyles'
 import { usePreservePositionOnModeChange } from './reader/usePreservePositionOnModeChange'
 import ReaderContent from './reader/ReaderContent'
-import type { TwoPageNav } from './reader/TwoPageReaderContent'
+import type { TwoPageNav, TwoPageVisibleChapter } from './reader/TwoPageReaderContent'
 import ReaderSearchPanel from './reader/ReaderSearchPanel'
 import ReaderSettingsControls, { type SettingsPanel } from './reader/ReaderSettingsControls'
 import ReaderStatusBar from './reader/ReaderStatusBar'
@@ -29,6 +29,7 @@ function ReaderPage() {
   const twoPageNavRef = useRef<TwoPageNav | null>(null)
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null)
   const [winW, setWinW] = useState(() => window.innerWidth)
+  const [twoPageVisibleChapter, setTwoPageVisibleChapter] = useState<TwoPageVisibleChapter | null>(null)
 
   const { reader, toggleToc, closeToc } = useAppStore()
   const { book, currentChapterIndex, currentChapter, progressPercent, showToc, showSearch, settings, tts } = reader
@@ -42,6 +43,10 @@ function ReaderPage() {
 
   const isTwoPageAvailable = winW >= TWO_PAGE_MIN_WIDTH
   const effectiveReadingMode = isTwoPageAvailable ? settings.reading_mode : 'ChapterScroll'
+
+  useEffect(() => {
+    if (effectiveReadingMode !== 'TwoPage') setTwoPageVisibleChapter(null)
+  }, [effectiveReadingMode])
 
   const { layoutAnchorParagraph, setLayoutAnchorParagraph } = usePreservePositionOnModeChange(effectiveReadingMode, contentRef, twoPageNavRef)
 
@@ -65,7 +70,12 @@ function ReaderPage() {
   useReaderKeyboard(toggleBookmark)
 
   const flatToc = useMemo(() => book ? flattenToc(book.toc) : [], [book])
-  const chapterTitle = currentChapter?.title ?? ''
+  const displayChapterIndex = effectiveReadingMode === 'TwoPage'
+    ? (twoPageVisibleChapter?.chapterIndex ?? currentChapterIndex)
+    : currentChapterIndex
+  const chapterTitle = effectiveReadingMode === 'TwoPage'
+    ? (twoPageVisibleChapter?.title ?? currentChapter?.title ?? '')
+    : (currentChapter?.title ?? '')
   const progressDisplay = `${Math.round(progressPercent * 100)}%`
 
   const isOriginal = settings.theme === 'original'
@@ -135,6 +145,7 @@ function ReaderPage() {
         onNextChapter={navigation.goToNextChapter}
         onPreviousChapter={navigation.goToPreviousChapter}
         onNavigate={navigation.clearFootnoteReturn}
+        onVisibleChapterChange={setTwoPageVisibleChapter}
       />
 
       {navigation.footnoteReturn && (
@@ -153,7 +164,7 @@ function ReaderPage() {
 
       <ReaderStatusBar
         chapterTitle={chapterTitle}
-        currentChapterIndex={currentChapterIndex}
+        currentChapterIndex={displayChapterIndex}
         progressDisplay={progressDisplay}
         tts={tts}
       />
