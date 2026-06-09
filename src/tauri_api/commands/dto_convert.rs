@@ -25,8 +25,6 @@ fn links_to_dto(links: &[TextLink]) -> Vec<ReaderTextLinkDto> {
 }
 
 pub fn item_to_dto(item: &crate::domain::library_item::LibraryItem) -> LibraryBookCardDto {
-    use crate::services::asset_service::AssetService;
-    let svc = crate::services::asset_service_impl::AssetServiceImpl::new();
     let cover_url = item
         .cover_cache_key
         .as_deref()
@@ -34,7 +32,16 @@ pub fn item_to_dto(item: &crate::domain::library_item::LibraryItem) -> LibraryBo
             let p = crate::storage::paths::cover_cache_path(&item.book_id, ext);
             p.exists().then(|| p.to_str().map(|s| s.to_string())).flatten()
         })
-        .or_else(|| svc.cover_path(&item.book_id).and_then(|p| p.to_str().map(|s| s.to_string())));
+        .or_else(|| {
+            let base_dir = crate::storage::paths::app_data_dir().join("cache/covers");
+            for ext in &["png", "jpg", "jpeg", "webp", "gif", "svg"] {
+                let p = base_dir.join(format!("{}.{}", item.book_id, ext));
+                if p.exists() {
+                    return p.to_str().map(|s| s.to_string());
+                }
+            }
+            None
+        });
     LibraryBookCardDto {
         book_id: item.book_id.clone(),
         title: item.title.clone(),
