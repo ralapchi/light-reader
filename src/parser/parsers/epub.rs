@@ -416,10 +416,9 @@ impl EpubParser {
 
                     if name_lower == b"p" || name_lower == b"div" || name_lower == b"li" {
                         if !current_para.trim().is_empty() {
-                            paragraphs.push(current_para.clone());
+                            paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
                         }
-                        current_para.clear();
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let attr_name = attr.key.as_ref();
@@ -434,10 +433,9 @@ impl EpubParser {
                         }
                     } else if name_lower == b"br" || name_lower == b"hr" {
                         if !current_para.trim().is_empty() {
-                            paragraphs.push(current_para.clone());
+                            paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
                         }
-                        current_para.clear();
                         text_indent = false;
                         para_count += 1;
                     } else if name_lower == b"a" {
@@ -487,10 +485,9 @@ impl EpubParser {
                         }
                     } else if name_lower == b"br" || name_lower == b"hr" {
                         if !current_para.trim().is_empty() {
-                            paragraphs.push(current_para.clone());
+                            paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
                         }
-                        current_para.clear();
                         text_indent = false;
                         para_count += 1;
                     } else if name_lower == b"a" {
@@ -536,10 +533,9 @@ impl EpubParser {
                     }
                     if name_lower == b"p" || name_lower == b"div" || name_lower == b"li" {
                         if !current_para.trim().is_empty() {
-                            paragraphs.push(current_para.clone());
+                            paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
                         }
-                        current_para.clear();
                         text_indent = false;
                         para_count += 1;
                     } else if name_lower == b"a" && in_link {
