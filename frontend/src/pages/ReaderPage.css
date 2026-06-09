@@ -963,28 +963,29 @@
 .reader-footnote-preview {
   position: fixed;
   z-index: 300;
-  transform: translate(-50%, calc(-100% - 8px));
-  max-width: min(420px, calc(100vw - 32px));
-  max-height: 220px;
+  transform: translateY(calc(-100% - 8px));
+  max-width: min(420px, calc(100vw - 24px));
+  max-height: 240px;
   overflow: auto;
   pointer-events: none;
   background: var(--surface, #FFFFFF);
   border: 1px solid var(--border, #E8E4DF);
-  border-radius: 6px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
   color: var(--text-primary, #1A1A1A);
   font-size: 13px;
-  line-height: 1.65;
-  padding: 10px 12px;
+  line-height: 1.7;
+  padding: 10px 14px;
   white-space: pre-wrap;
 }
 
 .reader-footnote-preview.down {
-  transform: translate(-50%, 0);
+  transform: none;
 }
 
 .reader-footnote-preview.loading {
   color: var(--text-secondary, #6F6A63);
+  font-style: italic;
 }
 
 /* ── Footnote return ───────────────────────────────────── */

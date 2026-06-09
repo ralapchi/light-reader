@@ -192,8 +192,8 @@ function ReaderPage() {
         <div
           className={`reader-footnote-preview ${footnotePreview.preview.status} ${footnotePreview.preview.direction}`}
           style={{
-            left: footnotePreview.preview.x,
-            top: footnotePreview.preview.y,
+            left: footnotePreview.preview.left,
+            top: footnotePreview.preview.top,
           }}
         >
           {footnotePreview.preview.text}

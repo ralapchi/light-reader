@@ -3,21 +3,24 @@ import { readerGetLinkPreview } from '../../services/api'
 
 interface FootnotePreviewState {
   text: string
-  x: number
-  y: number
+  left: number
+  top: number
   direction: 'up' | 'down'
   status: 'loading' | 'ready'
 }
 
-function tooltipPosition(target: HTMLElement): { x: number; y: number; direction: 'up' | 'down' } {
+function tooltipPosition(target: HTMLElement, tooltipWidth?: number): { left: number; top: number; direction: 'up' | 'down' } {
   const rect = target.getBoundingClientRect()
-  const x = Math.min(window.innerWidth - 18, Math.max(18, rect.left + rect.width / 2))
+  const w = tooltipWidth ?? 300
+  const halfW = w / 2
+  const centerX = rect.left + rect.width / 2
+  // 居中对齐，但不超出左右边界（留 12px 边距）
+  const left = Math.max(12, Math.min(window.innerWidth - w - 12, centerX - halfW))
 
-  // 如果上方空间不足 200px，改为向下显示
   if (rect.top < 200) {
-    return { x, y: rect.bottom + 8, direction: 'down' }
+    return { left, top: rect.bottom + 8, direction: 'down' }
   }
-  return { x, y: rect.top - 10, direction: 'up' }
+  return { left, top: rect.top - 10, direction: 'up' }
 }
 
 export function useFootnotePreview(currentChapterIndex: number) {
