@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { memo, type CSSProperties } from 'react'
 import type { ReaderBlockDto, ReaderTextLinkDto } from '../../services/api'
 
 interface ReaderBlockProps {
@@ -49,7 +49,7 @@ function renderLinkedText(text: string, links: ReaderTextLinkDto[], onLinkClick?
   return <>{parts}</>
 }
 
-export default function ReaderBlock({ block, imageCache, paragraphStyle, highlight, onLinkClick }: ReaderBlockProps) {
+export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, highlight, onLinkClick }: ReaderBlockProps) {
   if (block.type === 'separator') {
     return <p className="reader-paragraph separator" style={paragraphStyle}>***</p>
   }
@@ -87,4 +87,4 @@ export default function ReaderBlock({ block, imageCache, paragraphStyle, highlig
       {renderLinkedText(block.text, block.links ?? [], onLinkClick)}
     </p>
   )
-}
+})

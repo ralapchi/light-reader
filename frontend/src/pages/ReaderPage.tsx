@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { useSettingsPersistence } from '../hooks/useSettingsPersistence'
@@ -95,9 +95,10 @@ function ReaderPage() {
   const isOriginal = settings.theme === 'original'
   const { readerStyle, contentStyle, paragraphStyle } = useReaderStyles(settings, isOriginal)
 
-  const handleLinkClick = (href: string) => {
-    navigation.navigateToHref(href)
-  }
+  const handleLinkClick = useCallback(
+    (href: string) => navigation.navigateToHref(href),
+    [navigation.navigateToHref]
+  )
 
   return (
     <div className="reader-app" style={readerStyle}>

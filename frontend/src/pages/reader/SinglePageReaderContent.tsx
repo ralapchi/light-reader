@@ -1,4 +1,4 @@
-import { useCallback, type CSSProperties, type RefObject } from 'react'
+import { memo, useCallback, type CSSProperties, type RefObject } from 'react'
 import type { ReaderChapterDto } from '../../services/api'
 import ReaderBlock from './ReaderBlock'
 import { blockKey, blockParagraphIndex } from './readerUtils'
@@ -18,7 +18,7 @@ interface SinglePageReaderContentProps {
   paragraphStyle: CSSProperties
 }
 
-export default function SinglePageReaderContent({
+export default memo(function SinglePageReaderContent({
   chapter,
   contentRef,
   contentStyle,
@@ -66,4 +66,4 @@ export default function SinglePageReaderContent({
       </div>
     </div>
   )
-}
+})

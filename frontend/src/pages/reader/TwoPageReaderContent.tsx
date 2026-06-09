@@ -1,4 +1,4 @@
-import { useCallback, type CSSProperties, type RefObject } from 'react'
+import { memo, useCallback, type CSSProperties, type RefObject } from 'react'
 import type { ReaderChapterDto } from '../../services/api'
 import ReaderBlock from './ReaderBlock'
 import { blockKey, blockParagraphIndex } from './readerUtils'
@@ -41,7 +41,7 @@ interface TwoPageReaderContentProps {
   paragraphStyle: CSSProperties
 }
 
-export default function TwoPageReaderContent({
+export default memo(function TwoPageReaderContent({
   chapter,
   chapterCount,
   contentRef,
@@ -149,4 +149,4 @@ export default function TwoPageReaderContent({
 
     </div>
   )
-}
+})
