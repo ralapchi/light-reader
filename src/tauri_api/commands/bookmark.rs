@@ -10,15 +10,12 @@ pub fn search_in_book(
     if query.trim().is_empty() {
         return Ok(vec![]);
     }
-    // Clone chapters inside the lock, then drop guard before searching.
-    let chapters = {
-        let guard = state.lock().map_err(|e| e.to_string())?;
-        let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
-        book.chapters.clone()
-    };
+
+    let guard = state.lock().map_err(|e| e.to_string())?;
+    let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
 
     let mut hits = Vec::new();
-    for chapter in &chapters {
+    for chapter in &book.chapters {
         let text_para_count = chapter.text_paragraphs().count();
         for para in chapter.text_paragraphs() {
             if let Some(pos) = para.text.find(&query) {
