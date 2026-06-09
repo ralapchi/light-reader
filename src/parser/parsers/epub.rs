@@ -397,6 +397,58 @@ impl EpubParser {
         let mut link_start: usize = 0;
         let mut in_title_tag = false;
 
+        // Helper: flush current paragraph on br/hr
+        let flush_para = |current_para: &mut String,
+                              paragraphs: &mut Vec<String>,
+                              paragraph_links: &mut Vec<Vec<TextLink>>,
+                              current_links: &mut Vec<TextLink>,
+                              text_indent: &mut bool,
+                              para_count: &mut isize| {
+            if !current_para.trim().is_empty() {
+                paragraphs.push(std::mem::take(current_para));
+                paragraph_links.push(std::mem::take(current_links));
+            }
+            *text_indent = false;
+            *para_count += 1;
+        };
+
+        // Helper: extract href/title from <a> tag attributes
+        let handle_a_attrs = |attrs: quick_xml::events::attributes::Attributes,
+                                   link_href: &mut String,
+                                   link_title: &mut Option<String>,
+                                   in_link: &mut bool,
+                                   link_start: &mut usize,
+                                   current_para: &str| {
+            link_href.clear();
+            *link_title = None;
+            for attr in attrs {
+                if let Ok(attr) = attr {
+                    let an = attr.key.as_ref();
+                    if an.eq_ignore_ascii_case(b"href") {
+                        if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                            let v = v.trim();
+                            if !v.is_empty()
+                                && !v.starts_with("javascript:")
+                                && !v.starts_with("mailto:")
+                                && !v.starts_with("http://")
+                                && !v.starts_with("https://")
+                            {
+                                *link_href = v.to_string();
+                            }
+                        }
+                    } else if an.eq_ignore_ascii_case(b"title") {
+                        if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                            *link_title = Some(v.trim().to_string());
+                        }
+                    }
+                }
+            }
+            if !link_href.is_empty() {
+                *in_link = true;
+                *link_start = current_para.chars().count();
+            }
+        };
+
         let mut reader = Reader::from_str(html);
         reader.config_mut().trim_text(true);
         let mut buffer = Vec::new();
@@ -431,41 +483,9 @@ impl EpubParser {
                             }
                         }
                     } else if name.eq_ignore_ascii_case(b"br") || name.eq_ignore_ascii_case(b"hr") {
-                        if !current_para.trim().is_empty() {
-                            paragraphs.push(std::mem::take(&mut current_para));
-                            paragraph_links.push(std::mem::take(&mut current_links));
-                        }
-                        text_indent = false;
-                        para_count += 1;
+                        flush_para(&mut current_para, &mut paragraphs, &mut paragraph_links, &mut current_links, &mut text_indent, &mut para_count);
                     } else if name.eq_ignore_ascii_case(b"a") {
-                        link_href.clear();
-                        link_title = None;
-                        for attr in e.attributes() {
-                            if let Ok(attr) = attr {
-                                let an = attr.key.as_ref();
-                                if an.eq_ignore_ascii_case(b"href") {
-                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
-                                        let v = v.trim();
-                                        if !v.is_empty()
-                                            && !v.starts_with("javascript:")
-                                            && !v.starts_with("mailto:")
-                                            && !v.starts_with("http://")
-                                            && !v.starts_with("https://")
-                                        {
-                                            link_href = v.to_string();
-                                        }
-                                    }
-                                } else if an.eq_ignore_ascii_case(b"title") {
-                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
-                                        link_title = Some(v.trim().to_string());
-                                    }
-                                }
-                            }
-                        }
-                        if !link_href.is_empty() {
-                            in_link = true;
-                            link_start = current_para.chars().count();
-                        }
+                        handle_a_attrs(e.attributes(), &mut link_href, &mut link_title, &mut in_link, &mut link_start, &current_para);
                     }
                 }
                 Ok(Event::Empty(ref e)) => {
@@ -481,41 +501,9 @@ impl EpubParser {
                             images.push((para_count - 1, src, alt));
                         }
                     } else if name.eq_ignore_ascii_case(b"br") || name.eq_ignore_ascii_case(b"hr") {
-                        if !current_para.trim().is_empty() {
-                            paragraphs.push(std::mem::take(&mut current_para));
-                            paragraph_links.push(std::mem::take(&mut current_links));
-                        }
-                        text_indent = false;
-                        para_count += 1;
+                        flush_para(&mut current_para, &mut paragraphs, &mut paragraph_links, &mut current_links, &mut text_indent, &mut para_count);
                     } else if name.eq_ignore_ascii_case(b"a") {
-                        link_href.clear();
-                        link_title = None;
-                        for attr in e.attributes() {
-                            if let Ok(attr) = attr {
-                                let an = attr.key.as_ref();
-                                if an.eq_ignore_ascii_case(b"href") {
-                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
-                                        let v = v.trim();
-                                        if !v.is_empty()
-                                            && !v.starts_with("javascript:")
-                                            && !v.starts_with("mailto:")
-                                            && !v.starts_with("http://")
-                                            && !v.starts_with("https://")
-                                        {
-                                            link_href = v.to_string();
-                                        }
-                                    }
-                                } else if an.eq_ignore_ascii_case(b"title") {
-                                    if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
-                                        link_title = Some(v.trim().to_string());
-                                    }
-                                }
-                            }
-                        }
-                        if !link_href.is_empty() {
-                            in_link = true;
-                            link_start = current_para.chars().count();
-                        }
+                        handle_a_attrs(e.attributes(), &mut link_href, &mut link_title, &mut in_link, &mut link_start, &current_para);
                     }
                 }
                 Ok(Event::End(ref e)) => {
