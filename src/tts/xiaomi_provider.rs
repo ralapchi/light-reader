@@ -110,10 +110,11 @@ impl TtsProvider for XiaomiTtsProvider {
         } else {
             let status_code = status.as_u16();
             let body_text = resp.text().unwrap_or_default();
+            let truncated = &body_text[..body_text.char_indices().nth(300).map_or(body_text.len(), |(i, _)| i)];
             log::warn!(
                 "Xiaomi TTS API error: status={} body={}",
                 status_code,
-                &body_text.chars().take(300).collect::<String>()
+                truncated
             );
 
             let err_detail = serde_json::from_str::<serde_json::Value>(&body_text)
