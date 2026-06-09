@@ -22,13 +22,13 @@ struct TeeWriter<A: Write, B: Write> {
 
 impl<A: Write, B: Write> Write for TeeWriter<A, B> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let _ = self.a.lock().unwrap().write_all(buf);
-        let _ = self.b.lock().unwrap().write_all(buf);
+        if let Ok(mut a) = self.a.lock() { a.write_all(buf).ok(); }
+        if let Ok(mut b) = self.b.lock() { b.write_all(buf).ok(); }
         Ok(buf.len())
     }
     fn flush(&mut self) -> std::io::Result<()> {
-        self.a.lock().unwrap().flush()?;
-        self.b.lock().unwrap().flush()?;
+        if let Ok(mut a) = self.a.lock() { a.flush().ok(); }
+        if let Ok(mut b) = self.b.lock() { b.flush().ok(); }
         Ok(())
     }
 }
