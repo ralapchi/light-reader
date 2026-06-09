@@ -42,22 +42,28 @@ fn init_logging() {
         .unwrap_or_else(|_| "info".to_string());
 
     let log_path = log_dir.join("reader.log");
-    let file = std::fs::OpenOptions::new()
+    match std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&log_path)
-        .expect("无法创建日志文件");
-
-    let tee = TeeWriter {
-        a: Mutex::new(std::io::stderr()),
-        b: Mutex::new(file),
-    };
-
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&level_var))
-        .target(env_logger::Target::Pipe(Box::new(tee)))
-        .init();
-
-    info!("日志启动 (级别={}, 文件={})", level_var, log_path.display());
+    {
+        Ok(file) => {
+            let tee = TeeWriter {
+                a: Mutex::new(std::io::stderr()),
+                b: Mutex::new(file),
+            };
+            env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&level_var))
+                .target(env_logger::Target::Pipe(Box::new(tee)))
+                .init();
+            info!("日志启动 (级别={}, 文件={})", level_var, log_path.display());
+        }
+        Err(e) => {
+            env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&level_var))
+                .target(env_logger::Target::Stderr)
+                .init();
+            eprintln!("日志文件创建失败 ({}), 回退到 stderr: {}", log_path.display(), e);
+        }
+    }
 }
 
 fn main() {
