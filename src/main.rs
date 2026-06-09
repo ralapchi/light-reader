@@ -94,6 +94,7 @@ fn main() {
             reader_get_chapter,
             reader_chapter_image,
             reader_chapter_image_path,
+            reader_chapter_images,
             reader_go_to_chapter,
             reader_save_progress,
             reader_get_progress,

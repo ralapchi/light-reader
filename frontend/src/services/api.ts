@@ -148,6 +148,10 @@ export function readerChapterImage(bookId: string, assetId: string): Promise<str
   return invoke('reader_chapter_image', { bookId, assetId })
 }
 
+export function readerChapterImages(bookId: string, assetIds: string[]): Promise<Record<string, string>> {
+  return invoke('reader_chapter_images', { bookId, assetIds })
+}
+
 export interface SaveProgressDto {
   book_id: string
   chapter_index: number

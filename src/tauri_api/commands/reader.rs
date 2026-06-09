@@ -415,6 +415,86 @@ pub async fn reader_chapter_image_path(
     .map_err(|e| e.to_string())?
 }
 
+/// Batch version of reader_chapter_image: returns data URIs for multiple asset IDs in one IPC call.
+/// Shares a single EPUB zip open for all cache misses.
+#[tauri::command]
+pub async fn reader_chapter_images(
+    book_id: String,
+    asset_ids: Vec<String>,
+    state: tauri::State<'_, BookSession>,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    use crate::services::asset_service::AssetService;
+    let svc = crate::services::asset_service_impl::AssetServiceImpl::new();
+    let mut result = std::collections::HashMap::new();
+
+    // Separate cached vs uncached
+    let mut uncached_ids = Vec::new();
+    for aid in &asset_ids {
+        if let Some(p) = svc.image_path(&book_id, aid) {
+            if let Some(uri) = read_file_to_data_uri(p.to_str().unwrap_or(""))? {
+                result.insert(aid.clone(), uri);
+            }
+        } else {
+            uncached_ids.push(aid.clone());
+        }
+    }
+
+    if uncached_ids.is_empty() {
+        return Ok(result);
+    }
+
+    // Extract asset info for uncached images (short lock)
+    let assets_info: Vec<(String, std::path::PathBuf, String, Option<String>, Option<String>)> = {
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
+        if book.id != book_id {
+            return Ok(result);
+        }
+        uncached_ids
+            .iter()
+            .filter_map(|aid| {
+                book.assets
+                    .image_assets
+                    .iter()
+                    .find(|a| a.asset_id == *aid)
+                    .filter(|img| !img.asset_path.is_empty())
+                    .map(|img| {
+                        (
+                            aid.clone(),
+                            book.source_path.clone(),
+                            img.asset_path.clone(),
+                            img.cache_key.clone(),
+                            img.media_type.clone(),
+                        )
+                    })
+            })
+            .collect()
+    };
+
+    // Blocking work: extract from EPUB and convert to data URIs
+    let book_id_clone = book_id.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        for (aid, epub_path, asset_path, cache_key, media_type) in assets_info {
+            let path = resolve_chapter_image_cache_path_blocking(
+                &book_id_clone,
+                &aid,
+                Some(epub_path.as_path()),
+                Some(&asset_path),
+                cache_key.as_deref(),
+                media_type.as_deref(),
+            )?;
+            if let Some(p) = path {
+                if let Some(uri) = read_file_to_data_uri(p.to_str().unwrap_or(""))? {
+                    result.insert(aid, uri);
+                }
+            }
+        }
+        Ok(result)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub fn reader_go_to_chapter(
     chapter_index: usize,
