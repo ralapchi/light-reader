@@ -1,4 +1,4 @@
-import { memo, type CSSProperties } from 'react'
+import { memo, useMemo, type CSSProperties } from 'react'
 import type { ReaderBlockDto, ReaderTextLinkDto } from '../../services/api'
 
 interface ReaderBlockProps {
@@ -9,15 +9,13 @@ interface ReaderBlockProps {
   onLinkClick?: (href: string) => void
 }
 
-function renderLinkedText(text: string, links: ReaderTextLinkDto[], onLinkClick?: (href: string) => void) {
-  if (!links || links.length === 0) return text
+function renderLinkedText(text: string, sortedLinks: ReaderTextLinkDto[], onLinkClick?: (href: string) => void) {
+  if (!sortedLinks || sortedLinks.length === 0) return text
 
   const parts: React.ReactNode[] = []
   let cursor = 0
 
-  const sorted = [...links].sort((a, b) => a.start - b.start)
-
-  for (const link of sorted) {
+  for (const link of sortedLinks) {
     if (link.start < cursor || link.start >= text.length || link.end <= link.start) continue
 
     if (link.start > cursor) {
@@ -48,6 +46,11 @@ function renderLinkedText(text: string, links: ReaderTextLinkDto[], onLinkClick?
 }
 
 export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, highlight, onLinkClick }: ReaderBlockProps) {
+  const sortedLinks = useMemo(
+    () => block.links?.length ? [...block.links].sort((a, b) => a.start - b.start) : undefined,
+    [block.links]
+  )
+
   if (block.type === 'separator') {
     return <p className="reader-paragraph separator" style={paragraphStyle}>***</p>
   }
@@ -66,7 +69,7 @@ export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, hi
   if (block.type === 'heading') {
     return (
       <h2 className={`reader-heading${highlight ? ' tts-highlight' : ''}`} style={paragraphStyle} data-para-index={block.index}>
-        {renderLinkedText(block.text, block.links ?? [], onLinkClick)}
+        {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick)}
       </h2>
     )
   }
@@ -74,7 +77,7 @@ export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, hi
   if (block.type === 'quote') {
     return (
       <blockquote className={`reader-paragraph quote${highlight ? ' tts-highlight' : ''}`} style={paragraphStyle} data-para-index={block.index}>
-        {renderLinkedText(block.text, block.links ?? [], onLinkClick)}
+        {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick)}
       </blockquote>
     )
   }
@@ -82,7 +85,7 @@ export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, hi
   const cls = `reader-paragraph indent${highlight ? ' tts-highlight' : ''}`
   return (
     <p className={cls} style={paragraphStyle} data-para-index={block.index}>
-      {renderLinkedText(block.text, block.links ?? [], onLinkClick)}
+      {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick)}
     </p>
   )
 })
