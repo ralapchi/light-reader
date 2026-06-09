@@ -960,6 +960,33 @@
   opacity: 0.8;
 }
 
+.reader-footnote-preview {
+  position: fixed;
+  z-index: 300;
+  transform: translate(-50%, calc(-100% - 8px));
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: 220px;
+  overflow: auto;
+  pointer-events: none;
+  background: var(--surface, #FFFFFF);
+  border: 1px solid var(--border, #E8E4DF);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  color: var(--text-primary, #1A1A1A);
+  font-size: 13px;
+  line-height: 1.65;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+}
+
+.reader-footnote-preview.down {
+  transform: translate(-50%, 0);
+}
+
+.reader-footnote-preview.loading {
+  color: var(--text-secondary, #6F6A63);
+}
+
 /* ── Footnote return ───────────────────────────────────── */
 
 .footnote-return-btn {

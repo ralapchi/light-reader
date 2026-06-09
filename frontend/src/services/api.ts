@@ -186,6 +186,17 @@ export function readerResolveHref(
   return invoke('reader_resolve_href', { href, fromChapterIndex: fromChapterIndex ?? null })
 }
 
+export interface LinkPreviewDto {
+  chapter_index: number
+  paragraph_index: number | null
+  text: string
+  title: string | null
+}
+
+export function readerGetLinkPreview(href: string, fromChapterIndex: number): Promise<LinkPreviewDto | null> {
+  return invoke('reader_get_link_preview', { href, fromChapterIndex })
+}
+
 // ── Search / Bookmarks ─────────────────────────────────────
 
 export interface SearchHitDto {

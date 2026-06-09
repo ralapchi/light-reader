@@ -7,9 +7,17 @@ interface ReaderBlockProps {
   paragraphStyle?: CSSProperties
   highlight?: boolean
   onLinkClick?: (href: string) => void
+  onLinkHover?: (href: string, target: HTMLElement, title?: string | null) => void
+  onLinkLeave?: () => void
 }
 
-function renderLinkedText(text: string, sortedLinks: ReaderTextLinkDto[], onLinkClick?: (href: string) => void) {
+function renderLinkedText(
+  text: string,
+  sortedLinks: ReaderTextLinkDto[],
+  onLinkClick?: (href: string) => void,
+  onLinkHover?: (href: string, target: HTMLElement, title?: string | null) => void,
+  onLinkLeave?: () => void,
+) {
   if (!sortedLinks || sortedLinks.length === 0) return text
 
   const parts: React.ReactNode[] = []
@@ -30,7 +38,9 @@ function renderLinkedText(text: string, sortedLinks: ReaderTextLinkDto[], onLink
           e.stopPropagation()
           onLinkClick?.(link.href)
         }}
-        title={link.title || link.href}
+        onMouseEnter={(e) => onLinkHover?.(link.href, e.currentTarget, link.title)}
+        onMouseLeave={onLinkLeave}
+        title={link.title || undefined}
       >
         {text.slice(link.start, link.end)}
       </button>,
@@ -45,7 +55,7 @@ function renderLinkedText(text: string, sortedLinks: ReaderTextLinkDto[], onLink
   return <>{parts}</>
 }
 
-export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, highlight, onLinkClick }: ReaderBlockProps) {
+export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, highlight, onLinkClick, onLinkHover, onLinkLeave }: ReaderBlockProps) {
   const blockLinks = 'links' in block ? block.links : undefined
   const sortedLinks = useMemo(
     () => blockLinks?.length ? [...blockLinks].sort((a, b) => a.start - b.start) : undefined,
@@ -70,7 +80,7 @@ export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, hi
   if (block.type === 'heading') {
     return (
       <h2 className={`reader-heading${highlight ? ' tts-highlight' : ''}`} style={paragraphStyle} data-para-index={block.index}>
-        {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick)}
+        {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick, onLinkHover, onLinkLeave)}
       </h2>
     )
   }
@@ -78,7 +88,7 @@ export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, hi
   if (block.type === 'quote') {
     return (
       <blockquote className={`reader-paragraph quote${highlight ? ' tts-highlight' : ''}`} style={paragraphStyle} data-para-index={block.index}>
-        {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick)}
+        {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick, onLinkHover, onLinkLeave)}
       </blockquote>
     )
   }
@@ -86,7 +96,7 @@ export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, hi
   const cls = `reader-paragraph indent${highlight ? ' tts-highlight' : ''}`
   return (
     <p className={cls} style={paragraphStyle} data-para-index={block.index}>
-      {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick)}
+      {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick, onLinkHover, onLinkLeave)}
     </p>
   )
 })

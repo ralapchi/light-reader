@@ -38,6 +38,8 @@ interface TwoPageReaderContentProps {
   onNextChapter?: () => void
   onPreviousChapter?: () => void
   onLinkClick?: (href: string) => void
+  onLinkHover?: (href: string, target: HTMLElement, title?: string | null) => void
+  onLinkLeave?: () => void
   onNavigate?: () => void
   onVisibleChapterChange?: (visible: TwoPageVisibleChapter | null) => void
   paragraphStyle: CSSProperties
@@ -55,6 +57,8 @@ export default memo(function TwoPageReaderContent({
   onNextChapter,
   onPreviousChapter,
   onLinkClick,
+  onLinkHover,
+  onLinkLeave,
   onNavigate,
   onVisibleChapterChange,
   paragraphStyle,
@@ -139,6 +143,8 @@ export default memo(function TwoPageReaderContent({
                       paragraphStyle={paragraphStyle}
                       highlight={blockParagraphIndex(block) === highlightedParagraphIndex}
                       onLinkClick={onLinkClick}
+                      onLinkHover={onLinkHover}
+                      onLinkLeave={onLinkLeave}
                     />
                   </div>
                 ))}

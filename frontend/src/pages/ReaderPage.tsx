@@ -12,6 +12,7 @@ import { captureVisibleParagraph, flattenToc } from './reader/readerUtils'
 import { useReaderKeyboard } from './reader/useReaderKeyboard'
 import { useReaderStyles } from './reader/useReaderStyles'
 import { usePreservePositionOnModeChange } from './reader/usePreservePositionOnModeChange'
+import { useFootnotePreview } from './reader/useFootnotePreview'
 import ReaderContent from './reader/ReaderContent'
 import type { TwoPageNav, TwoPageVisibleChapter } from './reader/TwoPageReaderContent'
 import ReaderSearchPanel from './reader/ReaderSearchPanel'
@@ -64,10 +65,17 @@ function ReaderPage() {
   }, [effectiveReadingMode])
 
   const { layoutAnchorParagraph, setLayoutAnchorParagraph } = usePreservePositionOnModeChange(effectiveReadingMode, contentRef, twoPageNavRef)
+  const displayChapterIndex = effectiveReadingMode === 'TwoPage'
+    ? (twoPageVisibleChapter?.chapterIndex ?? currentChapterIndex)
+    : currentChapterIndex
+  const chapterTitle = effectiveReadingMode === 'TwoPage'
+    ? (twoPageVisibleChapter?.title ?? currentChapter?.title ?? '')
+    : (currentChapter?.title ?? '')
 
   const search = useReaderSearch()
   const navigation = useChapterNavigation(bookId, book, contentRef, search.handleClose, effectiveReadingMode, twoPageNavRef)
   const progress = useReadingProgress(bookId, book, currentChapterIndex, contentRef, effectiveReadingMode, twoPageNavRef)
+  const footnotePreview = useFootnotePreview(displayChapterIndex)
   const bookmarks = useBookmarks(bookId, currentChapterIndex, contentRef)
   const { toggleBookmark } = bookmarks
   const ttsReader = useTtsReader(contentRef)
@@ -91,12 +99,6 @@ function ReaderPage() {
   useReaderKeyboard(toggleBookmark)
 
   const flatToc = useMemo(() => book ? flattenToc(book.toc) : [], [book])
-  const displayChapterIndex = effectiveReadingMode === 'TwoPage'
-    ? (twoPageVisibleChapter?.chapterIndex ?? currentChapterIndex)
-    : currentChapterIndex
-  const chapterTitle = effectiveReadingMode === 'TwoPage'
-    ? (twoPageVisibleChapter?.title ?? currentChapter?.title ?? '')
-    : (currentChapter?.title ?? '')
   const progressDisplay = `${Math.round(progressPercent * 100)}%`
 
   const isOriginal = settings.theme === 'original'
@@ -162,6 +164,8 @@ function ReaderPage() {
         twoPageNavRef={twoPageNavRef}
         onScroll={progress.handleScroll}
         onLinkClick={handleLinkClick}
+        onLinkHover={footnotePreview.showPreview}
+        onLinkLeave={footnotePreview.hidePreview}
         paragraphStyle={paragraphStyle}
         readingMode={effectiveReadingMode}
         onNextChapter={navigation.goToNextChapter}
@@ -182,6 +186,18 @@ function ReaderPage() {
             <path d="M4 9h10a6 6 0 0 1 0 12h-1" />
           </svg>
         </button>
+      )}
+
+      {footnotePreview.preview && (
+        <div
+          className={`reader-footnote-preview ${footnotePreview.preview.status} ${footnotePreview.preview.direction}`}
+          style={{
+            left: footnotePreview.preview.x,
+            top: footnotePreview.preview.y,
+          }}
+        >
+          {footnotePreview.preview.text}
+        </div>
       )}
 
       <ReaderStatusBar

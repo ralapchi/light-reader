@@ -105,6 +105,7 @@ fn main() {
             reader_get_progress,
             reader_flush_progress,
             reader_resolve_href,
+            reader_get_link_preview,
             // Search / Bookmarks
             search_in_book,
             bookmark_list,

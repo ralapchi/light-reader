@@ -19,6 +19,8 @@ interface ReaderContentProps {
   onPreviousChapter?: () => void
   onScroll: () => void
   onLinkClick?: (href: string) => void
+  onLinkHover?: (href: string, target: HTMLElement, title?: string | null) => void
+  onLinkLeave?: () => void
   onNavigate?: () => void
   onVisibleChapterChange?: (visible: TwoPageVisibleChapter | null) => void
   paragraphStyle: CSSProperties
@@ -40,6 +42,8 @@ export default function ReaderContent(props: ReaderContentProps) {
         onNextChapter={props.onNextChapter}
         onPreviousChapter={props.onPreviousChapter}
         onLinkClick={props.onLinkClick}
+        onLinkHover={props.onLinkHover}
+        onLinkLeave={props.onLinkLeave}
         onNavigate={props.onNavigate}
         onVisibleChapterChange={props.onVisibleChapterChange}
         paragraphStyle={props.paragraphStyle}
@@ -59,6 +63,8 @@ export default function ReaderContent(props: ReaderContentProps) {
       onPreviousChapter={props.onPreviousChapter}
       onScroll={props.onScroll}
       onLinkClick={props.onLinkClick}
+      onLinkHover={props.onLinkHover}
+      onLinkLeave={props.onLinkLeave}
       onNavigate={props.onNavigate}
       paragraphStyle={props.paragraphStyle}
     />

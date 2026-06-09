@@ -140,6 +140,14 @@ pub struct ReaderResolvedLinkDto {
     pub scroll_offset: Option<f32>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LinkPreviewDto {
+    pub chapter_index: usize,
+    pub paragraph_index: Option<usize>,
+    pub text: String,
+    pub title: Option<String>,
+}
+
 // ── TTS DTOs ────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -14,6 +14,8 @@ interface SinglePageReaderContentProps {
   onPreviousChapter?: () => void
   onScroll: () => void
   onLinkClick?: (href: string) => void
+  onLinkHover?: (href: string, target: HTMLElement, title?: string | null) => void
+  onLinkLeave?: () => void
   onNavigate?: () => void
   paragraphStyle: CSSProperties
 }
@@ -29,6 +31,8 @@ export default memo(function SinglePageReaderContent({
   onPreviousChapter,
   onScroll,
   onLinkClick,
+  onLinkHover,
+  onLinkLeave,
   onNavigate,
   paragraphStyle,
 }: SinglePageReaderContentProps) {
@@ -58,6 +62,8 @@ export default memo(function SinglePageReaderContent({
                   paragraphStyle={paragraphStyle}
                   highlight={blockParagraphIndex(block) === highlightedParagraphIndex}
                   onLinkClick={onLinkClick}
+                  onLinkHover={onLinkHover}
+                  onLinkLeave={onLinkLeave}
                 />
               </div>
             ))}

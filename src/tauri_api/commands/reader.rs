@@ -267,6 +267,97 @@ pub fn reader_resolve_href(
     }))
 }
 
+/// Get link preview: resolve href and extract target paragraph text in one IPC call.
+#[tauri::command]
+pub fn reader_get_link_preview(
+    href: String,
+    from_chapter_index: usize,
+    state: tauri::State<'_, BookSession>,
+) -> Result<Option<LinkPreviewDto>, String> {
+    let guard = state.lock().map_err(|e| e.to_string())?;
+    let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
+    let (file_part, fragment) = match href.split_once('#') {
+        Some((f, frag)) => (f.to_string(), Some(frag.to_string())),
+        None => (href.clone(), None),
+    };
+
+    // Resolve chapter_index
+    let chapter_index = if file_part.is_empty() {
+        from_chapter_index
+    } else {
+        let target_file = file_part.rsplit('/').next().unwrap_or(&file_part);
+        if target_file.is_empty() {
+            return Ok(None);
+        }
+        match book.chapters.iter().position(|ch| {
+            ch.source_href
+                .as_ref()
+                .map(|h| {
+                    h == &file_part || h.ends_with(&format!("/{}", target_file)) || h == target_file
+                })
+                .unwrap_or(false)
+        }) {
+            Some(ci) => ci,
+            None => match book.chapters.iter().position(|ch| {
+                ch.source_href
+                    .as_ref()
+                    .map(|h| {
+                        let ch_file = h.rsplit('/').next().unwrap_or(h);
+                        ch_file == target_file
+                    })
+                    .unwrap_or(false)
+            }) {
+                Some(ci) => ci,
+                None => {
+                    if file_part.is_empty() || href.starts_with('#') {
+                        from_chapter_index
+                    } else {
+                        return Ok(None);
+                    }
+                }
+            },
+        }
+    };
+
+    if chapter_index >= book.chapters.len() {
+        return Ok(None);
+    }
+
+    let chapter = &book.chapters[chapter_index];
+
+    // Resolve paragraph_index from fragment
+    let paragraph_index = fragment.as_ref().and_then(|frag| {
+        chapter
+            .anchors
+            .iter()
+            .find(|(id, _)| id == frag)
+            .map(|(_, pi)| *pi)
+    });
+
+    // Extract paragraph text (trimmed)
+    let text = paragraph_index
+        .and_then(|pi| {
+            chapter.blocks.iter().find_map(|b| match b {
+                crate::domain::chapter_block::ChapterBlock::Paragraph(p)
+                | crate::domain::chapter_block::ChapterBlock::Heading(p)
+                | crate::domain::chapter_block::ChapterBlock::Quote(p)
+                    if p.index == pi =>
+                {
+                    Some(p.text.trim().to_string())
+                }
+                _ => None,
+            })
+        })
+        .unwrap_or_default();
+
+    Ok(Some(LinkPreviewDto {
+        chapter_index,
+        paragraph_index,
+        text,
+        title: None,
+    }))
+}
+
 /// Resolve a chapter image to its on-disk cache path, extracting from EPUB on cache miss.
 /// This function performs blocking I/O (zip extraction) and must be called from a blocking context.
 fn resolve_chapter_image_cache_path_blocking(
