@@ -1,35 +1,93 @@
 use crate::domain::book_format::BookFormat;
-use crate::services::library_service::LibraryService;
 use crate::services::library_service_impl::LibraryServiceImpl;
 
 use super::super::dto::*;
 use super::dto_convert::{item_to_dto, read_file_to_data_uri};
 
 #[tauri::command]
-pub fn library_list() -> Result<Vec<LibraryBookCardDto>, String> {
-    let svc = LibraryServiceImpl::new();
-    let items = svc.list_books();
-    Ok(items.iter().map(|i| item_to_dto(i)).collect())
+pub fn library_list(
+    index_state: tauri::State<'_, super::LibraryIndexState>,
+) -> Result<Vec<LibraryBookCardDto>, String> {
+    let index = index_state.lock().map_err(|e| e.to_string())?;
+    Ok(index.items.iter().map(|i| item_to_dto(i)).collect())
 }
 
 #[tauri::command]
-pub fn library_import(paths: Vec<String>) -> Result<Vec<LibraryBookCardDto>, String> {
-    let svc = LibraryServiceImpl::new();
-    let items = svc.import_books(paths).map_err(|e| e.to_string())?;
-    Ok(items.iter().map(|i| item_to_dto(i)).collect())
+pub fn library_import(
+    paths: Vec<String>,
+    index_state: tauri::State<'_, super::LibraryIndexState>,
+) -> Result<Vec<LibraryBookCardDto>, String> {
+    let mut index = index_state.lock().map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now().to_rfc3339();
+    let mut imported = Vec::new();
+
+    for path in &paths {
+        match LibraryServiceImpl::parse_book_item(path, &now) {
+            Ok(mut item) => {
+                let book_id = item.book_id.clone();
+                if item.format == BookFormat::Epub {
+                    let epub_path = std::path::Path::new(&item.source_path);
+                    if epub_path.exists() {
+                        if let Some(cover_path) = crate::services::asset_service_impl::extract_and_cache_cover(
+                            epub_path, &book_id,
+                        ) {
+                            if let Some(ext) = cover_path.extension().and_then(|e| e.to_str()) {
+                                item.cover_cache_key = Some(ext.to_string());
+                            }
+                        }
+                    }
+                }
+                if let Some(existing) = index.items.iter_mut().find(|i| i.book_id == book_id) {
+                    let imported_at = existing.imported_at.clone();
+                    imported.push(item.clone());
+                    *existing = item;
+                    existing.imported_at = imported_at;
+                } else {
+                    index.items.push(item.clone());
+                    imported.push(item);
+                }
+                index.last_selected_book_id = Some(book_id);
+            }
+            Err(e) => {
+                log::warn!("导入书籍失败: {} - {}", path, e);
+            }
+        }
+    }
+
+    LibraryServiceImpl::save_index(&index);
+
+    if imported.is_empty() && !paths.is_empty() {
+        Err("所有书籍导入失败".to_string())
+    } else {
+        Ok(imported.iter().map(|i| item_to_dto(i)).collect())
+    }
 }
 
 #[tauri::command]
-pub fn library_open(book_id: String) -> Result<(), String> {
-    let svc = LibraryServiceImpl::new();
-    svc.open_book(&book_id).map_err(|e| e.to_string())
+pub fn library_open(
+    book_id: String,
+    index_state: tauri::State<'_, super::LibraryIndexState>,
+) -> Result<(), String> {
+    let index = index_state.lock().map_err(|e| e.to_string())?;
+    let item = index
+        .items
+        .iter()
+        .find(|i| i.book_id == book_id)
+        .ok_or_else(|| "书籍不在书库中".to_string())?;
+    if item.file_health == crate::domain::library_item::FileHealth::Missing {
+        return Err("书籍文件缺失".to_string());
+    }
+    Ok(())
 }
 
 #[tauri::command]
-pub fn library_remove(book_id: String, delete_files: bool) -> Result<(), String> {
-    let svc = LibraryServiceImpl::new();
+pub fn library_remove(
+    book_id: String,
+    delete_files: bool,
+    index_state: tauri::State<'_, super::LibraryIndexState>,
+) -> Result<(), String> {
     let source = if delete_files {
-        let index = LibraryServiceImpl::load_index();
+        let index = index_state.lock().map_err(|e| e.to_string())?;
         Some(
             index
                 .items
@@ -43,7 +101,33 @@ pub fn library_remove(book_id: String, delete_files: bool) -> Result<(), String>
         None
     };
 
-    svc.remove_book(&book_id).map_err(|e| e.to_string())?;
+    {
+        let mut index = index_state.lock().map_err(|e| e.to_string())?;
+        let before = index.items.len();
+        index.items.retain(|i| i.book_id != book_id);
+        if index.items.len() == before {
+            return Err(format!("书籍 {} 不在书库中", book_id));
+        }
+        LibraryServiceImpl::save_index(&index);
+    }
+
+    // Clean up bookmarks
+    let _ = crate::storage::bookmark_store::save(&book_id, &[]);
+    // Clean up cached assets (best-effort)
+    let cover_dir = crate::storage::paths::app_data_dir().join("cache/covers");
+    for ext in &["png", "jpg", "jpeg", "webp", "gif", "svg"] {
+        let cover_path = cover_dir.join(format!("{}.{}", book_id, ext));
+        if cover_path.exists() {
+            let _ = std::fs::remove_file(&cover_path);
+        }
+    }
+    let img_dir = crate::storage::paths::app_data_dir()
+        .join("cache/images")
+        .join(&book_id);
+    if img_dir.exists() {
+        let _ = std::fs::remove_dir_all(&img_dir);
+    }
+
     if delete_files {
         if let Some(source) = source {
             match std::fs::remove_file(&source) {
@@ -57,29 +141,53 @@ pub fn library_remove(book_id: String, delete_files: bool) -> Result<(), String>
 }
 
 #[tauri::command]
-pub fn library_remove_batch(book_ids: Vec<String>, delete_files: bool) -> Result<(), String> {
-    let svc = LibraryServiceImpl::new();
-    let index = LibraryServiceImpl::load_index();
-    let source_paths: Vec<String> = if delete_files {
-        book_ids
-            .iter()
-            .filter_map(|id| {
-                index
-                    .items
-                    .iter()
-                    .find(|i| &i.book_id == id)
-                    .map(|i| i.source_path.clone())
-            })
-            .collect()
-    } else {
-        vec![]
-    };
-    let mut failures = Vec::new();
-    for id in &book_ids {
-        if let Err(e) = svc.remove_book(id) {
-            failures.push(format!("{}: {}", id, e));
+pub fn library_remove_batch(
+    book_ids: Vec<String>,
+    delete_files: bool,
+    index_state: tauri::State<'_, super::LibraryIndexState>,
+) -> Result<(), String> {
+    let source_paths: Vec<String> = {
+        let index = index_state.lock().map_err(|e| e.to_string())?;
+        if delete_files {
+            book_ids
+                .iter()
+                .filter_map(|id| {
+                    index
+                        .items
+                        .iter()
+                        .find(|i| &i.book_id == id)
+                        .map(|i| i.source_path.clone())
+                })
+                .collect()
+        } else {
+            vec![]
         }
+    };
+
+    let mut failures = Vec::new();
+    {
+        let mut index = index_state.lock().map_err(|e| e.to_string())?;
+        for id in &book_ids {
+            let before = index.items.len();
+            index.items.retain(|i| &i.book_id != id);
+            if index.items.len() == before {
+                failures.push(format!("{}: 书籍不在书库中", id));
+            } else {
+                let _ = crate::storage::bookmark_store::save(id, &[]);
+                let cover_dir = crate::storage::paths::app_data_dir().join("cache/covers");
+                for ext in &["png", "jpg", "jpeg", "webp", "gif", "svg"] {
+                    let p = cover_dir.join(format!("{}.{}", id, ext));
+                    if p.exists() { let _ = std::fs::remove_file(&p); }
+                }
+                let img_dir = crate::storage::paths::app_data_dir()
+                    .join("cache/images")
+                    .join(id);
+                if img_dir.exists() { let _ = std::fs::remove_dir_all(&img_dir); }
+            }
+        }
+        LibraryServiceImpl::save_index(&index);
     }
+
     if delete_files {
         for path in &source_paths {
             match std::fs::remove_file(path) {
@@ -97,27 +205,58 @@ pub fn library_remove_batch(book_ids: Vec<String>, delete_files: bool) -> Result
 }
 
 #[tauri::command]
-pub fn library_search(query: String) -> Result<Vec<LibraryBookCardDto>, String> {
-    let svc = LibraryServiceImpl::new();
-    let items = svc.search(&query);
-    Ok(items.iter().map(|i| item_to_dto(i)).collect())
+pub fn library_search(
+    query: String,
+    index_state: tauri::State<'_, super::LibraryIndexState>,
+) -> Result<Vec<LibraryBookCardDto>, String> {
+    let index = index_state.lock().map_err(|e| e.to_string())?;
+    let q = query.to_lowercase();
+    Ok(index
+        .items
+        .iter()
+        .filter(|item| {
+            item.title.to_lowercase().contains(&q)
+                || item
+                    .author
+                    .as_ref()
+                    .map_or(false, |a| a.to_lowercase().contains(&q))
+        })
+        .map(|i| item_to_dto(i))
+        .collect())
 }
 
 #[tauri::command]
-pub fn library_repair_path(book_id: String, new_path: String) -> Result<(), String> {
-    let svc = LibraryServiceImpl::new();
-    svc.repair_path(&book_id, &new_path)
-        .map_err(|e| e.to_string())
+pub fn library_repair_path(
+    book_id: String,
+    new_path: String,
+    index_state: tauri::State<'_, super::LibraryIndexState>,
+) -> Result<(), String> {
+    use crate::parser::ParserFactory;
+    let mut index = index_state.lock().map_err(|e| e.to_string())?;
+    if !index.items.iter().any(|i| i.book_id == book_id) {
+        return Err("书籍不在书库中".to_string());
+    }
+    if ParserFactory::get_parser(&new_path).is_none() {
+        return Err("不支持的文件格式".to_string());
+    }
+    if !std::path::Path::new(&new_path).exists() {
+        return Err("修复路径不存在".to_string());
+    }
+    LibraryServiceImpl::repair_item_path(&mut index, &book_id, &new_path);
+    LibraryServiceImpl::save_index(&index);
+    Ok(())
 }
 
 /// Get a book's cover image as a data URI by book_id.
 #[tauri::command]
-pub fn library_cover(book_id: String) -> Result<Option<String>, String> {
+pub fn library_cover(
+    book_id: String,
+    index_state: tauri::State<'_, super::LibraryIndexState>,
+) -> Result<Option<String>, String> {
     use crate::services::asset_service::AssetService;
     let svc = crate::services::asset_service_impl::AssetServiceImpl::new();
     let path = svc.cover_path(&book_id).or_else(|| {
-        // Cache miss: try lightweight EPUB cover extraction
-        let index = LibraryServiceImpl::load_index();
+        let index = index_state.lock().ok()?;
         let item = index.items.iter().find(|i| i.book_id == book_id)?;
         if item.format == BookFormat::Epub {
             let epub_path = std::path::Path::new(&item.source_path);

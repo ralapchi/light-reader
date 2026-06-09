@@ -21,6 +21,7 @@ pub fn reader_get_book(
 pub async fn reader_open_book(
     book_id: String,
     state: tauri::State<'_, BookSession>,
+    index_state: tauri::State<'_, super::LibraryIndexState>,
     app: tauri::AppHandle,
 ) -> Result<ReaderBookDto, String> {
     use crate::tauri_api::emitter::EventEmitter;
@@ -31,38 +32,41 @@ pub async fn reader_open_book(
     let emitter = EventEmitter::new(&app);
     let start = Instant::now();
 
-    // Load index once and validate book exists / file is present.
-    let mut index = LibraryServiceImpl::load_index();
-    let item = index
-        .items
-        .iter()
-        .find(|i| i.book_id == book_id)
-        .ok_or_else(|| {
-            let msg = "书籍不在书库中".to_string();
+    // Validate book exists and extract source_path from cached index, then drop guard.
+    let source_path = {
+        let index = index_state.lock().map_err(|e| e.to_string())?;
+        let item = index
+            .items
+            .iter()
+            .find(|i| i.book_id == book_id)
+            .ok_or_else(|| {
+                let msg = "书籍不在书库中".to_string();
+                emitter.book_opening_failed(&BookOpeningFailed {
+                    book_id: Some(book_id.clone()),
+                    error_code: "not_found".to_string(),
+                    error_message: msg.clone(),
+                    recoverable: false,
+                });
+                msg
+            })?;
+        if item.file_health == crate::domain::library_item::FileHealth::Missing {
+            let msg = "书籍文件缺失".to_string();
             emitter.book_opening_failed(&BookOpeningFailed {
                 book_id: Some(book_id.clone()),
-                error_code: "not_found".to_string(),
+                error_code: "validation".to_string(),
                 error_message: msg.clone(),
-                recoverable: false,
+                recoverable: true,
             });
-            msg
-        })?;
-    if item.file_health == crate::domain::library_item::FileHealth::Missing {
-        let msg = "书籍文件缺失".to_string();
-        emitter.book_opening_failed(&BookOpeningFailed {
-            book_id: Some(book_id.clone()),
-            error_code: "validation".to_string(),
-            error_message: msg.clone(),
-            recoverable: true,
-        });
-        return Err(msg);
-    }
+            return Err(msg);
+        }
 
-    emitter.book_opening_started(&BookOpeningStarted {
-        book_id: book_id.clone(),
-        title: item.title.clone(),
-        author: item.author.clone(),
-    });
+        emitter.book_opening_started(&BookOpeningStarted {
+            book_id: book_id.clone(),
+            title: item.title.clone(),
+            author: item.author.clone(),
+        });
+        item.source_path.clone()
+    };
 
     emitter.book_opening_progress(&BookOpeningProgress {
         book_id: book_id.clone(),
@@ -70,7 +74,6 @@ pub async fn reader_open_book(
         progress_text: Some("正在打开...".to_string()),
     });
 
-    let source_path = item.source_path.clone();
     let mut book =
         tauri::async_runtime::spawn_blocking(move || ReaderServiceImpl::load_book(&source_path))
             .await
@@ -103,10 +106,13 @@ pub async fn reader_open_book(
     // Store the book in session state.
     state.lock().map_err(|e| e.to_string())?.book = Some(book);
 
-    // Update last_opened_at in library index.
-    if let Some(item) = index.items.iter_mut().find(|i| i.book_id == book_id) {
-        item.last_opened_at = Some(chrono::Utc::now().to_rfc3339());
-        LibraryServiceImpl::save_index(&index);
+    // Update last_opened_at in cached library index and persist.
+    {
+        let mut index = index_state.lock().map_err(|e| e.to_string())?;
+        if let Some(item) = index.items.iter_mut().find(|i| i.book_id == book_id) {
+            item.last_opened_at = Some(chrono::Utc::now().to_rfc3339());
+            LibraryServiceImpl::save_index(&index);
+        }
     }
 
     emitter.book_opening_finished(&BookOpeningFinished {
@@ -428,7 +434,10 @@ pub fn reader_go_to_chapter(
 }
 
 #[tauri::command]
-pub fn reader_save_progress(mut progress: SaveProgressDto) -> Result<(), String> {
+pub fn reader_save_progress(
+    mut progress: SaveProgressDto,
+    index_state: tauri::State<'_, super::LibraryIndexState>,
+) -> Result<(), String> {
     progress.progress_percent = progress.progress_percent.clamp(0.0, 1.0);
     log::info!(
         "保存进度: book={}, ch={}, pct={:.0}%",
@@ -481,8 +490,8 @@ pub fn reader_save_progress(mut progress: SaveProgressDto) -> Result<(), String>
     };
     ReaderServiceImpl::persist_progress(&rp.book_id, &rp, None, 0);
 
-    // Also update the library index so "继续阅读" works.
-    let mut index = LibraryServiceImpl::load_index();
+    // Update the cached library index (no disk I/O per page turn).
+    let mut index = index_state.lock().map_err(|e| e.to_string())?;
     if let Some(item) = index
         .items
         .iter_mut()
@@ -490,7 +499,6 @@ pub fn reader_save_progress(mut progress: SaveProgressDto) -> Result<(), String>
     {
         item.progress_percent = progress.progress_percent;
         item.last_opened_at = Some(chrono::Utc::now().to_rfc3339());
-        LibraryServiceImpl::save_index(&index);
     }
 
     Ok(())

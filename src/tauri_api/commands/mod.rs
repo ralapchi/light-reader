@@ -82,6 +82,7 @@ impl TtsSession {
 /// Type aliases for Tauri state management.
 pub type BookSession = Mutex<ReaderState>;
 pub type TtsSessionLock = Mutex<TtsSession>;
+pub type LibraryIndexState = Mutex<crate::domain::library_item::LibraryIndex>;
 
 // Re-export all command functions so `use tauri_api::commands::*` still works.
 pub use bookmark::*;
