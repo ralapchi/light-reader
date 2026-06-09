@@ -111,15 +111,19 @@ impl LibraryService for LibraryServiceImpl {
 
         for path in &paths {
             match Self::parse_book_item(path, &now) {
-                Ok(item) => {
+                Ok(mut item) => {
                     let book_id = item.book_id.clone();
                     // Cache cover at import time (not on every list call)
                     if item.format == BookFormat::Epub {
                         let epub_path = std::path::Path::new(&item.source_path);
                         if epub_path.exists() {
-                            crate::services::asset_service_impl::extract_and_cache_cover(
+                            if let Some(cover_path) = crate::services::asset_service_impl::extract_and_cache_cover(
                                 epub_path, &book_id,
-                            );
+                            ) {
+                                if let Some(ext) = cover_path.extension().and_then(|e| e.to_str()) {
+                                    item.cover_cache_key = Some(ext.to_string());
+                                }
+                            }
                         }
                     }
                     if let Some(existing) = index.items.iter_mut().find(|i| i.book_id == book_id) {

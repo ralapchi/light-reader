@@ -7,9 +7,14 @@ use super::super::dto::*;
 pub fn item_to_dto(item: &crate::domain::library_item::LibraryItem) -> LibraryBookCardDto {
     use crate::services::asset_service::AssetService;
     let svc = crate::services::asset_service_impl::AssetServiceImpl::new();
-    let cover_url = svc
-        .cover_path(&item.book_id)
-        .and_then(|p| p.to_str().map(|s| s.to_string()));
+    let cover_url = item
+        .cover_cache_key
+        .as_deref()
+        .and_then(|ext| {
+            let p = crate::storage::paths::cover_cache_path(&item.book_id, ext);
+            p.exists().then(|| p.to_str().map(|s| s.to_string())).flatten()
+        })
+        .or_else(|| svc.cover_path(&item.book_id).and_then(|p| p.to_str().map(|s| s.to_string())));
     LibraryBookCardDto {
         book_id: item.book_id.clone(),
         title: item.title.clone(),
