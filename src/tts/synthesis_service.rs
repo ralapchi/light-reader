@@ -84,6 +84,7 @@ impl TtsSynthesisService {
             "pcm16",
         );
         let _ = cache.write(&path, &resp.audio_bytes);
+        cache.prune_if_over_limit();
         Ok(resp)
     }
 
@@ -138,6 +139,7 @@ impl TtsSynthesisService {
         if let Err(e) = self.cache.write(&cache_path, &response.audio_bytes) {
             log::warn!("TTS 缓存写入失败: {}", e);
         }
+        self.cache.prune_if_over_limit();
 
         Ok(response)
     }

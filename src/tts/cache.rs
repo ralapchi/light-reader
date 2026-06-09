@@ -1,5 +1,8 @@
 use std::path::{Path, PathBuf};
 
+/// Maximum TTS cache size in bytes (500 MB).
+const MAX_CACHE_BYTES: u64 = 500 * 1024 * 1024;
+
 pub struct TtsCache {
     base_dir: PathBuf,
 }
@@ -54,6 +57,69 @@ impl TtsCache {
             std::fs::create_dir_all(&self.base_dir)?;
         }
         Ok(())
+    }
+
+    /// Evict oldest cache files if total size exceeds `MAX_CACHE_BYTES`.
+    pub fn prune_if_over_limit(&self) {
+        let _ = self.prune_inner();
+    }
+
+    fn prune_inner(&self) -> std::io::Result<()> {
+        if !self.base_dir.exists() {
+            return Ok(());
+        }
+
+        let mut entries: Vec<(PathBuf, u64, std::time::SystemTime)> = Vec::new();
+        collect_files(&self.base_dir, &mut entries)?;
+
+        let total: u64 = entries.iter().map(|(_, size, _)| *size).sum();
+        if total <= MAX_CACHE_BYTES {
+            return Ok(());
+        }
+
+        // Oldest first
+        entries.sort_by_key(|(_, _, mtime)| *mtime);
+
+        let mut to_free = total - MAX_CACHE_BYTES;
+        for (path, size, _) in &entries {
+            if to_free == 0 {
+                break;
+            }
+            let _ = std::fs::remove_file(path);
+            to_free = to_free.saturating_sub(*size);
+        }
+
+        // Clean up empty directories
+        clean_empty_dirs(&self.base_dir);
+        Ok(())
+    }
+}
+
+fn collect_files(
+    dir: &Path,
+    out: &mut Vec<(PathBuf, u64, std::time::SystemTime)>,
+) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_files(&path, out)?;
+        } else if let Ok(meta) = path.metadata() {
+            let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            out.push((path, meta.len(), mtime));
+        }
+    }
+    Ok(())
+}
+
+fn clean_empty_dirs(dir: &Path) {
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            clean_empty_dirs(&path);
+            // Remove if empty (ignore errors for non-empty dirs)
+            let _ = std::fs::remove_dir(&path);
+        }
     }
 }
 
