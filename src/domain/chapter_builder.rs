@@ -73,12 +73,6 @@ pub(crate) fn build_chapter(
         })
         .collect::<Vec<_>>();
 
-    let content = paragraphs
-        .iter()
-        .map(|p| p.text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n\n");
-
     let mut blocks: Vec<ChapterBlock> = Vec::new();
 
     if paragraphs.is_empty() {
@@ -119,15 +113,21 @@ pub(crate) fn build_chapter(
         }
     }
 
+    let (word_count, char_count) = blocks.iter().fold((0usize, 0usize), |(wc, cc), b| {
+        let text = match b {
+            ChapterBlock::Paragraph(p) | ChapterBlock::Heading(p) | ChapterBlock::Quote(p) => &p.text,
+            _ => return (wc, cc),
+        };
+        (wc + text.split_whitespace().count(), cc + text.chars().count())
+    });
+
     Chapter {
         id: format!("ch-{}", index),
         index,
         title: title.to_string(),
         raw_title: Some(title.to_string()),
-        word_count: content.split_whitespace().count(),
-        char_count: content.chars().count(),
-        content,
-        paragraphs,
+        word_count,
+        char_count,
         blocks,
         source_href: source_href.map(|s| s.to_string()),
         anchor: None,

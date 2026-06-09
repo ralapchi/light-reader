@@ -9,10 +9,7 @@ pub struct Chapter {
     pub index: usize,
     pub title: String,
     pub raw_title: Option<String>,
-    pub content: String,
-    pub paragraphs: Vec<Paragraph>,
     /// Mixed blocks (paragraphs + images) for renderer use.
-    /// Falls back to `paragraphs`-only if no images are in this chapter.
     pub blocks: Vec<ChapterBlock>,
     pub word_count: usize,
     pub char_count: usize,
@@ -21,4 +18,16 @@ pub struct Chapter {
     /// 段内锚点列表 (fragment → paragraph_index)
     pub anchors: Vec<(String, usize)>,
     pub warnings: Vec<String>,
+}
+
+impl Chapter {
+    /// Returns an iterator over all text-type Paragraph references in blocks.
+    pub fn text_paragraphs(&self) -> impl Iterator<Item = &Paragraph> {
+        self.blocks.iter().filter_map(|b| match b {
+            ChapterBlock::Paragraph(p)
+            | ChapterBlock::Heading(p)
+            | ChapterBlock::Quote(p) => Some(p),
+            _ => None,
+        })
+    }
 }

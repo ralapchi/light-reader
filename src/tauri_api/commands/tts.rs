@@ -221,7 +221,7 @@ pub fn tts_start(
         .chapters
         .get(chapter_index)
         .ok_or_else(|| format!("章节 {} 不存在", chapter_index))?;
-    let paragraphs = chapter.paragraphs.clone();
+    let paragraphs: Vec<_> = chapter.text_paragraphs().cloned().collect();
 
     if paragraphs.is_empty() {
         return Err("当前章节没有内容".to_string());

@@ -19,7 +19,8 @@ pub fn search_in_book(
 
     let mut hits = Vec::new();
     for chapter in &chapters {
-        for para in &chapter.paragraphs {
+        let text_para_count = chapter.text_paragraphs().count();
+        for para in chapter.text_paragraphs() {
             if let Some(pos) = para.text.find(&query) {
                 let raw_start = pos.saturating_sub(30);
                 let start = snap_to_char_boundary(&para.text, raw_start);
@@ -36,7 +37,7 @@ pub fn search_in_book(
 
                 let progress_hint = format!(
                     "约 {}% 处",
-                    ((para.index as f32 / chapter.paragraphs.len().max(1) as f32) * 100.0) as u32
+                    ((para.index as f32 / text_para_count.max(1) as f32) * 100.0) as u32
                 );
 
                 hits.push(SearchHitDto {
@@ -111,8 +112,8 @@ pub fn bookmark_add(
 
     let snippet = match paragraph_index {
         Some(pi) => chapter
-            .paragraphs
-            .get(pi)
+            .text_paragraphs()
+            .find(|p| p.index == pi)
             .map(|p| {
                 let s = &p.text;
                 if s.len() > 80 {
