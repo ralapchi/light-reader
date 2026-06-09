@@ -17,10 +17,10 @@ use std::io::{BufReader, Read};
 use zip::ZipArchive;
 
 /// 判断标签是否为图片元素
-fn is_img_tag(name_lower: &[u8]) -> bool {
-    name_lower.starts_with(b"img")
-        || name_lower.ends_with(b":img")
-        || name_lower.ends_with(b"image")
+fn is_img_tag(name: &[u8]) -> bool {
+    name.len() >= 3 && name[..3].eq_ignore_ascii_case(b"img")
+        || name.len() >= 4 && name[name.len()-4..].eq_ignore_ascii_case(b":img")
+        || name.len() >= 5 && name[name.len()-5..].eq_ignore_ascii_case(b"image")
 }
 
 /// 从标签属性中读取图片的 src 和 alt
@@ -406,15 +406,14 @@ impl EpubParser {
                 Ok(Event::Start(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    let name_lower = name.to_ascii_lowercase();
-                    if name_lower == b"title" {
+                    if name.eq_ignore_ascii_case(b"title") {
                         in_title_tag = true;
                     }
 
                     // 提取锚点 id/name
                     record_anchor(e.attributes(), &mut anchors, paragraphs.len());
 
-                    if name_lower == b"p" || name_lower == b"div" || name_lower == b"li" {
+                    if name.eq_ignore_ascii_case(b"p") || name.eq_ignore_ascii_case(b"div") || name.eq_ignore_ascii_case(b"li") {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
@@ -431,21 +430,20 @@ impl EpubParser {
                                 }
                             }
                         }
-                    } else if name_lower == b"br" || name_lower == b"hr" {
+                    } else if name.eq_ignore_ascii_case(b"br") || name.eq_ignore_ascii_case(b"hr") {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
                         }
                         text_indent = false;
                         para_count += 1;
-                    } else if name_lower == b"a" {
+                    } else if name.eq_ignore_ascii_case(b"a") {
                         link_href.clear();
                         link_title = None;
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let an = attr.key.as_ref();
-                                let an_lower = an.to_ascii_lowercase();
-                                if an_lower == b"href" {
+                                if an.eq_ignore_ascii_case(b"href") {
                                     if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
                                         let v = v.trim();
                                         if !v.is_empty()
@@ -457,7 +455,7 @@ impl EpubParser {
                                             link_href = v.to_string();
                                         }
                                     }
-                                } else if an_lower == b"title" {
+                                } else if an.eq_ignore_ascii_case(b"title") {
                                     if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
                                         link_title = Some(v.trim().to_string());
                                     }
@@ -473,31 +471,29 @@ impl EpubParser {
                 Ok(Event::Empty(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    let name_lower = name.to_ascii_lowercase();
 
                     // 提取锚点 id/name
                     record_anchor(e.attributes(), &mut anchors, paragraphs.len());
 
-                    if is_img_tag(&name_lower) {
+                    if is_img_tag(name) {
                         let (src, alt) = read_img_attrs(e.attributes());
                         if !src.is_empty() {
                             images.push((para_count - 1, src, alt));
                         }
-                    } else if name_lower == b"br" || name_lower == b"hr" {
+                    } else if name.eq_ignore_ascii_case(b"br") || name.eq_ignore_ascii_case(b"hr") {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
                         }
                         text_indent = false;
                         para_count += 1;
-                    } else if name_lower == b"a" {
+                    } else if name.eq_ignore_ascii_case(b"a") {
                         link_href.clear();
                         link_title = None;
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let an = attr.key.as_ref();
-                                let an_lower = an.to_ascii_lowercase();
-                                if an_lower == b"href" {
+                                if an.eq_ignore_ascii_case(b"href") {
                                     if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
                                         let v = v.trim();
                                         if !v.is_empty()
@@ -509,7 +505,7 @@ impl EpubParser {
                                             link_href = v.to_string();
                                         }
                                     }
-                                } else if an_lower == b"title" {
+                                } else if an.eq_ignore_ascii_case(b"title") {
                                     if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
                                         link_title = Some(v.trim().to_string());
                                     }
@@ -525,20 +521,19 @@ impl EpubParser {
                 Ok(Event::End(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    let name_lower = name.to_ascii_lowercase();
-                    if name_lower == b"title" {
+                    if name.eq_ignore_ascii_case(b"title") {
                         in_title_tag = false;
                         // Discard any title text that leaked into current_para
                         current_para.clear();
                     }
-                    if name_lower == b"p" || name_lower == b"div" || name_lower == b"li" {
+                    if name.eq_ignore_ascii_case(b"p") || name.eq_ignore_ascii_case(b"div") || name.eq_ignore_ascii_case(b"li") {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
                         }
                         text_indent = false;
                         para_count += 1;
-                    } else if name_lower == b"a" && in_link {
+                    } else if name.eq_ignore_ascii_case(b"a") && in_link {
                         let end = current_para.chars().count();
                         if end > link_start {
                             current_links.push(TextLink {
