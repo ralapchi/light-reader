@@ -44,9 +44,16 @@ function ReaderPage() {
 
 
   useEffect(() => {
-    const onResize = () => setWinW(window.innerWidth)
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const onResize = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => setWinW(window.innerWidth), 100)
+    }
     window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    return () => {
+      if (timer) clearTimeout(timer)
+      window.removeEventListener('resize', onResize)
+    }
   }, [])
 
   const isTwoPageAvailable = winW >= TWO_PAGE_MIN_WIDTH
