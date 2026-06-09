@@ -3,6 +3,7 @@ EPUB 阅读器主入口
 */
 
 use std::io::Write;
+use tauri::Manager;
 use std::sync::Mutex;
 
 use log::info;
@@ -88,6 +89,7 @@ fn main() {
             library_search,
             library_repair_path,
             library_cover,
+            library_flush_index,
             // Reader
             reader_get_book,
             reader_open_book,
@@ -120,6 +122,15 @@ fn main() {
             tts_stop,
             tts_clear_cache,
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if let Some(guard) = window.try_state::<Mutex<crate::domain::library_item::LibraryIndex>>() {
+                    if let Ok(index) = guard.lock() {
+                        crate::services::library_service_impl::LibraryServiceImpl::save_index(&index);
+                    }
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("Tauri 启动失败");
 }

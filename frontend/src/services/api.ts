@@ -134,6 +134,10 @@ export function libraryCover(bookId: string): Promise<string | null> {
   return invoke('library_cover', { bookId })
 }
 
+export function libraryFlushIndex(): Promise<void> {
+  return invoke('library_flush_index')
+}
+
 // ── Reader ─────────────────────────────────────────────────
 
 export function readerOpenBook(bookId: string): Promise<ReaderBookDto> {

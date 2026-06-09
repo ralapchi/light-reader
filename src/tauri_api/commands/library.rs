@@ -304,3 +304,13 @@ pub async fn asset_read_file(path: String) -> Result<Option<String>, String> {
         .await
         .map_err(|e| e.to_string())?
 }
+
+/// Persist the in-memory library index to disk. Called on navigation back and app exit.
+#[tauri::command]
+pub fn library_flush_index(
+    index_state: tauri::State<'_, super::LibraryIndexState>,
+) -> Result<(), String> {
+    let index = index_state.lock().map_err(|e| e.to_string())?;
+    LibraryServiceImpl::save_index(&index);
+    Ok(())
+}
