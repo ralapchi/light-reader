@@ -84,6 +84,14 @@ pub fn save(settings: &SettingsFile) -> Result<(), String> {
     crate::storage::util::write_json_atomic(&path, settings).map_err(|e| e.to_string())
 }
 
+/// Load settings, apply a mutation, and save in one operation.
+/// Avoids double load when multiple fields need updating.
+pub fn update(f: impl FnOnce(&mut SettingsFile)) -> Result<(), String> {
+    let mut file = load();
+    f(&mut file);
+    save(&file)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

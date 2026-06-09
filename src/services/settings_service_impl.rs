@@ -21,9 +21,9 @@ impl SettingsService for SettingsServiceImpl {
     }
 
     fn save_settings(&self, settings: &ReaderSettings) -> AppResult<()> {
-        let mut file = settings_store::load();
-        file.reader_settings = settings.clone();
-        settings_store::save(&file).map_err(|e| AppError::new("SETTINGS_SAVE_FAILED", &e))
+        let settings = settings.clone();
+        settings_store::update(|file| file.reader_settings = settings)
+            .map_err(|e| AppError::new("SETTINGS_SAVE_FAILED", &e))
     }
 
     fn load_tts_config(&self) -> TtsConfig {
@@ -31,8 +31,8 @@ impl SettingsService for SettingsServiceImpl {
     }
 
     fn save_tts_config(&self, config: &TtsConfig) -> AppResult<()> {
-        let mut file = settings_store::load();
-        file.tts_config = Some(config.clone());
-        settings_store::save(&file).map_err(|e| AppError::new("TTS_CONFIG_SAVE_FAILED", &e))
+        let config = config.clone();
+        settings_store::update(|file| file.tts_config = Some(config))
+            .map_err(|e| AppError::new("TTS_CONFIG_SAVE_FAILED", &e))
     }
 }
