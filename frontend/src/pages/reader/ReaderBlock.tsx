@@ -46,9 +46,10 @@ function renderLinkedText(text: string, sortedLinks: ReaderTextLinkDto[], onLink
 }
 
 export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, highlight, onLinkClick }: ReaderBlockProps) {
+  const blockLinks = 'links' in block ? block.links : undefined
   const sortedLinks = useMemo(
-    () => block.links?.length ? [...block.links].sort((a, b) => a.start - b.start) : undefined,
-    [block.links]
+    () => blockLinks?.length ? [...blockLinks].sort((a, b) => a.start - b.start) : undefined,
+    [blockLinks]
   )
 
   if (block.type === 'separator') {
