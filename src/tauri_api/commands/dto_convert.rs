@@ -1,8 +1,28 @@
 use crate::domain::book_format::BookFormat;
+use crate::domain::paragraph::TextLink;
 use crate::tts::config::TtsConfig;
 use crate::tts::types::TtsProviderKind;
 
 use super::super::dto::*;
+
+fn format_str(format: &BookFormat) -> &'static str {
+    match format {
+        BookFormat::Epub => "epub",
+        BookFormat::Txt => "txt",
+    }
+}
+
+fn links_to_dto(links: &[TextLink]) -> Vec<ReaderTextLinkDto> {
+    links
+        .iter()
+        .map(|l| ReaderTextLinkDto {
+            start: l.start,
+            end: l.end,
+            href: l.href.clone(),
+            title: l.title.clone(),
+        })
+        .collect()
+}
 
 pub fn item_to_dto(item: &crate::domain::library_item::LibraryItem) -> LibraryBookCardDto {
     use crate::services::asset_service::AssetService;
@@ -19,10 +39,7 @@ pub fn item_to_dto(item: &crate::domain::library_item::LibraryItem) -> LibraryBo
         book_id: item.book_id.clone(),
         title: item.title.clone(),
         author: item.author.clone(),
-        format: match item.format {
-            BookFormat::Epub => "epub".to_string(),
-            BookFormat::Txt => "txt".to_string(),
-        },
+        format: format_str(&item.format).to_string(),
         cover_url,
         progress_percent: item.progress_percent,
         chapter_count: item.chapter_count,
@@ -53,47 +70,20 @@ pub fn block_to_dto(
             block_id: format!("p-{}", p.index),
             text: p.text.clone(),
             kind: format!("{:?}", p.kind).to_lowercase(),
-            links: p
-                .links
-                .iter()
-                .map(|l| ReaderTextLinkDto {
-                    start: l.start,
-                    end: l.end,
-                    href: l.href.clone(),
-                    title: l.title.clone(),
-                })
-                .collect(),
+            links: links_to_dto(&p.links),
         },
         crate::domain::chapter_block::ChapterBlock::Heading(p) => ReaderBlockDto::Heading {
             index: p.index,
             block_id: format!("h-{}", p.index),
             text: p.text.clone(),
             kind: format!("{:?}", p.kind).to_lowercase(),
-            links: p
-                .links
-                .iter()
-                .map(|l| ReaderTextLinkDto {
-                    start: l.start,
-                    end: l.end,
-                    href: l.href.clone(),
-                    title: l.title.clone(),
-                })
-                .collect(),
+            links: links_to_dto(&p.links),
         },
         crate::domain::chapter_block::ChapterBlock::Quote(p) => ReaderBlockDto::Quote {
             index: p.index,
             block_id: format!("q-{}", p.index),
             text: p.text.clone(),
-            links: p
-                .links
-                .iter()
-                .map(|l| ReaderTextLinkDto {
-                    start: l.start,
-                    end: l.end,
-                    href: l.href.clone(),
-                    title: l.title.clone(),
-                })
-                .collect(),
+            links: links_to_dto(&p.links),
         },
         crate::domain::chapter_block::ChapterBlock::Image(img) => ReaderBlockDto::Image {
             index: img.index,
@@ -113,10 +103,7 @@ pub fn build_reader_book_dto(book: &crate::domain::book::Book) -> ReaderBookDto 
         book_id: book.id.clone(),
         title: book.metadata.title.clone(),
         author: book.metadata.author.clone(),
-        format: match book.format {
-            BookFormat::Epub => "epub".to_string(),
-            BookFormat::Txt => "txt".to_string(),
-        },
+        format: format_str(&book.format).to_string(),
         chapter_count: book.chapters.len(),
         toc: book.toc.iter().map(toc_to_dto).collect(),
     }
