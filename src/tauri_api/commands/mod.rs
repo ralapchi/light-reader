@@ -27,12 +27,22 @@ pub enum PlaybackCmd {
     Stop,
 }
 
-/// Shared session state for Tauri commands.
+/// Book state for Reader commands (chapter browsing, search, bookmarks, images).
+pub struct ReaderState {
+    pub book: Option<crate::domain::book::Book>,
+}
+
+impl ReaderState {
+    pub fn new() -> Self {
+        Self { book: None }
+    }
+}
+
+/// TTS-only session state (playback control, synthesis cache, segments).
 ///
 /// Note: The audio player lives on a dedicated thread (rodio's OutputStream is !Send).
 /// Playback control goes through `playback_tx`, and status is polled via `is_playing_flag`.
 pub struct TtsSession {
-    pub book: Option<crate::domain::book::Book>,
     pub tts_config: TtsConfig,
     pub cache: Arc<TtsCache>,
     pub playback_state: crate::domain::tts_state::PlaybackState,
@@ -58,7 +68,6 @@ impl TtsSession {
         let cache = Arc::new(TtsCache::new(crate::storage::paths::tts_cache_dir()));
 
         Self {
-            book: None,
             tts_config,
             cache,
             playback_state: Default::default(),
@@ -70,8 +79,9 @@ impl TtsSession {
     }
 }
 
-/// Back-compat type alias — commands use `State<'_, ReaderSession>`.
-pub type ReaderSession = Mutex<TtsSession>;
+/// Type aliases for Tauri state management.
+pub type BookSession = Mutex<ReaderState>;
+pub type TtsSessionLock = Mutex<TtsSession>;
 
 // Re-export all command functions so `use tauri_api::commands::*` still works.
 pub use bookmark::*;

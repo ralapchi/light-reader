@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use super::super::dto::*;
 use super::dto_convert::dto_to_tts_config;
-use super::{PlaybackCmd, ReaderSession};
+use super::{BookSession, PlaybackCmd, TtsSessionLock};
 
 /// Spawn a dedicated audio playback thread (rodio OutputStream is !Send).
 fn spawn_playback_thread() -> (mpsc::Sender<PlaybackCmd>, Arc<AtomicBool>) {
@@ -176,7 +176,7 @@ fn synthesize_and_play(
 #[tauri::command]
 pub fn tts_test_connection(
     config: TtsConfigDto,
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, TtsSessionLock>,
 ) -> Result<bool, String> {
     let guard = state.lock().map_err(|e| e.to_string())?;
     let full_config = dto_to_tts_config(&config, guard.tts_config.api_key.clone());
@@ -193,14 +193,31 @@ pub fn tts_test_connection(
 #[tauri::command]
 pub fn tts_start(
     chapter_index: usize,
-    state: tauri::State<'_, ReaderSession>,
+    book_state: tauri::State<'_, BookSession>,
+    tts_state: tauri::State<'_, TtsSessionLock>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     use crate::tauri_api::emitter::EventEmitter;
     use crate::tauri_api::events::TtsPlaying;
     let emitter = EventEmitter::new(&app);
 
-    let mut guard = state.lock().map_err(|e| e.to_string())?;
+    // Extract book data from ReaderState (short lock)
+    let (book_id, paragraphs) = {
+        let book_guard = book_state.lock().map_err(|e| e.to_string())?;
+        let book = book_guard.book.as_ref().ok_or("没有打开的书籍")?;
+        let book_id = book.id.clone();
+        let chapter = book
+            .chapters
+            .get(chapter_index)
+            .ok_or_else(|| format!("章节 {} 不存在", chapter_index))?;
+        let paragraphs: Vec<_> = chapter.text_paragraphs().cloned().collect();
+        if paragraphs.is_empty() {
+            return Err("当前章节没有内容".to_string());
+        }
+        (book_id, paragraphs)
+    };
+
+    let mut guard = tts_state.lock().map_err(|e| e.to_string())?;
 
     // Stop any existing playback first
     if let Some(tx) = &guard.playback_tx {
@@ -213,19 +230,6 @@ pub fn tts_start(
     // Reset stop flag for new session
     guard.stop_flag = Arc::new(AtomicBool::new(false));
     let stop_flag = Arc::clone(&guard.stop_flag);
-
-    // Get current chapter
-    let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
-    let book_id = book.id.clone();
-    let chapter = book
-        .chapters
-        .get(chapter_index)
-        .ok_or_else(|| format!("章节 {} 不存在", chapter_index))?;
-    let paragraphs: Vec<_> = chapter.text_paragraphs().cloned().collect();
-
-    if paragraphs.is_empty() {
-        return Err("当前章节没有内容".to_string());
-    }
 
     let config = guard.tts_config.clone();
     let cache = Arc::clone(&guard.cache);
@@ -265,7 +269,7 @@ pub fn tts_start(
         &playback_tx,
         &app,
     ) {
-        let mut guard = state.lock().map_err(|lock_err| lock_err.to_string())?;
+        let mut guard = tts_state.lock().map_err(|lock_err| lock_err.to_string())?;
         guard.stop_flag.store(true, Ordering::Relaxed);
         guard.playback_state.status = PlaybackStatus::Error(e.clone());
         guard.playback_tx = None;
@@ -273,7 +277,7 @@ pub fn tts_start(
         return Err(e);
     }
 
-    let mut guard = state.lock().map_err(|e| e.to_string())?;
+    let mut guard = tts_state.lock().map_err(|e| e.to_string())?;
 
     // Update playback state
     guard.playback_state.status = PlaybackStatus::Playing;
@@ -379,7 +383,7 @@ pub fn tts_start(
 
 #[tauri::command]
 pub fn tts_pause(
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, TtsSessionLock>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     use crate::tauri_api::emitter::EventEmitter;
@@ -407,7 +411,7 @@ pub fn tts_pause(
 
 #[tauri::command]
 pub fn tts_resume(
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, TtsSessionLock>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     use crate::tauri_api::emitter::EventEmitter;
@@ -442,7 +446,7 @@ pub fn tts_resume(
 
 #[tauri::command]
 pub fn tts_stop(
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, TtsSessionLock>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     use crate::tauri_api::emitter::EventEmitter;
@@ -464,7 +468,7 @@ pub fn tts_stop(
 }
 
 #[tauri::command]
-pub fn tts_clear_cache(state: tauri::State<'_, ReaderSession>) -> Result<(), String> {
+pub fn tts_clear_cache(state: tauri::State<'_, TtsSessionLock>) -> Result<(), String> {
     let guard = state.lock().map_err(|e| e.to_string())?;
     guard.cache.clear_all().map_err(|e| e.to_string())
 }

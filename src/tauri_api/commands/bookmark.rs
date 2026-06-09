@@ -1,11 +1,11 @@
 use super::super::dto::*;
 use super::dto_convert::snap_to_char_boundary;
-use super::ReaderSession;
+use super::BookSession;
 
 #[tauri::command]
 pub fn search_in_book(
     query: String,
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, BookSession>,
 ) -> Result<Vec<SearchHitDto>, String> {
     if query.trim().is_empty() {
         return Ok(vec![]);
@@ -98,7 +98,7 @@ pub fn bookmark_add(
     chapter_index: usize,
     paragraph_index: Option<usize>,
     note: Option<String>,
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, BookSession>,
 ) -> Result<BookmarkDto, String> {
     use crate::domain::bookmark::Bookmark;
 

@@ -68,6 +68,7 @@ fn main() {
     info!("Tauri 模式启动");
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(Mutex::new(ReaderState::new()))
         .manage(Mutex::new(TtsSession::new()))
         .invoke_handler(tauri::generate_handler![
             // Library

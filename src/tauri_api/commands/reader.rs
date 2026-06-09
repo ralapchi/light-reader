@@ -4,11 +4,11 @@ use crate::services::reader_service_impl::ReaderServiceImpl;
 
 use super::super::dto::*;
 use super::dto_convert::{block_to_dto, build_reader_book_dto, read_file_to_data_uri};
-use super::ReaderSession;
+use super::BookSession;
 
 #[tauri::command]
 pub fn reader_get_book(
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, BookSession>,
 ) -> Result<Option<ReaderBookDto>, String> {
     let guard = state.lock().map_err(|e| e.to_string())?;
     match guard.book.as_ref() {
@@ -20,7 +20,7 @@ pub fn reader_get_book(
 #[tauri::command]
 pub async fn reader_open_book(
     book_id: String,
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, BookSession>,
     app: tauri::AppHandle,
 ) -> Result<ReaderBookDto, String> {
     use crate::tauri_api::emitter::EventEmitter;
@@ -121,7 +121,7 @@ pub async fn reader_open_book(
 #[tauri::command]
 pub fn reader_get_chapter(
     chapter_index: usize,
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, BookSession>,
 ) -> Result<ReaderChapterDto, String> {
     let guard = state.lock().map_err(|e| e.to_string())?;
     let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
@@ -151,7 +151,7 @@ pub fn reader_get_chapter(
 pub fn reader_resolve_href(
     href: String,
     from_chapter_index: Option<usize>,
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, BookSession>,
 ) -> Result<Option<ReaderResolvedLinkDto>, String> {
     let guard = state.lock().map_err(|e| e.to_string())?;
     let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
@@ -256,7 +256,7 @@ pub fn reader_resolve_href(
 fn resolve_chapter_image_cache_path(
     book_id: &str,
     asset_id: &str,
-    state: &tauri::State<'_, ReaderSession>,
+    state: &tauri::State<'_, BookSession>,
 ) -> Result<Option<std::path::PathBuf>, String> {
     use crate::services::asset_service::AssetService;
     let svc = crate::services::asset_service_impl::AssetServiceImpl::new();
@@ -315,7 +315,7 @@ fn resolve_chapter_image_cache_path(
 pub fn reader_chapter_image(
     book_id: String,
     asset_id: String,
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, BookSession>,
 ) -> Result<Option<String>, String> {
     match resolve_chapter_image_cache_path(&book_id, &asset_id, &state)? {
         Some(p) => read_file_to_data_uri(p.to_str().unwrap_or("")),
@@ -329,7 +329,7 @@ pub fn reader_chapter_image(
 pub fn reader_chapter_image_path(
     book_id: String,
     asset_id: String,
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, BookSession>,
 ) -> Result<Option<String>, String> {
     match resolve_chapter_image_cache_path(&book_id, &asset_id, &state)? {
         Some(p) => Ok(p.to_str().map(|s| s.to_string())),
@@ -340,7 +340,7 @@ pub fn reader_chapter_image_path(
 #[tauri::command]
 pub fn reader_go_to_chapter(
     chapter_index: usize,
-    state: tauri::State<'_, ReaderSession>,
+    state: tauri::State<'_, BookSession>,
 ) -> Result<(), String> {
     let mut guard = state.lock().map_err(|e| e.to_string())?;
     let book = guard.book.as_mut().ok_or("没有打开的书籍")?;
