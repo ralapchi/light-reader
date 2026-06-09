@@ -38,15 +38,17 @@ export function useTwoPageNavigation(
   const currentChapterFlowIndexRef = useRef(0)
 
   const spreadIndexRef = useRef(spreadIndex)
-  useEffect(() => { spreadIndexRef.current = spreadIndex }, [spreadIndex])
-
-  // Refs to avoid stale closures in async callbacks
   const chapterSpreadStartsRef = useRef(chapterSpreadStarts)
-  useEffect(() => { chapterSpreadStartsRef.current = chapterSpreadStarts }, [chapterSpreadStarts])
   const flowChaptersRef = useRef(flowChapters)
-  useEffect(() => { flowChaptersRef.current = flowChapters }, [flowChapters])
   const chapterRef = useRef(chapter)
-  useEffect(() => { chapterRef.current = chapter }, [chapter])
+
+  // Sync state to refs in a single effect to avoid intermediate renders
+  useEffect(() => {
+    spreadIndexRef.current = spreadIndex
+    chapterSpreadStartsRef.current = chapterSpreadStarts
+    flowChaptersRef.current = flowChapters
+    chapterRef.current = chapter
+  })
 
   const getChapterIndexForFlowIndex = useCallback((index: number) => {
     const chapters = flowChaptersRef.current
