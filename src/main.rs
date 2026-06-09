@@ -3,8 +3,8 @@ EPUB 阅读器主入口
 */
 
 use std::io::Write;
-use tauri::Manager;
 use std::sync::Mutex;
+use tauri::Manager;
 
 use log::info;
 
@@ -79,6 +79,9 @@ fn main() {
         .manage(Mutex::new(ReaderState::new()))
         .manage(Mutex::new(TtsSession::new()))
         .manage(Mutex::new(library_index))
+        .manage(ProgressState::new(std::collections::HashMap::new()))
+        .manage(DirtyProgressState::new(std::collections::HashSet::new()))
+        .manage(ProgressRevisionState::new(std::collections::HashMap::new()))
         .invoke_handler(tauri::generate_handler![
             // Library
             library_list,
@@ -100,6 +103,7 @@ fn main() {
             reader_go_to_chapter,
             reader_save_progress,
             reader_get_progress,
+            reader_flush_progress,
             reader_resolve_href,
             // Search / Bookmarks
             search_in_book,
@@ -127,6 +131,14 @@ fn main() {
                 if let Some(guard) = window.try_state::<Mutex<crate::domain::library_item::LibraryIndex>>() {
                     if let Ok(index) = guard.lock() {
                         crate::services::library_service_impl::LibraryServiceImpl::save_index(&index);
+                    }
+                }
+                if let (Some(progress), Some(dirty)) = (
+                    window.try_state::<ProgressState>(),
+                    window.try_state::<DirtyProgressState>(),
+                ) {
+                    if let Err(e) = flush_dirty_progress_states(progress.inner(), dirty.inner()) {
+                        log::warn!("退出时保存阅读进度失败: {}", e);
                     }
                 }
             }

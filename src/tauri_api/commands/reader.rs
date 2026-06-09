@@ -1,5 +1,4 @@
 use crate::services::asset_service_impl::AssetServiceImpl;
-use crate::services::library_service_impl::LibraryServiceImpl;
 use crate::services::reader_service_impl::ReaderServiceImpl;
 
 use super::super::dto::*;
@@ -22,6 +21,7 @@ pub async fn reader_open_book(
     book_id: String,
     state: tauri::State<'_, BookSession>,
     index_state: tauri::State<'_, super::LibraryIndexState>,
+    progress_state: tauri::State<'_, super::ProgressState>,
     app: tauri::AppHandle,
 ) -> Result<ReaderBookDto, String> {
     use crate::tauri_api::emitter::EventEmitter;
@@ -106,12 +106,21 @@ pub async fn reader_open_book(
     // Store the book in session state.
     state.lock().map_err(|e| e.to_string())?.book = Some(book);
 
-    // Update last_opened_at in cached library index and persist.
+    // Load persisted progress into memory before the reader page restores position.
+    {
+        let mut progress_map = progress_state.lock().map_err(|e| e.to_string())?;
+        if !progress_map.contains_key(&book_id) {
+            if let Some(progress) = crate::storage::progress_store::load(&book_id) {
+                progress_map.insert(book_id.clone(), progress);
+            }
+        }
+    }
+
+    // Update last_opened_at in cached library index. Disk flush happens on exit/back.
     {
         let mut index = index_state.lock().map_err(|e| e.to_string())?;
         if let Some(item) = index.items.iter_mut().find(|i| i.book_id == book_id) {
             item.last_opened_at = Some(chrono::Utc::now().to_rfc3339());
-            LibraryServiceImpl::save_index(&index);
         }
     }
 
@@ -517,40 +526,63 @@ pub fn reader_go_to_chapter(
 pub fn reader_save_progress(
     mut progress: SaveProgressDto,
     index_state: tauri::State<'_, super::LibraryIndexState>,
+    progress_state: tauri::State<'_, super::ProgressState>,
+    dirty_progress_state: tauri::State<'_, super::DirtyProgressState>,
+    progress_revision_state: tauri::State<'_, super::ProgressRevisionState>,
 ) -> Result<(), String> {
     progress.progress_percent = progress.progress_percent.clamp(0.0, 1.0);
+    let normalized_offset = progress.scroll_offset.map(|offset| offset.clamp(0.0, 1.0));
+    let incoming_revision = progress.revision.unwrap_or(0);
+    {
+        let mut revisions = progress_revision_state.lock().map_err(|e| e.to_string())?;
+        let current_revision = revisions.get(&progress.book_id).copied().unwrap_or(0);
+        if incoming_revision < current_revision {
+            log::info!(
+                "忽略过期进度: book={}, incoming_rev={}, current_rev={}, incoming_ch={}, incoming_pct={:.0}%",
+                progress.book_id,
+                incoming_revision,
+                current_revision,
+                progress.chapter_index,
+                progress.progress_percent * 100.0
+            );
+            return Ok(());
+        }
+        revisions.insert(progress.book_id.clone(), incoming_revision);
+    }
     log::info!(
-        "保存进度: book={}, ch={}, pct={:.0}%",
+        "更新内存进度: book={}, rev={}, ch={}, pct={:.0}%",
         progress.book_id,
+        incoming_revision,
         progress.chapter_index,
         progress.progress_percent * 100.0
     );
     use crate::domain::reading_progress::ReadingProgress;
-    let existing = crate::storage::progress_store::load(&progress.book_id);
+    let existing = {
+        let mut progress_map = progress_state.lock().map_err(|e| e.to_string())?;
+        if !progress_map.contains_key(&progress.book_id) {
+            if let Some(saved) = crate::storage::progress_store::load(&progress.book_id) {
+                progress_map.insert(progress.book_id.clone(), saved);
+            }
+        }
+        progress_map.get(&progress.book_id).cloned()
+    };
     let same_chapter_existing = existing
         .as_ref()
         .filter(|p| p.chapter_index == progress.chapter_index);
     let clear = progress.clear_position.unwrap_or(false);
-    let no_position_supplied =
-        !clear && progress.paragraph_index.is_none() && progress.scroll_offset.is_none();
     let rp = ReadingProgress {
         book_id: progress.book_id.clone(),
         chapter_index: progress.chapter_index,
         paragraph_index: if clear {
             None
-        } else if no_position_supplied {
+        } else if progress.paragraph_index.is_none() && normalized_offset.is_none() {
             same_chapter_existing.and_then(|p| p.paragraph_index)
         } else {
             progress.paragraph_index
         },
-        scroll_offset: if clear {
-            0.0
-        } else {
-            progress
-                .scroll_offset
-                .or_else(|| same_chapter_existing.map(|p| p.scroll_offset))
-                .unwrap_or(0.0)
-        },
+        scroll_offset: normalized_offset
+            .or_else(|| same_chapter_existing.map(|p| p.scroll_offset))
+            .unwrap_or(0.0),
         progress_percent: progress.progress_percent,
         last_read_at: chrono::Utc::now().to_rfc3339(),
         session_read_seconds: existing
@@ -568,7 +600,14 @@ pub fn reader_save_progress(
             })
         },
     };
-    ReaderServiceImpl::persist_progress(&rp.book_id, &rp, None, 0);
+    progress_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .insert(rp.book_id.clone(), rp);
+    dirty_progress_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .insert(progress.book_id.clone());
 
     // Update the cached library index (no disk I/O per page turn).
     let mut index = index_state.lock().map_err(|e| e.to_string())?;
@@ -586,8 +625,83 @@ pub fn reader_save_progress(
 
 /// Load saved reading progress for a book (chapter + scroll offset).
 #[tauri::command]
-pub fn reader_get_progress(book_id: String) -> Option<SaveProgressDto> {
-    crate::storage::progress_store::load(&book_id).map(|rp| SaveProgressDto {
+pub fn reader_get_progress(
+    book_id: String,
+    progress_state: tauri::State<'_, super::ProgressState>,
+) -> Option<SaveProgressDto> {
+    let progress = {
+        let mut progress_map = progress_state.lock().ok()?;
+        if let Some(progress) = progress_map.get(&book_id) {
+            Some(progress.clone())
+        } else {
+            let saved = crate::storage::progress_store::load(&book_id);
+            if let Some(progress) = saved.as_ref() {
+                progress_map.insert(book_id, progress.clone());
+            }
+            saved
+        }
+    };
+    progress.map(progress_to_dto)
+}
+
+#[tauri::command]
+pub fn reader_flush_progress(
+    progress_state: tauri::State<'_, super::ProgressState>,
+    dirty_progress_state: tauri::State<'_, super::DirtyProgressState>,
+) -> Result<(), String> {
+    flush_dirty_progress_states(progress_state.inner(), dirty_progress_state.inner())
+}
+
+pub fn flush_dirty_progress_states(
+    progress_state: &super::ProgressState,
+    dirty_progress_state: &super::DirtyProgressState,
+) -> Result<(), String> {
+    let dirty_ids: Vec<String> = dirty_progress_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .iter()
+        .cloned()
+        .collect();
+    if dirty_ids.is_empty() {
+        return Ok(());
+    }
+
+    let entries = {
+        let progress_map = progress_state.lock().map_err(|e| e.to_string())?;
+        dirty_ids
+            .iter()
+            .filter_map(|book_id| progress_map.get(book_id).map(|progress| (book_id.clone(), progress.clone())))
+            .collect::<Vec<_>>()
+    };
+
+    let mut saved_ids = Vec::new();
+    let mut first_error: Option<String> = None;
+    for (book_id, progress) in entries {
+        match crate::storage::progress_store::save(&book_id, &progress) {
+            Ok(()) => saved_ids.push(book_id),
+            Err(e) => {
+                if first_error.is_none() {
+                    first_error = Some(e);
+                }
+            }
+        }
+    }
+
+    if !saved_ids.is_empty() {
+        let mut dirty = dirty_progress_state.lock().map_err(|e| e.to_string())?;
+        for book_id in saved_ids {
+            dirty.remove(&book_id);
+        }
+    }
+
+    match first_error {
+        Some(e) => Err(e),
+        None => Ok(()),
+    }
+}
+
+fn progress_to_dto(rp: crate::domain::reading_progress::ReadingProgress) -> SaveProgressDto {
+    SaveProgressDto {
         book_id: rp.book_id,
         chapter_index: rp.chapter_index,
         progress_percent: rp.progress_percent,
@@ -599,5 +713,6 @@ pub fn reader_get_progress(book_id: String) -> Option<SaveProgressDto> {
             char_offset: a.char_offset,
         }),
         clear_position: None,
-    })
+        revision: None,
+    }
 }

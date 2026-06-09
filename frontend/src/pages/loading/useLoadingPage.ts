@@ -74,8 +74,9 @@ export function useLoadingPage() {
         useAppStore.getState().setPendingNavTarget({
           chapter_index: clamped,
           paragraph_index: null,
-          scroll_offset: null,
+          scroll_offset: saved?.scroll_offset ?? null,
           anchor: null,
+          offset_mode: 'progress',
         })
       }
 

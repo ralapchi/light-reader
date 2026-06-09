@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { libraryFlushIndex, readerGetChapter, readerSaveProgress } from '../../services/api'
+import { libraryFlushIndex, readerFlushProgress, readerGetChapter, readerSaveProgress } from '../../services/api'
 import type { ReaderBookDto, ReadingMode, SearchHitDto } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import type { TwoPageNav } from './TwoPageReaderContent'
@@ -103,8 +103,8 @@ export function useChapterNavigation(
   usePendingNavigationTarget(bookId, book, contentRef, readingMode, goToChapter, twoPageNavRef)
 
   const goBackToLibrary = useCallback(() => {
-    libraryFlushIndex().catch(() => {})
-    navigate('/')
+    Promise.allSettled([libraryFlushIndex(), readerFlushProgress()])
+      .finally(() => navigate('/'))
   }, [navigate])
   const goToPreviousChapter = useCallback(() => {
     const index = getNavigationChapterIndex()

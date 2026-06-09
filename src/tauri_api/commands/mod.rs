@@ -16,6 +16,7 @@ use crate::tts::config::TtsConfig;
 use crate::tts::segmenter::Segment;
 
 use std::sync::atomic::AtomicBool;
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
@@ -83,6 +84,9 @@ impl TtsSession {
 pub type BookSession = Mutex<ReaderState>;
 pub type TtsSessionLock = Mutex<TtsSession>;
 pub type LibraryIndexState = Mutex<crate::domain::library_item::LibraryIndex>;
+pub type ProgressState = Mutex<HashMap<String, crate::domain::reading_progress::ReadingProgress>>;
+pub type DirtyProgressState = Mutex<HashSet<String>>;
+pub type ProgressRevisionState = Mutex<HashMap<String, u64>>;
 
 // Re-export all command functions so `use tauri_api::commands::*` still works.
 pub use bookmark::*;

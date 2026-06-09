@@ -164,6 +164,7 @@ export interface SaveProgressDto {
   scroll_offset?: number | null
   anchor?: ReaderAnchor | null
   clear_position?: boolean
+  revision?: number
 }
 
 export function readerSaveProgress(progress: SaveProgressDto): Promise<void> {
@@ -172,6 +173,10 @@ export function readerSaveProgress(progress: SaveProgressDto): Promise<void> {
 
 export function readerGetProgress(bookId: string): Promise<SaveProgressDto | null> {
   return invoke('reader_get_progress', { bookId })
+}
+
+export function readerFlushProgress(): Promise<void> {
+  return invoke('reader_flush_progress')
 }
 
 export function readerResolveHref(

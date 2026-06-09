@@ -3,7 +3,12 @@ import { readerSaveProgress } from '../../services/api'
 import type { ReaderBookDto, ReadingMode } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import type { TwoPageNav } from './TwoPageReaderContent'
-import { chapterProgressPercent } from './readerProgressUtils'
+import {
+  createReadingPosition,
+  readingPositionProgressPercent,
+  readingPositionToSaveProgress,
+  type ReadingPosition,
+} from './readerProgressUtils'
 
 export function useReadingProgress(
   bookId: string | undefined,
@@ -14,39 +19,43 @@ export function useReadingProgress(
   twoPageNavRef?: React.RefObject<TwoPageNav | null>,
 ) {
   const { setProgressPercent } = useAppStore()
-  const progressPercent = useAppStore(s => s.reader.progressPercent)
+  const scrollSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const readingModeRef = useRef(readingMode)
+  useEffect(() => { readingModeRef.current = readingMode }, [readingMode])
 
-  const saveProgress = useCallback((pct?: number, _force?: boolean, _paragraphIndex?: number | null, _scrollOffset?: number | null, chapterIndex?: number) => {
-    if (!bookId) return
-    readerSaveProgress({
-      book_id: bookId,
-      chapter_index: chapterIndex ?? currentChapterIndex,
-      progress_percent: pct ?? progressPercent,
-      paragraph_index: null,
-      scroll_offset: null,
-      anchor: null,
-      clear_position: true,
-    }).catch(() => { /* non-critical */ })
-  }, [bookId, currentChapterIndex, progressPercent])
+  useEffect(() => {
+    if (readingMode !== 'TwoPage') return
+    if (scrollSaveTimerRef.current != null) {
+      clearTimeout(scrollSaveTimerRef.current)
+      scrollSaveTimerRef.current = null
+    }
+  }, [readingMode])
+
+  const savePosition = useCallback((position: ReadingPosition) => {
+    if (!book) return
+    const progress = readingPositionToSaveProgress(position, book.chapter_count)
+    readerSaveProgress(progress).catch(() => { /* non-critical */ })
+  }, [book])
 
   const saveCurrentPosition = useCallback(() => {
     const el = contentRef.current
     if (!el || !book) return
     const twoPage = readingMode === 'TwoPage'
-    let bookPct: number
-
     if (twoPage) {
       const nav = twoPageNavRef?.current ?? null
       const visibleChapterIndex = nav?.currentChapterIndex ?? currentChapterIndex
-      bookPct = chapterProgressPercent(visibleChapterIndex, book.chapter_count)
-      saveProgress(bookPct, true, null, null, visibleChapterIndex)
+      const chapterOffset = nav?.currentChapterOffset ?? 0
+      const position = createReadingPosition(bookId ?? book.book_id, visibleChapterIndex, chapterOffset, 'two-page')
+      savePosition(position)
       return
     } else {
-      bookPct = chapterProgressPercent(currentChapterIndex, book.chapter_count)
+      const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight)
+      const chapterOffset = maxScroll > 0 ? el.scrollTop / maxScroll : 0
+      const position = createReadingPosition(bookId ?? book.book_id, currentChapterIndex, chapterOffset, 'single')
+      savePosition(position)
+      return
     }
-
-    saveProgress(bookPct, true, null, null, currentChapterIndex)
-  }, [book, currentChapterIndex, saveProgress, contentRef, readingMode])
+  }, [book, bookId, currentChapterIndex, savePosition, contentRef, readingMode, twoPageNavRef])
 
   const saveRef = useRef(saveCurrentPosition)
   useEffect(() => { saveRef.current = saveCurrentPosition }, [saveCurrentPosition])
@@ -65,6 +74,10 @@ export function useReadingProgress(
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('beforeunload', onBeforeUnload)
+      if (scrollSaveTimerRef.current != null) {
+        clearTimeout(scrollSaveTimerRef.current)
+        scrollSaveTimerRef.current = null
+      }
       saveRef.current()
     }
   }, [])
@@ -77,10 +90,17 @@ export function useReadingProgress(
     const scrollHeight = el.scrollHeight - el.clientHeight
     if (scrollHeight > 0 && book) {
       const chapterPct = scrollTop / scrollHeight
-      const bookPct = Math.min(1, (currentChapterIndex + chapterPct) / book.chapter_count)
+      const position = createReadingPosition(book.book_id, currentChapterIndex, chapterPct, 'single')
+      const bookPct = readingPositionProgressPercent(position, book.chapter_count)
       setProgressPercent(bookPct)
+      if (scrollSaveTimerRef.current != null) clearTimeout(scrollSaveTimerRef.current)
+      scrollSaveTimerRef.current = setTimeout(() => {
+        scrollSaveTimerRef.current = null
+        if (readingModeRef.current === 'TwoPage') return
+        savePosition(position)
+      }, 250)
     }
-  }, [setProgressPercent, book, currentChapterIndex, contentRef, readingMode])
+  }, [setProgressPercent, book, currentChapterIndex, contentRef, readingMode, savePosition])
 
-  return { saveProgress, saveCurrentPosition, handleScroll }
+  return { saveCurrentPosition, handleScroll }
 }

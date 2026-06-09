@@ -28,6 +28,14 @@ interface TtsState {
 
 // ── Reader state (for reader page) ──────────────────────────
 
+export type PendingNavTarget = {
+  chapter_index: number
+  paragraph_index: number | null
+  scroll_offset: number | null
+  anchor?: ReaderAnchor | null
+  offset_mode?: 'pixel' | 'progress'
+}
+
 interface ReaderState {
   book: ReaderBookDto | null
   currentChapterIndex: number
@@ -36,7 +44,7 @@ interface ReaderState {
   showToc: boolean
   showSearch: boolean
   bookmarks: BookmarkDto[]
-  pendingNavTarget: { chapter_index: number; paragraph_index: number | null; scroll_offset: number | null; anchor?: ReaderAnchor | null } | null
+  pendingNavTarget: PendingNavTarget | null
   settings: ReaderSettings
   tts: TtsState
 }
@@ -73,7 +81,7 @@ interface AppState {
   closeToc: () => void
   closeSearch: () => void
   setBookmarks: (bookmarks: BookmarkDto[]) => void
-  setPendingNavTarget: (target: { chapter_index: number; paragraph_index: number | null; scroll_offset: number | null; anchor?: ReaderAnchor | null } | null) => void
+  setPendingNavTarget: (target: PendingNavTarget | null) => void
   setSettings: (settings: Partial<ReaderSettings>) => void
   setTtsState: (partial: Partial<TtsState>) => void
   resetTts: () => void

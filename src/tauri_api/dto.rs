@@ -66,6 +66,9 @@ pub struct SaveProgressDto {
     /// instead of falling back to existing saved values.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clear_position: Option<bool>,
+    /// Monotonic frontend save version. Older async saves are ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

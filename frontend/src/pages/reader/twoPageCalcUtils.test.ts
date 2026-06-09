@@ -8,6 +8,8 @@ import {
 import {
   chapterProgressPercent,
   buildChapterOnlyProgress,
+  createReadingPosition,
+  readingPositionToSaveProgress,
 } from './readerProgressUtils'
 
 describe('chapterProgressPercent', () => {
@@ -35,8 +37,26 @@ describe('buildChapterOnlyProgress', () => {
     expect(dto.chapter_index).toBe(3)
     expect(dto.progress_percent).toBeCloseTo(0.3)
     expect(dto.paragraph_index).toBeNull()
-    expect(dto.scroll_offset).toBeNull()
+    expect(dto.scroll_offset).toBe(0)
     expect(dto.anchor).toBeNull()
+  })
+})
+
+describe('ReadingPosition', () => {
+  it('stores chapter-relative offset and book progress through one DTO adapter', () => {
+    const position = createReadingPosition('book-1', 3, 0.5, 'two-page')
+    const dto = readingPositionToSaveProgress(position, 10)
+    expect(dto.chapter_index).toBe(3)
+    expect(dto.progress_percent).toBeCloseTo(0.35)
+    expect(dto.scroll_offset).toBe(0.5)
+    expect(dto.paragraph_index).toBeNull()
+    expect(dto.revision).toBe(position.revision)
+  })
+
+  it('assigns monotonic revisions', () => {
+    const first = createReadingPosition('book-1', 3, 0, 'single')
+    const second = createReadingPosition('book-1', 3, 0.1, 'single')
+    expect(second.revision).toBeGreaterThan(first.revision)
   })
 })
 

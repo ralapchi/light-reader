@@ -9,10 +9,12 @@ import { useTwoPageNavigation } from './useTwoPageNavigation'
 export interface TwoPageNav {
   findSpreadByParagraph: (paragraphIndex: number) => number | null
   goToSpread: (index: number) => void
+  goToChapterOffset: (chapterIndex: number, chapterOffset: number) => void
   recalcSpreads: () => void
   spreadIndex: number
   spreadCount: number
   currentChapterIndex: number
+  currentChapterOffset: number
   innerRef: React.RefObject<HTMLDivElement | null>
 }
 

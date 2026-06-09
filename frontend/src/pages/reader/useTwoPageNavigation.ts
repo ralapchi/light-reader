@@ -4,7 +4,8 @@ import type { ReaderChapterDto } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import type { TwoPageNav, TwoPageVisibleChapter } from './TwoPageReaderContent'
 import { afterNextPaint } from './rafUtils'
-import { getChapterBookProgress, findFlowIndexForSpread, findNearestFilledSpread, buildFilledSpreadIndexes } from './twoPageCalcUtils'
+import { createReadingPosition, readingPositionToSaveProgress } from './readerProgressUtils'
+import { findFlowIndexForSpread, findNearestFilledSpread, buildFilledSpreadIndexes } from './twoPageCalcUtils'
 
 export function useTwoPageNavigation(
   contentRef: RefObject<HTMLDivElement | null>,
@@ -40,6 +41,7 @@ export function useTwoPageNavigation(
   const spreadIndexRef = useRef(spreadIndex)
   const chapterSpreadStartsRef = useRef(chapterSpreadStarts)
   const flowChaptersRef = useRef(flowChapters)
+  const chapterContentPageCountsRef = useRef(chapterContentPageCounts)
   const chapterRef = useRef(chapter)
 
   // Sync state to refs in a single effect to avoid intermediate renders
@@ -47,6 +49,7 @@ export function useTwoPageNavigation(
     spreadIndexRef.current = spreadIndex
     chapterSpreadStartsRef.current = chapterSpreadStarts
     flowChaptersRef.current = flowChapters
+    chapterContentPageCountsRef.current = chapterContentPageCounts
     chapterRef.current = chapter
   })
 
@@ -132,6 +135,36 @@ export function useTwoPageNavigation(
     return spreadStart + localSpread
   }, [pageWidth, spineGap, scrollRef, flowChapters, chapterSpreadStarts])
 
+  const getChapterOffsetForSpread = useCallback((spread: number, flowIdx: number) => {
+    const starts = chapterSpreadStartsRef.current
+    const contentPageCounts = chapterContentPageCountsRef.current
+    const chapterStart = starts[flowIdx] ?? 0
+    const contentSpreads = Math.max(1, Math.ceil((contentPageCounts[flowIdx] ?? 1) / 2))
+    if (contentSpreads <= 1) return 0
+    return Math.max(0, Math.min(1, (spread - chapterStart) / (contentSpreads - 1)))
+  }, [])
+
+  const findSpreadByChapterOffset = useCallback((chapterIndex: number, chapterOffset: number): number | null => {
+    const chapters = flowChaptersRef.current
+    const flowIdx = chapters.findIndex(ch => ch.chapter_index === chapterIndex)
+    if (flowIdx < 0) return null
+    const starts = chapterSpreadStartsRef.current
+    const contentPageCounts = chapterContentPageCountsRef.current
+    const chapterStart = starts[flowIdx] ?? 0
+    const contentSpreads = Math.max(1, Math.ceil((contentPageCounts[flowIdx] ?? 1) / 2))
+    const localSpread = Math.round(Math.max(0, Math.min(1, chapterOffset)) * Math.max(0, contentSpreads - 1))
+    return chapterStart + localSpread
+  }, [])
+
+  const goToChapterOffset = useCallback((chapterIndex: number, chapterOffset: number) => {
+    recalcSpreads()
+    const spread = findSpreadByChapterOffset(chapterIndex, chapterOffset)
+    if (spread == null) return
+    const flowIdx = findFlowIndexForSpreadLocal(spread)
+    setVisibleFlowIndex(flowIdx)
+    goToSpread(spread)
+  }, [findFlowIndexForSpreadLocal, findSpreadByChapterOffset, goToSpread, recalcSpreads, setVisibleFlowIndex])
+
   // Save progress — reads from refs to avoid stale closures
   const saveProgressForSpread = useCallback((spread: number) => {
     const bookData = useAppStore.getState().reader.book
@@ -141,18 +174,12 @@ export function useTwoPageNavigation(
     const flowIdx = findFlowIndexForSpread(spread, starts)
     const chapters = flowChaptersRef.current
     const visChapterIndex = chapters[flowIdx]?.chapter_index ?? chapterRef.current?.chapter_index ?? 0
-    const bookPct = getChapterBookProgress(visChapterIndex, bookData.chapter_count)
-    useAppStore.getState().setProgressPercent(bookPct)
-    readerSaveProgress({
-      book_id: bookIdent,
-      chapter_index: visChapterIndex,
-      progress_percent: bookPct,
-      paragraph_index: null,
-      scroll_offset: null,
-      anchor: null,
-      clear_position: true,
-    }).catch(() => { /* non-critical */ })
-  }, [])
+    const chapterOffset = getChapterOffsetForSpread(spread, flowIdx)
+    const position = createReadingPosition(bookIdent, visChapterIndex, chapterOffset, 'two-page')
+    const progress = readingPositionToSaveProgress(position, bookData.chapter_count)
+    useAppStore.getState().setProgressPercent(progress.progress_percent)
+    readerSaveProgress(progress).catch(() => { /* non-critical */ })
+  }, [getChapterOffsetForSpread])
 
   const turnSpread = useCallback((delta: number) => {
     onNavigate?.()
@@ -176,13 +203,10 @@ export function useTwoPageNavigation(
       return
     }
     const newSpread = findNearestFilledSpreadLocal(current + delta, delta)
-    const previousFlowIndex = currentChapterFlowIndexRef.current
     const nextFlowIndex = findFlowIndexForSpreadLocal(newSpread)
     setVisibleFlowIndex(nextFlowIndex)
     goToSpread(newSpread)
-    if (nextFlowIndex !== previousFlowIndex) {
-      saveProgressForSpread(newSpread)
-    }
+    saveProgressForSpread(newSpread)
   }, [goToSpread, recalcSpreads, onNextChapter, onPreviousChapter, onNavigate, hasNextChapter, loadNextChapter, totalSpreadsRef, spreadIndexRef, findNearestFilledSpreadLocal, findFlowIndexForSpreadLocal, saveProgressForSpread, setVisibleFlowIndex])
 
   const nextSpread = useCallback(() => turnSpread(1), [turnSpread])
@@ -201,6 +225,11 @@ export function useTwoPageNavigation(
     return flowChapters[idx]?.title ?? chapter?.title ?? ''
   }, [flowChapters, chapter, currentChapterFlowIndex])
 
+  const visibleChapterOffset = useMemo(
+    () => getChapterOffsetForSpread(activeSpreadIndex, currentChapterFlowIndex),
+    [activeSpreadIndex, currentChapterFlowIndex, getChapterOffsetForSpread],
+  )
+
   useEffect(() => {
     if (flowChapters.length === 0) {
       onVisibleChapterChange?.(null)
@@ -216,11 +245,12 @@ export function useTwoPageNavigation(
 
   const nav: TwoPageNav = useMemo(() => ({
     findSpreadByParagraph,
-    goToSpread, recalcSpreads,
+    goToSpread, goToChapterOffset, recalcSpreads,
     spreadIndex, spreadCount: totalSpreads,
     currentChapterIndex: visibleChapterIndex,
+    currentChapterOffset: visibleChapterOffset,
     innerRef,
-  }), [findSpreadByParagraph, goToSpread, recalcSpreads, spreadIndex, totalSpreads, visibleChapterIndex, innerRef])
+  }), [findSpreadByParagraph, goToSpread, goToChapterOffset, recalcSpreads, spreadIndex, totalSpreads, visibleChapterIndex, visibleChapterOffset, innerRef])
 
   useEffect(() => {
     twoPageNavRef.current = nav
@@ -273,13 +303,10 @@ export function useTwoPageNavigation(
     if (totalSpreads <= preLoadTotalSpreadsRef.current) return
     needsNextSpreadRef.current = false
     const newSpread = Math.min(spreadIndexRef.current + 1, totalSpreads - 1)
-    const previousFlowIndex = currentChapterFlowIndexRef.current
     const flowIdx = findFlowIndexForSpreadLocal(newSpread)
     setVisibleFlowIndex(flowIdx)
     setSpreadIndex(newSpread)
-    if (flowIdx !== previousFlowIndex) {
-      saveProgressForSpread(newSpread)
-    }
+    saveProgressForSpread(newSpread)
   }, [flowChapters, totalSpreads, findFlowIndexForSpreadLocal, saveProgressForSpread, setVisibleFlowIndex])
 
   // ── Auto preload adjacent chapters ─────────────────────────

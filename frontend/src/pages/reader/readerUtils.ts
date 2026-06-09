@@ -28,6 +28,11 @@ export function scrollToOffset(el: HTMLElement, offset: number) {
   el.style.scrollBehavior = prev
 }
 
+export function scrollToProgressOffset(el: HTMLElement, offset: number) {
+  const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight)
+  scrollToOffset(el, Math.max(0, Math.min(1, offset)) * maxScroll)
+}
+
 export function scrollToParagraph(container: HTMLElement, paraIndex: number) {
   const paras = container.querySelectorAll('.reader-paragraph')
   const target = paras[paraIndex]
@@ -164,4 +169,3 @@ export function scrollToAnchor(container: HTMLElement, anchor: ReaderAnchor): vo
 
   container.style.scrollBehavior = prev
 }
-

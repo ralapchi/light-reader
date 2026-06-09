@@ -4,7 +4,7 @@ import type { ReaderBookDto, ReadingMode } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import type { TwoPageNav } from './TwoPageReaderContent'
 import { afterNextPaint, afterLayoutSettled } from './rafUtils'
-import { scrollToAnchor, scrollToOffset, scrollToParagraph, scrollToParagraphTwoPage } from './readerUtils'
+import { scrollToAnchor, scrollToOffset, scrollToParagraph, scrollToParagraphTwoPage, scrollToProgressOffset } from './readerUtils'
 
 export function usePendingNavigationTarget(
   bookId: string | undefined,
@@ -32,7 +32,11 @@ export function usePendingNavigationTarget(
         const alreadyLoaded = currentChapter && currentChapter.chapter_index === targetChapter
         if (alreadyLoaded) {
           if (readingMode === 'TwoPage') {
-            if (pending.paragraph_index != null) {
+            if (pending.offset_mode === 'progress' && pending.scroll_offset != null) {
+              cancels.push(afterLayoutSettled(() => {
+                twoPageNavRef?.current?.goToChapterOffset(targetChapter, pending.scroll_offset!)
+              }))
+            } else if (pending.paragraph_index != null) {
               cancels.push(afterNextPaint(() => {
                 const content = contentRef.current
                 if (!content) return
@@ -49,7 +53,8 @@ export function usePendingNavigationTarget(
             cancels.push(afterLayoutSettled(() => {
               const el = contentRef.current
               if (!el) return
-              scrollToOffset(el, pending.scroll_offset!)
+              if (pending.offset_mode === 'progress') scrollToProgressOffset(el, pending.scroll_offset!)
+              else scrollToOffset(el, pending.scroll_offset!)
             }))
           } else if (pending.paragraph_index != null) {
             cancels.push(afterNextPaint(() => {
@@ -59,8 +64,19 @@ export function usePendingNavigationTarget(
             }))
           }
         } else {
-          goToChapter(targetChapter, pending.scroll_offset, { saveProgress: false }).then(() => {
-            if (pending.anchor && readingMode !== 'TwoPage') {
+          const chapterScrollOffset = pending.offset_mode === 'progress' ? null : pending.scroll_offset
+          goToChapter(targetChapter, chapterScrollOffset, { saveProgress: false }).then(() => {
+            if (pending.offset_mode === 'progress') {
+              cancels.push(afterLayoutSettled(() => {
+                if (readingMode === 'TwoPage') {
+                  twoPageNavRef?.current?.goToChapterOffset(targetChapter, pending.scroll_offset ?? 0)
+                  return
+                }
+                const content = contentRef.current
+                if (!content || pending.scroll_offset == null) return
+                scrollToProgressOffset(content, pending.scroll_offset)
+              }))
+            } else if (pending.anchor && readingMode !== 'TwoPage') {
               cancels.push(afterNextPaint(() => {
                 const content = contentRef.current
                 if (!content) return

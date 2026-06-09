@@ -10,10 +10,8 @@ use crate::domain::book_metadata::BookMetadata;
 use crate::domain::chapter_builder::*;
 use crate::domain::error_codes;
 use crate::domain::paragraph::TextLink;
-use crate::domain::reading_progress::ReadingProgress;
 use crate::domain::toc_item::TocItem;
 use crate::parser::ParserFactory;
-use crate::storage;
 
 pub struct ReaderServiceImpl;
 
@@ -162,23 +160,4 @@ impl ReaderServiceImpl {
         })
     }
 
-    /// Save reading progress to disk.
-    pub fn persist_progress(
-        book_id: &str,
-        progress: &ReadingProgress,
-        session_started_at: Option<&str>,
-        total_at_start: u64,
-    ) {
-        if let Some(started_at) = session_started_at {
-            if let Ok(start) = chrono::DateTime::parse_from_rfc3339(started_at) {
-                let elapsed = Utc::now().signed_duration_since(start).num_seconds().max(0) as u64;
-                let mut progress = progress.clone();
-                progress.session_read_seconds = elapsed;
-                progress.total_read_seconds = total_at_start + elapsed;
-                let _ = storage::progress_store::save(book_id, &progress);
-                return;
-            }
-        }
-        let _ = storage::progress_store::save(book_id, progress);
-    }
 }
