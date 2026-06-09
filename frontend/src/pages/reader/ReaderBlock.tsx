@@ -13,19 +13,17 @@ function renderLinkedText(text: string, links: ReaderTextLinkDto[], onLinkClick?
   if (!links || links.length === 0) return text
 
   const parts: React.ReactNode[] = []
-  const chars = Array.from(text)
   let cursor = 0
 
   const sorted = [...links].sort((a, b) => a.start - b.start)
 
   for (const link of sorted) {
-    if (link.start < cursor || link.start >= chars.length || link.end <= link.start) continue
+    if (link.start < cursor || link.start >= text.length || link.end <= link.start) continue
 
     if (link.start > cursor) {
-      parts.push(chars.slice(cursor, link.start).join(''))
+      parts.push(text.slice(cursor, link.start))
     }
 
-    const linkText = chars.slice(link.start, link.end).join('')
     parts.push(
       <button
         key={`link-${link.start}`}
@@ -36,14 +34,14 @@ function renderLinkedText(text: string, links: ReaderTextLinkDto[], onLinkClick?
         }}
         title={link.title || link.href}
       >
-        {linkText}
+        {text.slice(link.start, link.end)}
       </button>,
     )
     cursor = link.end
   }
 
-  if (cursor < chars.length) {
-    parts.push(chars.slice(cursor).join(''))
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor))
   }
 
   return <>{parts}</>
