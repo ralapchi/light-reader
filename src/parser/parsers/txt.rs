@@ -113,11 +113,12 @@ impl TxtParser {
 
         // 数字开头模式：1. 标题、12、标题（阿拉伯数字 + 分隔符）
         if trimmed.len() >= 3 {
-            let first_char = trimmed.chars().next().unwrap();
-            if first_char.is_ascii_digit() {
-                let rest = trimmed.trim_start_matches(|c: char| c.is_ascii_digit());
-                if rest.starts_with('.') || rest.starts_with('、') || rest.starts_with(' ') {
-                    return Some(trimmed.to_string());
+            if let Some(first_char) = trimmed.chars().next() {
+                if first_char.is_ascii_digit() {
+                    let rest = trimmed.trim_start_matches(|c: char| c.is_ascii_digit());
+                    if rest.starts_with('.') || rest.starts_with('、') || rest.starts_with(' ') {
+                        return Some(trimmed.to_string());
+                    }
                 }
             }
         }
