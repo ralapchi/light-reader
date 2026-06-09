@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { open } from '@tauri-apps/plugin-dialog'
 import { assetUrl, libraryImport, libraryList, librarySearch } from '../../services/api'
@@ -93,7 +93,7 @@ export function useLibraryPage() {
 
   return {
     books,
-    continueReading: continueReadingBooks(books),
+    continueReading: useMemo(() => continueReadingBooks(books), [books]),
     coverImages,
     deleteConfirm: deletion.deleteConfirm,
     handleDeleteBatch: deletion.handleDeleteBatch,
