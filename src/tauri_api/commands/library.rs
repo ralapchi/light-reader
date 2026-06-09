@@ -137,12 +137,16 @@ pub fn library_cover(book_id: String) -> Result<Option<String>, String> {
 }
 
 /// Read a file by absolute path and return a base64 data URI.
+/// Blocking I/O runs off the async runtime.
 #[tauri::command]
-pub fn asset_read_file(path: String) -> Result<Option<String>, String> {
-    let requested = std::path::Path::new(&path);
-    let canonical = match std::fs::canonicalize(requested) {
-        Ok(p) => p,
-        Err(_) => return Ok(None),
+pub async fn asset_read_file(path: String) -> Result<Option<String>, String> {
+    // Path validation is fast, do it before spawn_blocking
+    let canonical = {
+        let requested = std::path::Path::new(&path);
+        match std::fs::canonicalize(requested) {
+            Ok(p) => p,
+            Err(_) => return Ok(None),
+        }
     };
     crate::storage::paths::ensure_dirs().map_err(|e| e.to_string())?;
     let app_data = crate::storage::paths::app_data_dir();
@@ -154,5 +158,10 @@ pub fn asset_read_file(path: String) -> Result<Option<String>, String> {
     {
         return Err("不允许读取应用数据目录之外的文件".to_string());
     }
-    read_file_to_data_uri(canonical.to_str().unwrap_or(""))
+
+    // File read + base64 encoding is blocking
+    let path_str = canonical.to_str().unwrap_or("").to_string();
+    tauri::async_runtime::spawn_blocking(move || read_file_to_data_uri(&path_str))
+        .await
+        .map_err(|e| e.to_string())?
 }

@@ -253,10 +253,14 @@ pub fn reader_resolve_href(
 }
 
 /// Resolve a chapter image to its on-disk cache path, extracting from EPUB on cache miss.
-fn resolve_chapter_image_cache_path(
+/// This function performs blocking I/O (zip extraction) and must be called from a blocking context.
+fn resolve_chapter_image_cache_path_blocking(
     book_id: &str,
     asset_id: &str,
-    state: &tauri::State<'_, BookSession>,
+    epub_path: Option<&std::path::Path>,
+    asset_path: Option<&str>,
+    cache_key: Option<&str>,
+    media_type: Option<&str>,
 ) -> Result<Option<std::path::PathBuf>, String> {
     use crate::services::asset_service::AssetService;
     let svc = crate::services::asset_service_impl::AssetServiceImpl::new();
@@ -267,32 +271,18 @@ fn resolve_chapter_image_cache_path(
     }
 
     // Cache miss — extract from EPUB on-demand
-    let (epub_path, asset_path, cache_key, media_type) = {
-        let guard = state.lock().map_err(|e| e.to_string())?;
-        let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
-        match book
-            .assets
-            .image_assets
-            .iter()
-            .find(|a| a.asset_id == asset_id)
-        {
-            Some(img) if !img.asset_path.is_empty() => (
-                book.source_path.clone(),
-                img.asset_path.clone(),
-                img.cache_key.clone(),
-                img.media_type.clone(),
-            ),
-            _ => return Ok(None),
-        }
+    let (epub_path, asset_path) = match (epub_path, asset_path) {
+        (Some(ep), Some(ap)) if !ap.is_empty() => (ep, ap),
+        _ => return Ok(None),
     };
 
     if let Some(bytes) =
-        crate::services::asset_service_impl::extract_epub_image(&epub_path, &asset_path)
+        crate::services::asset_service_impl::extract_epub_image(epub_path, asset_path)
     {
-        let ext = if let Some(ref key) = cache_key {
+        let ext = if let Some(key) = cache_key {
             key.rsplit('.').next().unwrap_or("png").to_string()
         } else {
-            match media_type.as_deref() {
+            match media_type {
                 Some("image/jpeg") => "jpg".to_string(),
                 Some("image/webp") => "webp".to_string(),
                 Some("image/gif") => "gif".to_string(),
@@ -300,8 +290,10 @@ fn resolve_chapter_image_cache_path(
                 _ => "png".to_string(),
             }
         };
-        let key = cache_key.unwrap_or_else(|| format!("{}.{}", asset_id, ext));
-        svc.cache_chapter_image(book_id, asset_id, &key, &bytes);
+        let key_owned = cache_key
+            .map(|k| k.to_string())
+            .unwrap_or_else(|| format!("{}.{}", asset_id, ext));
+        svc.cache_chapter_image(book_id, asset_id, &key_owned, &bytes);
         let cache_path = crate::storage::paths::image_cache_path(book_id, asset_id, &ext);
         return Ok(Some(cache_path));
     }
@@ -309,32 +301,112 @@ fn resolve_chapter_image_cache_path(
     Ok(None)
 }
 
+/// Extract image asset info from book state (short lock).
+fn extract_image_asset_info(
+    book_id: &str,
+    asset_id: &str,
+    state: &tauri::State<'_, BookSession>,
+) -> Result<Option<(std::path::PathBuf, String, Option<String>, Option<String>)>, String> {
+    let guard = state.lock().map_err(|e| e.to_string())?;
+    let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
+    if book.id != book_id {
+        return Ok(None);
+    }
+    Ok(book
+        .assets
+        .image_assets
+        .iter()
+        .find(|a| a.asset_id == asset_id)
+        .filter(|img| !img.asset_path.is_empty())
+        .map(|img| {
+            (
+                book.source_path.clone(),
+                img.asset_path.clone(),
+                img.cache_key.clone(),
+                img.media_type.clone(),
+            )
+        }))
+}
+
 /// Get a chapter image as a base64 data URI by its asset_id.
-/// On cache miss, extracts from EPUB on-demand.
+/// On cache miss, extracts from EPUB on-demand. Blocking I/O runs off the async runtime.
 #[tauri::command]
-pub fn reader_chapter_image(
+pub async fn reader_chapter_image(
     book_id: String,
     asset_id: String,
     state: tauri::State<'_, BookSession>,
 ) -> Result<Option<String>, String> {
-    match resolve_chapter_image_cache_path(&book_id, &asset_id, &state)? {
-        Some(p) => read_file_to_data_uri(p.to_str().unwrap_or("")),
-        None => Ok(None),
+    // Fast path: disk cache hit (no state access needed)
+    {
+        use crate::services::asset_service::AssetService;
+        let svc = crate::services::asset_service_impl::AssetServiceImpl::new();
+        if let Some(p) = svc.image_path(&book_id, &asset_id) {
+            return read_file_to_data_uri(p.to_str().unwrap_or(""));
+        }
     }
+
+    // Extract asset info from state (short lock)
+    let asset_info = extract_image_asset_info(&book_id, &asset_id, &state)?;
+
+    // Heavy blocking work off the async runtime
+    tauri::async_runtime::spawn_blocking(move || {
+        let (epub_path, asset_path, cache_key, media_type) = match asset_info {
+            Some(info) => info,
+            None => return Ok(None),
+        };
+        let path = resolve_chapter_image_cache_path_blocking(
+            &book_id,
+            &asset_id,
+            Some(epub_path.as_path()),
+            Some(&asset_path),
+            cache_key.as_deref(),
+            media_type.as_deref(),
+        )?;
+        match path {
+            Some(p) => read_file_to_data_uri(p.to_str().unwrap_or("")),
+            None => Ok(None),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Get a chapter image file path by its asset_id (for use with convertFileSrc).
 /// On cache miss, extracts from EPUB on-demand and caches to disk.
 #[tauri::command]
-pub fn reader_chapter_image_path(
+pub async fn reader_chapter_image_path(
     book_id: String,
     asset_id: String,
     state: tauri::State<'_, BookSession>,
 ) -> Result<Option<String>, String> {
-    match resolve_chapter_image_cache_path(&book_id, &asset_id, &state)? {
-        Some(p) => Ok(p.to_str().map(|s| s.to_string())),
-        None => Ok(None),
+    // Fast path: disk cache hit
+    {
+        use crate::services::asset_service::AssetService;
+        let svc = crate::services::asset_service_impl::AssetServiceImpl::new();
+        if let Some(p) = svc.image_path(&book_id, &asset_id) {
+            return Ok(p.to_str().map(|s| s.to_string()));
+        }
     }
+
+    let asset_info = extract_image_asset_info(&book_id, &asset_id, &state)?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let (epub_path, asset_path, cache_key, media_type) = match asset_info {
+            Some(info) => info,
+            None => return Ok(None),
+        };
+        let path = resolve_chapter_image_cache_path_blocking(
+            &book_id,
+            &asset_id,
+            Some(epub_path.as_path()),
+            Some(&asset_path),
+            cache_key.as_deref(),
+            media_type.as_deref(),
+        )?;
+        Ok(path.map(|p| p.to_str().map(|s| s.to_string())).unwrap_or(None))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
