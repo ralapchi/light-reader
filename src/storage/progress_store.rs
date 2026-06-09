@@ -60,5 +60,5 @@ pub fn save(book_id: &str, progress: &ReadingProgress) -> Result<(), String> {
         version: PROGRESS_VERSION,
         progress,
     };
-    crate::storage::util::write_json_atomic(&path, &file).map_err(|e| e.to_string())
+    crate::storage::util::write_json_atomic_compact(&path, &file).map_err(|e| e.to_string())
 }

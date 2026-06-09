@@ -41,5 +41,5 @@ pub fn save(index: &LibraryIndex) -> Result<(), std::io::Error> {
     if let Some(obj) = value.as_object_mut() {
         obj.insert("version".to_string(), serde_json::json!(LIBRARY_VERSION));
     }
-    crate::storage::util::write_json_atomic(&path, &value)
+    crate::storage::util::write_json_atomic_compact(&path, &value)
 }
