@@ -134,24 +134,27 @@ impl ReaderServiceImpl {
             modified_at: None,
         });
 
+        let chapter_count = chapters.len();
+        let embedded_styles_detected = matches!(format, BookFormat::Epub);
+
         Ok(Book {
             id: crate::domain::book::stable_book_id(path),
             source_path,
-            format: format.clone(),
+            format,
             metadata,
             toc,
-            chapters: chapters.clone(),
+            chapters,
             assets: BookAssets {
                 cover_image_bytes: result.cover_image,
                 cover_media_type: result.cover_media_type,
                 has_images: !result.image_assets.is_empty(),
-                embedded_styles_detected: matches!(format, BookFormat::Epub),
+                embedded_styles_detected,
                 image_assets: result.image_assets,
             },
             load_info: BookLoadInfo {
                 parser_name: parser_name.to_string(),
                 parse_warnings: result.warnings,
-                chapter_count: chapters.len(),
+                chapter_count,
                 loaded_at: Utc::now().to_rfc3339(),
                 source_file_size: file_size,
                 load_duration_ms: duration_ms,

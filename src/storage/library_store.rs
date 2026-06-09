@@ -35,7 +35,11 @@ pub fn load() -> LibraryIndex {
 
 pub fn save(index: &LibraryIndex) -> Result<(), std::io::Error> {
     let path = paths::library_index_path();
-    let mut index = index.clone();
-    index.version = LIBRARY_VERSION;
-    crate::storage::util::write_json_atomic(&path, &index)
+    let mut value = serde_json::to_value(index).map_err(|e| {
+        std::io::Error::new(std::io::ErrorKind::InvalidData, e)
+    })?;
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert("version".to_string(), serde_json::json!(LIBRARY_VERSION));
+    }
+    crate::storage::util::write_json_atomic(&path, &value)
 }

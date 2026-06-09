@@ -12,6 +12,13 @@ struct ProgressFile {
     progress: ReadingProgress,
 }
 
+/// Borrowed wrapper to avoid cloning progress for serialization.
+#[derive(Serialize)]
+struct ProgressFileRef<'a> {
+    version: u32,
+    progress: &'a ReadingProgress,
+}
+
 pub fn load(book_id: &str) -> Option<ReadingProgress> {
     let path = paths::progress_path(book_id);
     if !path.exists() {
@@ -49,9 +56,9 @@ pub fn load(book_id: &str) -> Option<ReadingProgress> {
 
 pub fn save(book_id: &str, progress: &ReadingProgress) -> Result<(), String> {
     let path = paths::progress_path(book_id);
-    let file = ProgressFile {
+    let file = ProgressFileRef {
         version: PROGRESS_VERSION,
-        progress: progress.clone(),
+        progress,
     };
     crate::storage::util::write_json_atomic(&path, &file).map_err(|e| e.to_string())
 }

@@ -242,8 +242,8 @@ pub fn tts_start(
     }
 
     let total_segments = segments.len();
-    let segments_for_poll = segments.clone();
-    guard.segments = segments.clone();
+    guard.segments = segments;
+    let segments_for_poll = guard.segments.clone();
 
     // Spawn playback thread
     let (playback_tx, is_playing_flag) = spawn_playback_thread();
@@ -251,8 +251,9 @@ pub fn tts_start(
     guard.is_playing_flag = Arc::clone(&is_playing_flag);
 
     // Synthesize and play segment 0
-    let segment = segments[0].clone();
+    let segment = guard.segments[0].clone();
     let paragraph_indices = segment.paragraph_indices.clone();
+    let prefetch_segment = guard.segments.get(1).cloned();
 
     guard.playback_state.status = PlaybackStatus::Buffering;
     guard.playback_state.current_book_id = Some(book_id.clone());
@@ -297,8 +298,7 @@ pub fn tts_start(
     drop(guard);
 
     // Pre-fetch segment 1
-    if segments.len() > 1 {
-        let next = segments[1].clone();
+    if let Some(next) = prefetch_segment {
         let cfg = config.clone();
         let c = Arc::clone(&cache);
         let bid = book_id.clone();

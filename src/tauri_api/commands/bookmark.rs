@@ -126,28 +126,29 @@ pub fn bookmark_add(
 
     let bm = Bookmark {
         id: uuid::Uuid::new_v4().to_string(),
-        book_id: book_id.clone(),
+        book_id,
         chapter_index,
         paragraph_index,
         title: chapter.title.clone(),
-        snippet: snippet.clone(),
+        snippet,
         created_at: chrono::Utc::now().to_rfc3339(),
-        note: note.clone(),
+        note,
     };
 
-    let mut items = crate::storage::bookmark_store::load(&book_id);
-    items.push(bm.clone());
-    crate::storage::bookmark_store::save(&book_id, &items).map_err(|e| e.to_string())?;
+    let mut items = crate::storage::bookmark_store::load(&bm.book_id);
+    items.push(bm);
+    crate::storage::bookmark_store::save(&items.last().unwrap().book_id, &items).map_err(|e| e.to_string())?;
 
+    let saved = items.into_iter().next_back().unwrap();
     Ok(BookmarkDto {
-        id: bm.id,
-        book_id: bm.book_id,
-        chapter_index: bm.chapter_index,
-        paragraph_index: bm.paragraph_index,
-        title: bm.title,
-        snippet: bm.snippet,
-        created_at: bm.created_at,
-        note: bm.note,
+        id: saved.id,
+        book_id: saved.book_id,
+        chapter_index: saved.chapter_index,
+        paragraph_index: saved.paragraph_index,
+        title: saved.title,
+        snippet: saved.snippet,
+        created_at: saved.created_at,
+        note: saved.note,
     })
 }
 
