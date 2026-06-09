@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { libraryCover } from '../../services/api'
 import type { LibraryBookCardDto } from '../../services/api'
 
@@ -18,11 +18,17 @@ function keepCoversForBooks(
 
 export function useCoverLoader() {
   const [coverImages, setCoverImages] = useState<Record<string, string>>({})
+  const loadIdRef = useRef(0)
+
+  useEffect(() => {
+    return () => { loadIdRef.current++ }
+  }, [])
 
   const loadCovers = useCallback(async (items: LibraryBookCardDto[]) => {
+    const loadId = ++loadIdRef.current
     const covers: Record<string, string> = {}
-    // Process in batches to limit concurrent IPC requests
     for (let i = 0; i < items.length; i += MAX_CONCURRENT) {
+      if (loadIdRef.current !== loadId) return
       const batch = items.slice(i, i + MAX_CONCURRENT)
       const results = await Promise.allSettled(
         batch.map(async (item) => {
@@ -36,7 +42,9 @@ export function useCoverLoader() {
         }
       }
     }
-    setCoverImages(prev => ({ ...prev, ...covers }))
+    if (loadIdRef.current === loadId) {
+      setCoverImages(prev => ({ ...prev, ...covers }))
+    }
   }, [])
 
   const pruneCovers = useCallback((items: LibraryBookCardDto[]) => {

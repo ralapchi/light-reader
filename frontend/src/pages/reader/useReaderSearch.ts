@@ -7,11 +7,15 @@ export function useReaderSearch() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchHitDto[]>([])
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null)
+  const searchIdRef = useRef(0)
   const { toggleSearch, closeSearch } = useAppStore()
   const showSearch = useAppStore(s => s.reader.showSearch)
 
   useEffect(() => {
-    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+      searchIdRef.current++
+    }
   }, [])
 
   const clearState = useCallback(() => {
@@ -36,12 +40,17 @@ export function useReaderSearch() {
       setSearchResults([])
       return
     }
+    const sid = ++searchIdRef.current
     timerRef.current = setTimeout(async () => {
       try {
         const hits = await searchInBook(q.trim())
-        setSearchResults(hits)
+        if (searchIdRef.current === sid) {
+          setSearchResults(hits)
+        }
       } catch {
-        setSearchResults([])
+        if (searchIdRef.current === sid) {
+          setSearchResults([])
+        }
       }
     }, 300)
   }, [])

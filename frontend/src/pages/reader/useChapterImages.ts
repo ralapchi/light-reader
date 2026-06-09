@@ -9,6 +9,7 @@ export function useChapterImages(bookId: string | undefined) {
   const [imageCache, setImageCache] = useState<Record<string, string>>({})
   const imageStateRef = useRef<Map<string, ImageState>>(new Map())
   const mountedRef = useRef(true)
+  const loadIdRef = useRef(0)
 
   useEffect(() => {
     mountedRef.current = true
@@ -18,6 +19,7 @@ export function useChapterImages(bookId: string | undefined) {
   useEffect(() => {
     setImageCache({})
     imageStateRef.current.clear()
+    loadIdRef.current++
   }, [bookId])
 
   const loadChapterImages = useCallback(async (blocks: ReaderBlockDto[]) => {
@@ -31,6 +33,7 @@ export function useChapterImages(bookId: string | undefined) {
     })
     if (pending.length === 0) return
 
+    const loadId = loadIdRef.current
     let active = 0
     let index = 0
     const updates: Record<string, string> = {}
@@ -45,6 +48,7 @@ export function useChapterImages(bookId: string | undefined) {
           active++
           readerChapterImage(bookId, assetId)
             .then(dataUri => {
+              if (loadIdRef.current !== loadId) return
               if (dataUri) {
                 updates[assetId] = dataUri
                 imageStateRef.current.set(assetId, 'loaded')
@@ -53,10 +57,12 @@ export function useChapterImages(bookId: string | undefined) {
               }
             })
             .catch(() => {
+              if (loadIdRef.current !== loadId) return
               imageStateRef.current.set(assetId, 'failed')
             })
             .finally(() => {
               active--
+              if (loadIdRef.current !== loadId) { resolve(); return }
               if (index < pending.length) {
                 tryStart()
               } else if (active === 0) {
@@ -69,7 +75,7 @@ export function useChapterImages(bookId: string | undefined) {
       tryStart()
     })
 
-    if (mountedRef.current && Object.keys(updates).length > 0) {
+    if (mountedRef.current && loadIdRef.current === loadId && Object.keys(updates).length > 0) {
       setImageCache(prev => ({ ...prev, ...updates }))
     }
   }, [bookId])
