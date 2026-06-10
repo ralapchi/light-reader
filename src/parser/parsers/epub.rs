@@ -1308,13 +1308,13 @@ impl BookParser for EpubParser {
                             next += 1;
                         }
                     }
-                    let filtered_paragraphs: Vec<String> = paragraphs
+                    let mut filtered_paragraphs: Vec<String> = paragraphs
                         .into_iter()
                         .enumerate()
                         .filter(|(i, _)| keep[*i])
                         .map(|(_, p)| p)
                         .collect();
-                    let filtered_links: Vec<Vec<TextLink>> = paragraph_links
+                    let mut filtered_links: Vec<Vec<TextLink>> = paragraph_links
                         .into_iter()
                         .enumerate()
                         .filter(|(i, _)| keep[*i])
@@ -1336,6 +1336,65 @@ impl BookParser for EpubParser {
                         .collect();
                     let mut text_content = filtered_paragraphs.join("\n\n");
                     if !text_content.is_empty() && !Self::is_cover_only_text(&text_content) {
+                        // 处理内联图片（生僻字替代），替换 PUA 占位符为 asset_id
+                        // 必须在 push 到 chapter_links 之前完成，因为替换会改变链接位置
+                        {
+                            let chapter_full = self.get_full_path(&opf_base_path, href);
+                            let chapter_dir = std::path::Path::new(&chapter_full)
+                                .parent()
+                                .map(|p| p.to_string_lossy().to_string())
+                                .unwrap_or_default();
+                            for (idx, img_src, _img_alt) in &inline_images_from_html {
+                                let img_full_path = epub_assets::resolve_path(&chapter_dir, img_src);
+                                let asset_id = image_asset_ids_by_path
+                                    .entry(img_full_path.clone())
+                                    .or_insert_with(|| {
+                                        use std::hash::{Hash, Hasher};
+                                        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                                        img_full_path.hash(&mut hasher);
+                                        format!("img-{:016x}", hasher.finish())
+                                    })
+                                    .clone();
+                                let placeholder = format!("\u{E000}{}\u{E001}", idx);
+                                let replacement = format!("\u{E000}{}\u{E001}", asset_id);
+                                let placeholder_chars = placeholder.chars().count();
+                                let len_diff = replacement.chars().count() as isize - placeholder_chars as isize;
+                                for (para_text, para_links) in filtered_paragraphs.iter_mut().zip(filtered_links.iter_mut()) {
+                                    if let Some(byte_pos) = para_text.find(&placeholder) {
+                                        let char_pos = para_text[..byte_pos].chars().count();
+                                        *para_text = para_text.replacen(&placeholder, &replacement, 1);
+                                        if len_diff != 0 {
+                                            for link in para_links.iter_mut() {
+                                                if link.start > char_pos + placeholder_chars {
+                                                    link.start = (link.start as isize + len_diff) as usize;
+                                                    link.end = (link.end as isize + len_diff) as usize;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if !image_assets.iter().any(|a| a.asset_path == img_full_path) {
+                                    let mime = epub_assets::media_type_from_href(img_src);
+                                    let cache_key = Some(format!(
+                                        "{}.{}",
+                                        asset_id,
+                                        epub_assets::ext_from_href(img_src)
+                                    ));
+                                    image_assets.push(crate::domain::book_assets::BookImageAsset {
+                                        asset_id,
+                                        source_href: epub_assets::normalize_href(img_src),
+                                        asset_path: img_full_path,
+                                        media_type: Some(mime.to_string()),
+                                        cache_key,
+                                        width_hint: None,
+                                        height_hint: None,
+                                        alt_text: _img_alt.clone(),
+                                    });
+                                }
+                            }
+                            text_content = filtered_paragraphs.join("\n\n");
+                        }
+
                         spine_hrefs.push(href.clone());
                         chapter_links.push(filtered_links);
                         chapter_anchors.push(filtered_anchors);
@@ -1400,46 +1459,6 @@ impl BookParser for EpubParser {
                             ));
                         }
                         chapter_image_blocks.push(img_blocks);
-
-                        // 处理内联图片（生僻字替代），替换 PUA 占位符为 asset_id
-                        let chapter_full = self.get_full_path(&opf_base_path, href);
-                        let chapter_dir = std::path::Path::new(&chapter_full)
-                            .parent()
-                            .map(|p| p.to_string_lossy().to_string())
-                            .unwrap_or_default();
-                        for (idx, img_src, img_alt) in inline_images_from_html {
-                            let img_full_path = epub_assets::resolve_path(&chapter_dir, &img_src);
-                            let asset_id = image_asset_ids_by_path
-                                .entry(img_full_path.clone())
-                                .or_insert_with(|| {
-                                    use std::hash::{Hash, Hasher};
-                                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                                    img_full_path.hash(&mut hasher);
-                                    format!("img-{:016x}", hasher.finish())
-                                })
-                                .clone();
-                            let placeholder = format!("\u{E000}{}\u{E001}", idx);
-                            let replacement = format!("\u{E000}{}\u{E001}", asset_id);
-                            text_content = text_content.replace(&placeholder, &replacement);
-                            let mime = epub_assets::media_type_from_href(&img_src);
-                            let cache_key = Some(format!(
-                                "{}.{}",
-                                asset_id,
-                                epub_assets::ext_from_href(&img_src)
-                            ));
-                            if !image_assets.iter().any(|a| a.asset_path == img_full_path) {
-                                image_assets.push(crate::domain::book_assets::BookImageAsset {
-                                    asset_id,
-                                    source_href: epub_assets::normalize_href(&img_src),
-                                    asset_path: img_full_path,
-                                    media_type: Some(mime.to_string()),
-                                    cache_key,
-                                    width_hint: None,
-                                    height_hint: None,
-                                    alt_text: img_alt,
-                                });
-                            }
-                        }
                         content.push(text_content);
 
                         // 优先使用 TOC 标题
