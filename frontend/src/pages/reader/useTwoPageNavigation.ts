@@ -31,6 +31,7 @@ export function useTwoPageNavigation(
   const [spreadIndex, setSpreadIndex] = useState(0)
   const needsResetRef = useRef(false)
   const needsNextSpreadRef = useRef(false)
+  const needsPrevChapterLastSpreadRef = useRef(false)
   const preLoadTotalSpreadsRef = useRef(0)
   const clampRafRef = useRef<number | null>(null)
   const innerRef = useRef<HTMLDivElement | null>(null)
@@ -199,6 +200,7 @@ export function useTwoPageNavigation(
       return
     }
     if (delta < 0 && current === 0) {
+      needsPrevChapterLastSpreadRef.current = true
       onPreviousChapter?.()
       return
     }
@@ -264,10 +266,26 @@ export function useTwoPageNavigation(
     needsNextSpreadRef.current = false
     preLoadTotalSpreadsRef.current = 0
     setExtraChapters([])
-    setSpreadIndex(0)
-    needsResetRef.current = true
+    if (!needsPrevChapterLastSpreadRef.current) {
+      setSpreadIndex(0)
+      needsResetRef.current = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset on chapter change, not when extra chapters are added
   }, [chapter?.chapter_index, setVisibleFlowIndex])
+
+  // ── Jump to last spread when navigating to previous chapter ──
+
+  useEffect(() => {
+    if (!needsPrevChapterLastSpreadRef.current) return
+    if (totalSpreads <= 1) return
+    needsPrevChapterLastSpreadRef.current = false
+    needsResetRef.current = false
+    const lastSpread = totalSpreads - 1
+    const flowIdx = findFlowIndexForSpreadLocal(lastSpread)
+    setVisibleFlowIndex(flowIdx)
+    setSpreadIndex(lastSpread)
+    saveProgressForSpread(lastSpread)
+  }, [totalSpreads, findFlowIndexForSpreadLocal, saveProgressForSpread, setVisibleFlowIndex])
 
   // ── Clamp spread when total shrinks ────────────────────────
 
