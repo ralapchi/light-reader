@@ -409,6 +409,7 @@ impl EpubParser {
         let mut link_is_footnote = false;
         let mut inline_img_counter: usize = 0;
         let mut inline_images: Vec<(usize, String, Option<String>)> = Vec::new();
+        let mut in_style_or_script: u8 = 0;
 
         // Helper: flush current paragraph on br/hr
         let flush_para = |current_para: &mut String,
@@ -481,6 +482,9 @@ impl EpubParser {
                     let name = qname.as_ref();
                     if name.eq_ignore_ascii_case(b"title") {
                         in_title_tag = true;
+                    }
+                    if name.eq_ignore_ascii_case(b"style") || name.eq_ignore_ascii_case(b"script") {
+                        in_style_or_script = in_style_or_script.saturating_add(1);
                     }
 
                     // 提取锚点 id/name
@@ -562,6 +566,9 @@ impl EpubParser {
                         // Discard any title text that leaked into current_para
                         current_para.clear();
                     }
+                    if name.eq_ignore_ascii_case(b"style") || name.eq_ignore_ascii_case(b"script") {
+                        in_style_or_script = in_style_or_script.saturating_sub(1);
+                    }
                     let is_heading_tag = name.eq_ignore_ascii_case(b"h1")
                         || name.eq_ignore_ascii_case(b"h2")
                         || name.eq_ignore_ascii_case(b"h3")
@@ -599,6 +606,9 @@ impl EpubParser {
                 }
                 Ok(Event::Text(ref _e)) if in_title_tag => {
                     // Skip text inside <title> tag — it's metadata, not content
+                }
+                Ok(Event::Text(ref _e)) if in_style_or_script > 0 => {
+                    // Skip text inside <style>/<script> tags
                 }
                 Ok(Event::Text(ref e)) => {
                     if let Ok(text) = e.unescape() {
