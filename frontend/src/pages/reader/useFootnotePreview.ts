@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { readerGetLinkPreview } from '../../services/api'
 
 interface FootnotePreviewState {
@@ -73,6 +73,19 @@ export function useFootnotePreview(currentChapterIndex: number) {
     requestIdRef.current += 1
     setPreview(null)
   }, [])
+
+  const prevChapterRef = useRef(currentChapterIndex)
+  useEffect(() => {
+    if (prevChapterRef.current !== currentChapterIndex) {
+      prevChapterRef.current = currentChapterIndex
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current)
+        hoverTimerRef.current = null
+      }
+      requestIdRef.current += 1
+      setPreview(null)
+    }
+  }, [currentChapterIndex])
 
   return { preview, showPreview, hidePreview }
 }
