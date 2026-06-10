@@ -219,6 +219,7 @@ impl BookParser for TxtParser {
             chapter_image_blocks: Vec::new(),
             chapter_links: Vec::new(),
             chapter_anchors: Vec::new(),
+            chapter_heading_flags: Vec::new(),
         })
     }
 }

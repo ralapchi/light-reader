@@ -381,6 +381,7 @@ impl EpubParser {
         Vec<(isize, String, Option<String>)>,
         Vec<Vec<TextLink>>,
         Vec<(String, usize)>,
+        Vec<bool>,
     ) {
         let mut paragraphs: Vec<String> = Vec::new();
         let mut current_para = String::new();
@@ -396,6 +397,8 @@ impl EpubParser {
         let mut link_title: Option<String> = None;
         let mut link_start: usize = 0;
         let mut in_title_tag = false;
+        let mut in_heading = false;
+        let mut heading_flags: Vec<bool> = Vec::new();
 
         // Helper: flush current paragraph on br/hr
         let flush_para = |current_para: &mut String,
@@ -465,11 +468,20 @@ impl EpubParser {
                     // 提取锚点 id/name
                     record_anchor(e.attributes(), &mut anchors, paragraphs.len());
 
-                    if name.eq_ignore_ascii_case(b"p") || name.eq_ignore_ascii_case(b"div") || name.eq_ignore_ascii_case(b"li") {
+                    let is_heading_tag = name.eq_ignore_ascii_case(b"h1")
+                        || name.eq_ignore_ascii_case(b"h2")
+                        || name.eq_ignore_ascii_case(b"h3")
+                        || name.eq_ignore_ascii_case(b"h4")
+                        || name.eq_ignore_ascii_case(b"h5")
+                        || name.eq_ignore_ascii_case(b"h6");
+
+                    if name.eq_ignore_ascii_case(b"p") || name.eq_ignore_ascii_case(b"div") || name.eq_ignore_ascii_case(b"li") || is_heading_tag {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
+                            heading_flags.push(in_heading);
                         }
+                        in_heading = is_heading_tag;
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let attr_name = attr.key.as_ref();
@@ -483,6 +495,9 @@ impl EpubParser {
                             }
                         }
                     } else if name.eq_ignore_ascii_case(b"br") || name.eq_ignore_ascii_case(b"hr") {
+                        if !current_para.trim().is_empty() {
+                            heading_flags.push(in_heading);
+                        }
                         flush_para(&mut current_para, &mut paragraphs, &mut paragraph_links, &mut current_links, &mut text_indent, &mut para_count);
                     } else if name.eq_ignore_ascii_case(b"a") {
                         handle_a_attrs(e.attributes(), &mut link_href, &mut link_title, &mut in_link, &mut link_start, &current_para);
@@ -501,6 +516,9 @@ impl EpubParser {
                             images.push((para_count - 1, src, alt));
                         }
                     } else if name.eq_ignore_ascii_case(b"br") || name.eq_ignore_ascii_case(b"hr") {
+                        if !current_para.trim().is_empty() {
+                            heading_flags.push(in_heading);
+                        }
                         flush_para(&mut current_para, &mut paragraphs, &mut paragraph_links, &mut current_links, &mut text_indent, &mut para_count);
                     } else if name.eq_ignore_ascii_case(b"a") {
                         handle_a_attrs(e.attributes(), &mut link_href, &mut link_title, &mut in_link, &mut link_start, &current_para);
@@ -514,13 +532,22 @@ impl EpubParser {
                         // Discard any title text that leaked into current_para
                         current_para.clear();
                     }
-                    if name.eq_ignore_ascii_case(b"p") || name.eq_ignore_ascii_case(b"div") || name.eq_ignore_ascii_case(b"li") {
+                    let is_heading_tag = name.eq_ignore_ascii_case(b"h1")
+                        || name.eq_ignore_ascii_case(b"h2")
+                        || name.eq_ignore_ascii_case(b"h3")
+                        || name.eq_ignore_ascii_case(b"h4")
+                        || name.eq_ignore_ascii_case(b"h5")
+                        || name.eq_ignore_ascii_case(b"h6");
+
+                    if name.eq_ignore_ascii_case(b"p") || name.eq_ignore_ascii_case(b"div") || name.eq_ignore_ascii_case(b"li") || is_heading_tag {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
+                            heading_flags.push(in_heading);
                         }
                         text_indent = false;
                         para_count += 1;
+                        in_heading = false;
                     } else if name.eq_ignore_ascii_case(b"a") && in_link {
                         let end = current_para.chars().count();
                         if end > link_start {
@@ -557,9 +584,10 @@ impl EpubParser {
         if !current_para.trim().is_empty() {
             paragraphs.push(current_para);
             paragraph_links.push(std::mem::take(&mut current_links));
+            heading_flags.push(in_heading);
         }
 
-        (paragraphs, images, paragraph_links, anchors)
+        (paragraphs, images, paragraph_links, anchors, heading_flags)
     }
 
     /// 从 HTML 内容中提取标题
@@ -1213,6 +1241,7 @@ impl BookParser for EpubParser {
         > = Vec::new();
         let mut chapter_links: Vec<Vec<Vec<TextLink>>> = Vec::new();
         let mut chapter_anchors: Vec<Vec<(String, usize)>> = Vec::new();
+        let mut chapter_heading_flags: Vec<Vec<bool>> = Vec::new();
         let mut image_asset_ids_by_path: HashMap<String, String> = HashMap::new();
 
         for idref in &spine_ids {
@@ -1232,7 +1261,7 @@ impl BookParser for EpubParser {
                     content
                 };
                 if !html_content.is_empty() {
-                    let (paragraphs, images_with_pos, paragraph_links, raw_anchors) =
+                    let (paragraphs, images_with_pos, paragraph_links, raw_anchors, para_heading_flags) =
                         self.extract_html_with_positions(&html_content);
                     // 过滤 XML/SVG 噪声段落，同步更新链接和锚点索引
                     let keep: Vec<bool> =
@@ -1257,6 +1286,12 @@ impl BookParser for EpubParser {
                         .filter(|(i, _)| keep[*i])
                         .map(|(_, links)| links)
                         .collect();
+                    let filtered_heading_flags: Vec<bool> = para_heading_flags
+                        .into_iter()
+                        .enumerate()
+                        .filter(|(i, _)| keep[*i])
+                        .map(|(_, f)| f)
+                        .collect();
                     let filtered_anchors: Vec<(String, usize)> = raw_anchors
                         .into_iter()
                         .filter_map(|(frag, old_idx)| {
@@ -1271,6 +1306,7 @@ impl BookParser for EpubParser {
                         spine_hrefs.push(href.clone());
                         chapter_links.push(filtered_links);
                         chapter_anchors.push(filtered_anchors);
+                        chapter_heading_flags.push(filtered_heading_flags);
 
                         // Build image blocks from single-pass extraction
                         let mut img_blocks: Vec<(
@@ -1418,6 +1454,7 @@ impl BookParser for EpubParser {
             chapter_image_blocks,
             chapter_links,
             chapter_anchors,
+            chapter_heading_flags,
         })
     }
 }

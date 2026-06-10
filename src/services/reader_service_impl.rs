@@ -67,7 +67,12 @@ impl ReaderServiceImpl {
                     .get(index)
                     .cloned()
                     .unwrap_or_default();
-                build_chapter(index, &title, text, &img_blocks, href, links, anchors)
+                let heading_flags = result
+                    .chapter_heading_flags
+                    .get(index)
+                    .map(|f| f.as_slice())
+                    .unwrap_or(&[]);
+                build_chapter(index, &title, text, &img_blocks, href, links, anchors, heading_flags)
             })
             .collect::<Vec<_>>();
 

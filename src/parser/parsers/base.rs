@@ -36,6 +36,8 @@ pub struct ParseResult {
     pub chapter_links: Vec<Vec<Vec<TextLink>>>,
     /// 每章节的锚点 (fragment, paragraph_index)（与 content 索引对齐）
     pub chapter_anchors: Vec<Vec<(String, usize)>>,
+    /// 每章节段落是否来自 HTML heading 标签（与 content 索引对齐）
+    pub chapter_heading_flags: Vec<Vec<bool>>,
 }
 
 /// 解析器 trait

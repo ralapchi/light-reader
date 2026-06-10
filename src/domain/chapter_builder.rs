@@ -17,6 +17,7 @@ pub(crate) fn build_chapter(
     source_href: Option<&str>,
     paragraph_links: &[Vec<crate::domain::paragraph::TextLink>],
     anchors: Vec<(String, usize)>,
+    heading_flags: &[bool],
 ) -> Chapter {
     let mut line_number = 0usize;
     let paragraphs = text
@@ -62,10 +63,15 @@ pub(crate) fn build_chapter(
                     title: l.title.clone(),
                 })
                 .collect();
+            let kind = if heading_flags.get(paragraph_index).copied().unwrap_or(false) {
+                ParagraphKind::Title
+            } else {
+                infer_paragraph_kind(clean_text)
+            };
             Some(Paragraph {
                 index: paragraph_index,
                 text: clean_text.to_string(),
-                kind: infer_paragraph_kind(clean_text),
+                kind,
                 indent_level,
                 source_line_hint: Some(line_number),
                 links,
@@ -336,7 +342,7 @@ mod tests {
     fn images_interleaved_at_correct_positions() {
         let text = "第一段\n\n第二段\n\n第三段";
         let imgs = vec![img_block(0, 0), img_block(2, 1)];
-        let ch = build_chapter(0, "test", text, &imgs, None, &[], Vec::new());
+        let ch = build_chapter(0, "test", text, &imgs, None, &[], Vec::new(), &[]);
         // Expected: Para(0), Img(0), Para(1), Para(2), Img(1)
         let kinds: Vec<&str> = ch
             .blocks
@@ -356,7 +362,7 @@ mod tests {
     fn pos_neg1_images_before_first_paragraph() {
         let text = "第一段\n\n第二段";
         let imgs = vec![img_block(-1, 0), img_block(-1, 1)];
-        let ch = build_chapter(0, "test", text, &imgs, None, &[], Vec::new());
+        let ch = build_chapter(0, "test", text, &imgs, None, &[], Vec::new(), &[]);
         let kinds: Vec<&str> = ch
             .blocks
             .iter()
@@ -374,7 +380,7 @@ mod tests {
     #[test]
     fn no_images_produces_only_paragraphs() {
         let text = "第一段\n\n第二段";
-        let ch = build_chapter(0, "test", text, &[], None, &[], Vec::new());
+        let ch = build_chapter(0, "test", text, &[], None, &[], Vec::new(), &[]);
         assert_eq!(ch.blocks.len(), 2);
         for block in &ch.blocks {
             assert!(matches!(block, ChapterBlock::Paragraph(_)));
