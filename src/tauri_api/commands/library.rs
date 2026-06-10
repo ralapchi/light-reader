@@ -85,6 +85,9 @@ pub fn library_remove(
     book_id: String,
     delete_files: bool,
     index_state: tauri::State<'_, super::LibraryIndexState>,
+    progress_state: tauri::State<'_, super::ProgressState>,
+    dirty_progress_state: tauri::State<'_, super::DirtyProgressState>,
+    progress_revision_state: tauri::State<'_, super::ProgressRevisionState>,
 ) -> Result<(), String> {
     let source = if delete_files {
         let index = index_state.lock().map_err(|e| e.to_string())?;
@@ -114,6 +117,16 @@ pub fn library_remove(
     // Clean up bookmarks and reading progress
     let _ = crate::storage::bookmark_store::save(&book_id, &[]);
     crate::storage::progress_store::delete(&book_id);
+    // Clear in-memory progress cache so re-imported books don't restore old progress
+    if let Ok(mut map) = progress_state.lock() {
+        map.remove(&book_id);
+    }
+    if let Ok(mut dirty) = dirty_progress_state.lock() {
+        dirty.remove(&book_id);
+    }
+    if let Ok(mut revs) = progress_revision_state.lock() {
+        revs.remove(&book_id);
+    }
     // Clean up cached assets (best-effort)
     let cover_dir = crate::storage::paths::app_data_dir().join("cache/covers");
     for ext in &["png", "jpg", "jpeg", "webp", "gif", "svg"] {
@@ -160,6 +173,9 @@ pub fn library_remove_batch(
     book_ids: Vec<String>,
     delete_files: bool,
     index_state: tauri::State<'_, super::LibraryIndexState>,
+    progress_state: tauri::State<'_, super::ProgressState>,
+    dirty_progress_state: tauri::State<'_, super::DirtyProgressState>,
+    progress_revision_state: tauri::State<'_, super::ProgressRevisionState>,
 ) -> Result<(), String> {
     let source_paths: Vec<String> = {
         let index = index_state.lock().map_err(|e| e.to_string())?;
@@ -190,6 +206,9 @@ pub fn library_remove_batch(
             } else {
                 let _ = crate::storage::bookmark_store::save(id, &[]);
                 crate::storage::progress_store::delete(id);
+                if let Ok(mut map) = progress_state.lock() { map.remove(id); }
+                if let Ok(mut dirty) = dirty_progress_state.lock() { dirty.remove(id); }
+                if let Ok(mut revs) = progress_revision_state.lock() { revs.remove(id); }
                 let cover_dir = crate::storage::paths::app_data_dir().join("cache/covers");
                 for ext in &["png", "jpg", "jpeg", "webp", "gif", "svg"] {
                     let p = cover_dir.join(format!("{}.{}", id, ext));
