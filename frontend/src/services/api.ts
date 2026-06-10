@@ -46,6 +46,7 @@ export interface ReaderTextLinkDto {
   end: number
   href: string
   title: string | null
+  is_footnote?: boolean
 }
 
 export type ReaderBlockDto =

@@ -399,6 +399,8 @@ impl EpubParser {
         let mut in_title_tag = false;
         let mut in_heading = false;
         let mut heading_flags: Vec<bool> = Vec::new();
+        let mut in_sup = false;
+        let mut link_is_footnote = false;
 
         // Helper: flush current paragraph on br/hr
         let flush_para = |current_para: &mut String,
@@ -421,9 +423,11 @@ impl EpubParser {
                                    link_title: &mut Option<String>,
                                    in_link: &mut bool,
                                    link_start: &mut usize,
+                                   is_footnote: &mut bool,
                                    current_para: &str| {
             link_href.clear();
             *link_title = None;
+            *is_footnote = false;
             for attr in attrs {
                 if let Ok(attr) = attr {
                     let an = attr.key.as_ref();
@@ -442,6 +446,12 @@ impl EpubParser {
                     } else if an.eq_ignore_ascii_case(b"title") {
                         if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
                             *link_title = Some(v.trim().to_string());
+                        }
+                    } else if an.eq_ignore_ascii_case(b"type") {
+                        if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                            if v.contains("noteref") {
+                                *is_footnote = true;
+                            }
                         }
                     }
                 }
@@ -499,8 +509,10 @@ impl EpubParser {
                             heading_flags.push(in_heading);
                         }
                         flush_para(&mut current_para, &mut paragraphs, &mut paragraph_links, &mut current_links, &mut text_indent, &mut para_count);
+                    } else if name.eq_ignore_ascii_case(b"sup") {
+                        in_sup = true;
                     } else if name.eq_ignore_ascii_case(b"a") {
-                        handle_a_attrs(e.attributes(), &mut link_href, &mut link_title, &mut in_link, &mut link_start, &current_para);
+                        handle_a_attrs(e.attributes(), &mut link_href, &mut link_title, &mut in_link, &mut link_start, &mut link_is_footnote, &current_para);
                     }
                 }
                 Ok(Event::Empty(ref e)) => {
@@ -521,7 +533,7 @@ impl EpubParser {
                         }
                         flush_para(&mut current_para, &mut paragraphs, &mut paragraph_links, &mut current_links, &mut text_indent, &mut para_count);
                     } else if name.eq_ignore_ascii_case(b"a") {
-                        handle_a_attrs(e.attributes(), &mut link_href, &mut link_title, &mut in_link, &mut link_start, &current_para);
+                        handle_a_attrs(e.attributes(), &mut link_href, &mut link_title, &mut in_link, &mut link_start, &mut link_is_footnote, &current_para);
                     }
                 }
                 Ok(Event::End(ref e)) => {
@@ -548,6 +560,8 @@ impl EpubParser {
                         text_indent = false;
                         para_count += 1;
                         in_heading = false;
+                    } else if name.eq_ignore_ascii_case(b"sup") {
+                        in_sup = false;
                     } else if name.eq_ignore_ascii_case(b"a") && in_link {
                         let end = current_para.chars().count();
                         if end > link_start {
@@ -556,11 +570,13 @@ impl EpubParser {
                                 end,
                                 href: link_href.clone(),
                                 title: link_title.clone(),
+                                is_footnote: link_is_footnote || in_sup,
                             });
                         }
                         in_link = false;
                         link_href.clear();
                         link_title = None;
+                        link_is_footnote = false;
                     }
                 }
                 Ok(Event::Text(ref _e)) if in_title_tag => {

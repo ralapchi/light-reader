@@ -33,7 +33,7 @@ function renderLinkedText(
     parts.push(
       <button
         key={`link-${link.start}`}
-        className="reader-link"
+        className={link.is_footnote ? 'reader-link reader-link-noteref' : 'reader-link'}
         onClick={(e) => {
           e.stopPropagation()
           onLinkClick?.(link.href)

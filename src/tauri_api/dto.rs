@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 // ── Library DTOs ────────────────────────────────────────────
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -87,6 +91,8 @@ pub struct ReaderTextLinkDto {
     pub href: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub is_footnote: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -20,6 +20,7 @@ fn links_to_dto(links: &[TextLink]) -> Vec<ReaderTextLinkDto> {
             end: l.end,
             href: l.href.clone(),
             title: l.title.clone(),
+            is_footnote: l.is_footnote,
         })
         .collect()
 }

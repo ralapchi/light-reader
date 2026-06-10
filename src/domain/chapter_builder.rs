@@ -61,6 +61,7 @@ pub(crate) fn build_chapter(
                     end: l.end.saturating_sub(total_offset).min(clean_char_count),
                     href: l.href.clone(),
                     title: l.title.clone(),
+                    is_footnote: l.is_footnote,
                 })
                 .collect();
             let kind = if heading_flags.get(paragraph_index).copied().unwrap_or(false) {

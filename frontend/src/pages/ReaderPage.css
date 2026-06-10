@@ -960,6 +960,18 @@
   opacity: 0.8;
 }
 
+.reader-link-noteref {
+  vertical-align: super;
+  font-size: 0.75em;
+  line-height: 0;
+  position: relative;
+  border-bottom: none;
+}
+
+.reader-link-noteref:hover {
+  border-bottom: none;
+}
+
 .reader-footnote-preview {
   position: fixed;
   z-index: 300;
