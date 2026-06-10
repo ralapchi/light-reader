@@ -1,5 +1,5 @@
 import type { CSSProperties, RefObject } from 'react'
-import type { ReaderChapterDto, ReadingMode } from '../../services/api'
+import type { ReaderBlockDto, ReaderChapterDto, ReadingMode } from '../../services/api'
 import SinglePageReaderContent from './SinglePageReaderContent'
 import TwoPageReaderContent, { type TwoPageNav, type TwoPageVisibleChapter } from './TwoPageReaderContent'
 
@@ -13,6 +13,7 @@ interface ReaderContentProps {
   contentWidth: number
   highlightedParagraphIndex?: number
   imageCache: Record<string, string>
+  loadChapterImages: (blocks: ReaderBlockDto[]) => Promise<void>
   initialParagraphIndex?: number | null
   twoPageNavRef: React.MutableRefObject<TwoPageNav | null>
   onNextChapter?: () => void
@@ -37,6 +38,7 @@ export default function ReaderContent(props: ReaderContentProps) {
         contentStyle={props.contentStyle}
         highlightedParagraphIndex={props.highlightedParagraphIndex}
         imageCache={props.imageCache}
+        loadChapterImages={props.loadChapterImages}
         initialParagraphIndex={props.initialParagraphIndex}
         twoPageNavRef={props.twoPageNavRef}
         onNextChapter={props.onNextChapter}

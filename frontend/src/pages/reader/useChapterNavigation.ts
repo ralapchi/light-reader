@@ -38,7 +38,15 @@ export function useChapterNavigation(
   }, [currentChapterIndex, readingMode, twoPageNavRef])
 
   // ── Chapter image loading ──────────────────────────────
+  const currentChapter = useAppStore(s => s.reader.currentChapter)
   const { imageCache, loadChapterImages } = useChapterImages(bookId)
+
+  // Load images whenever a chapter is available (covers store restore path)
+  useEffect(() => {
+    if (currentChapter) {
+      loadChapterImages(currentChapter.blocks)
+    }
+  }, [currentChapter, loadChapterImages])
 
   // ── Chapter navigation ─────────────────────────────────
   const goToChapter = useCallback(async (
@@ -123,6 +131,7 @@ export function useChapterNavigation(
     clearFootnoteReturn,
     handleSearchResultClick,
     imageCache,
+    loadChapterImages,
     goBackToLibrary,
     goToPreviousChapter,
     goToNextChapter,

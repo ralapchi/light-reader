@@ -1,5 +1,5 @@
-import { memo, useCallback, type CSSProperties, type RefObject } from 'react'
-import type { ReaderChapterDto } from '../../services/api'
+import { memo, useCallback, useEffect, type CSSProperties, type RefObject } from 'react'
+import type { ReaderBlockDto, ReaderChapterDto } from '../../services/api'
 import ReaderBlock from './ReaderBlock'
 import { blockKey, blockParagraphIndex } from './readerUtils'
 import { useAdjacentChapterPreload } from './useAdjacentChapterPreload'
@@ -33,6 +33,7 @@ interface TwoPageReaderContentProps {
   contentStyle: CSSProperties
   highlightedParagraphIndex?: number
   imageCache: Record<string, string>
+  loadChapterImages: (blocks: ReaderBlockDto[]) => Promise<void>
   initialParagraphIndex?: number | null
   twoPageNavRef: React.MutableRefObject<TwoPageNav | null>
   onNextChapter?: () => void
@@ -52,6 +53,7 @@ export default memo(function TwoPageReaderContent({
   contentStyle,
   highlightedParagraphIndex,
   imageCache,
+  loadChapterImages,
   initialParagraphIndex,
   twoPageNavRef,
   onNextChapter,
@@ -67,6 +69,13 @@ export default memo(function TwoPageReaderContent({
 
   const { flowChapters, loadNextChapter, hasNextChapter, setExtraChapters } =
     useAdjacentChapterPreload(chapter, chapterCount)
+
+  // Load images for all flow chapters (including preloaded adjacent chapters)
+  useEffect(() => {
+    for (const ch of flowChapters) {
+      loadChapterImages(ch.blocks)
+    }
+  }, [flowChapters, loadChapterImages])
 
   const { scrollRef, chapterRefs, pageHeight, pageWidth, spineGap, chapterPageCounts, chapterContentPageCounts, chapterSpreadStarts, totalSpreads, totalSpreadsRef, isReady } =
     useTwoPageLayout(contentRef, contentStyle, flowChapters)

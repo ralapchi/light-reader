@@ -160,6 +160,7 @@ function ReaderPage() {
         contentWidth={settings.content_width}
         highlightedParagraphIndex={tts.paragraph_indices[0]}
         imageCache={navigation.imageCache}
+        loadChapterImages={navigation.loadChapterImages}
         initialParagraphIndex={layoutAnchorParagraph}
         twoPageNavRef={twoPageNavRef}
         onScroll={progress.handleScroll}
