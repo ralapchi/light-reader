@@ -62,3 +62,10 @@ pub fn save(book_id: &str, progress: &ReadingProgress) -> Result<(), String> {
     };
     crate::storage::util::write_json_atomic_compact(&path, &file).map_err(|e| e.to_string())
 }
+
+pub fn delete(book_id: &str) {
+    let path = paths::progress_path(book_id);
+    if path.exists() {
+        let _ = std::fs::remove_file(&path);
+    }
+}

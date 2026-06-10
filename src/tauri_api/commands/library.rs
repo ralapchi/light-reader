@@ -111,8 +111,9 @@ pub fn library_remove(
         LibraryServiceImpl::save_index(&index);
     }
 
-    // Clean up bookmarks
+    // Clean up bookmarks and reading progress
     let _ = crate::storage::bookmark_store::save(&book_id, &[]);
+    crate::storage::progress_store::delete(&book_id);
     // Clean up cached assets (best-effort)
     let cover_dir = crate::storage::paths::app_data_dir().join("cache/covers");
     for ext in &["png", "jpg", "jpeg", "webp", "gif", "svg"] {
@@ -126,6 +127,20 @@ pub fn library_remove(
         .join(&book_id);
     if img_dir.exists() {
         let _ = std::fs::remove_dir_all(&img_dir);
+    }
+    // Clean up TTS cache (cache/tts/{provider}/{book_id}/)
+    let tts_dir = crate::storage::paths::tts_cache_dir();
+    if tts_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&tts_dir) {
+            for entry in entries.flatten() {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    let book_tts = entry.path().join(&book_id);
+                    if book_tts.exists() {
+                        let _ = std::fs::remove_dir_all(&book_tts);
+                    }
+                }
+            }
+        }
     }
 
     if delete_files {
@@ -174,6 +189,7 @@ pub fn library_remove_batch(
                 failures.push(format!("{}: 书籍不在书库中", id));
             } else {
                 let _ = crate::storage::bookmark_store::save(id, &[]);
+                crate::storage::progress_store::delete(id);
                 let cover_dir = crate::storage::paths::app_data_dir().join("cache/covers");
                 for ext in &["png", "jpg", "jpeg", "webp", "gif", "svg"] {
                     let p = cover_dir.join(format!("{}.{}", id, ext));
@@ -183,6 +199,19 @@ pub fn library_remove_batch(
                     .join("cache/images")
                     .join(id);
                 if img_dir.exists() { let _ = std::fs::remove_dir_all(&img_dir); }
+                let tts_dir = crate::storage::paths::tts_cache_dir();
+                if tts_dir.exists() {
+                    if let Ok(entries) = std::fs::read_dir(&tts_dir) {
+                        for entry in entries.flatten() {
+                            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                                let book_tts = entry.path().join(id);
+                                if book_tts.exists() {
+                                    let _ = std::fs::remove_dir_all(&book_tts);
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         LibraryServiceImpl::save_index(&index);
