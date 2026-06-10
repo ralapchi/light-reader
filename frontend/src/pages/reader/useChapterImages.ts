@@ -23,15 +23,32 @@ export function useChapterImages(bookId: string | undefined) {
 
   const loadChapterImages = useCallback(async (blocks: ReaderBlockDto[]) => {
     if (!bookId) return
-    const imageBlocks = blocks.filter(b => b.type === 'image')
-    if (imageBlocks.length === 0) return
 
-    const pendingIds = imageBlocks
-      .filter(b => {
-        const state = imageStateRef.current.get(b.asset_id)
-        return state !== 'loading' && state !== 'loaded'
-      })
-      .map(b => b.asset_id)
+    // Block-level images
+    const imageBlocks = blocks.filter(b => b.type === 'image')
+
+    // Inline images embedded in paragraph text via PUA markers
+    const inlineImageIds: string[] = []
+    for (const b of blocks) {
+      if ('text' in b) {
+        const re = /(.+?)/g
+        let m: RegExpExecArray | null
+        while ((m = re.exec(b.text)) !== null) {
+          inlineImageIds.push(m[1])
+        }
+      }
+    }
+
+    const allAssetIds = [
+      ...imageBlocks.map(b => b.asset_id),
+      ...inlineImageIds,
+    ]
+    if (allAssetIds.length === 0) return
+
+    const pendingIds = allAssetIds.filter(id => {
+      const state = imageStateRef.current.get(id)
+      return state !== 'loading' && state !== 'loaded'
+    })
     if (pendingIds.length === 0) return
 
     const loadId = loadIdRef.current

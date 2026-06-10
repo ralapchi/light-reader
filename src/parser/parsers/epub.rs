@@ -23,10 +23,11 @@ fn is_img_tag(name: &[u8]) -> bool {
         || name.len() >= 5 && name[name.len()-5..].eq_ignore_ascii_case(b"image")
 }
 
-/// 从标签属性中读取图片的 src 和 alt
-fn read_img_attrs(attrs: quick_xml::events::attributes::Attributes) -> (String, Option<String>) {
+/// 从标签属性中读取图片的 src、alt 和 style
+fn read_img_attrs(attrs: quick_xml::events::attributes::Attributes) -> (String, Option<String>, Option<String>) {
     let mut src = String::new();
     let mut alt = None;
+    let mut style = None;
     for attr in attrs {
         if let Ok(attr) = attr {
             let an = attr.key.as_ref();
@@ -41,10 +42,14 @@ fn read_img_attrs(attrs: quick_xml::events::attributes::Attributes) -> (String, 
                         alt = Some(v.to_string());
                     }
                 }
+            } else if an_lower.starts_with(b"style") {
+                if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                    style = Some(v.to_string());
+                }
             }
         }
     }
-    (src, alt)
+    (src, alt, style)
 }
 
 /// 从元素属性中提取 id/name 锚点
@@ -382,6 +387,7 @@ impl EpubParser {
         Vec<Vec<TextLink>>,
         Vec<(String, usize)>,
         Vec<bool>,
+        Vec<(usize, String, Option<String>)>,
     ) {
         let mut paragraphs: Vec<String> = Vec::new();
         let mut current_para = String::new();
@@ -401,6 +407,8 @@ impl EpubParser {
         let mut heading_flags: Vec<bool> = Vec::new();
         let mut in_sup = false;
         let mut link_is_footnote = false;
+        let mut inline_img_counter: usize = 0;
+        let mut inline_images: Vec<(usize, String, Option<String>)> = Vec::new();
 
         // Helper: flush current paragraph on br/hr
         let flush_para = |current_para: &mut String,
@@ -523,9 +531,19 @@ impl EpubParser {
                     record_anchor(e.attributes(), &mut anchors, paragraphs.len());
 
                     if is_img_tag(name) {
-                        let (src, alt) = read_img_attrs(e.attributes());
+                        let (src, alt, style) = read_img_attrs(e.attributes());
                         if !src.is_empty() {
-                            images.push((para_count - 1, src, alt));
+                            let is_inline = !current_para.is_empty()
+                                && style.as_deref().map_or(false, |s| {
+                                    s.contains("height:1em") || s.contains("display:inline") || s.contains("display: inline")
+                                });
+                            if is_inline {
+                                current_para.push_str(&format!("\u{E000}{}\u{E001}", inline_img_counter));
+                                inline_images.push((inline_img_counter, src, alt));
+                                inline_img_counter += 1;
+                            } else {
+                                images.push((para_count - 1, src, alt));
+                            }
                         }
                     } else if name.eq_ignore_ascii_case(b"br") || name.eq_ignore_ascii_case(b"hr") {
                         if !current_para.trim().is_empty() {
@@ -603,7 +621,7 @@ impl EpubParser {
             heading_flags.push(in_heading);
         }
 
-        (paragraphs, images, paragraph_links, anchors, heading_flags)
+        (paragraphs, images, paragraph_links, anchors, heading_flags, inline_images)
     }
 
     /// 从 HTML 内容中提取标题
@@ -1277,7 +1295,7 @@ impl BookParser for EpubParser {
                     content
                 };
                 if !html_content.is_empty() {
-                    let (paragraphs, images_with_pos, paragraph_links, raw_anchors, para_heading_flags) =
+                    let (paragraphs, images_with_pos, paragraph_links, raw_anchors, para_heading_flags, inline_images_from_html) =
                         self.extract_html_with_positions(&html_content);
                     // 过滤 XML/SVG 噪声段落，同步更新链接和锚点索引
                     let keep: Vec<bool> =
@@ -1316,9 +1334,8 @@ impl BookParser for EpubParser {
                                 .and_then(|&new_idx| new_idx.map(|n| (frag, n)))
                         })
                         .collect();
-                    let text_content = filtered_paragraphs.join("\n\n");
+                    let mut text_content = filtered_paragraphs.join("\n\n");
                     if !text_content.is_empty() && !Self::is_cover_only_text(&text_content) {
-                        content.push(text_content);
                         spine_hrefs.push(href.clone());
                         chapter_links.push(filtered_links);
                         chapter_anchors.push(filtered_anchors);
@@ -1378,10 +1395,52 @@ impl BookParser for EpubParser {
                                     alt_text: None,
                                     caption: None,
                                     source_href: None,
+                                    is_inline: false,
                                 },
                             ));
                         }
                         chapter_image_blocks.push(img_blocks);
+
+                        // 处理内联图片（生僻字替代），替换 PUA 占位符为 asset_id
+                        let chapter_full = self.get_full_path(&opf_base_path, href);
+                        let chapter_dir = std::path::Path::new(&chapter_full)
+                            .parent()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        for (idx, img_src, img_alt) in inline_images_from_html {
+                            let img_full_path = epub_assets::resolve_path(&chapter_dir, &img_src);
+                            let asset_id = image_asset_ids_by_path
+                                .entry(img_full_path.clone())
+                                .or_insert_with(|| {
+                                    use std::hash::{Hash, Hasher};
+                                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                                    img_full_path.hash(&mut hasher);
+                                    format!("img-{:016x}", hasher.finish())
+                                })
+                                .clone();
+                            let placeholder = format!("\u{E000}{}\u{E001}", idx);
+                            let replacement = format!("\u{E000}{}\u{E001}", asset_id);
+                            text_content = text_content.replace(&placeholder, &replacement);
+                            let mime = epub_assets::media_type_from_href(&img_src);
+                            let cache_key = Some(format!(
+                                "{}.{}",
+                                asset_id,
+                                epub_assets::ext_from_href(&img_src)
+                            ));
+                            if !image_assets.iter().any(|a| a.asset_path == img_full_path) {
+                                image_assets.push(crate::domain::book_assets::BookImageAsset {
+                                    asset_id,
+                                    source_href: epub_assets::normalize_href(&img_src),
+                                    asset_path: img_full_path,
+                                    media_type: Some(mime.to_string()),
+                                    cache_key,
+                                    width_hint: None,
+                                    height_hint: None,
+                                    alt_text: img_alt,
+                                });
+                            }
+                        }
+                        content.push(text_content);
 
                         // 优先使用 TOC 标题
                         let chapter_title =

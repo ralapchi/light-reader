@@ -10,6 +10,8 @@ pub struct InlineImageBlock {
     pub alt_text: Option<String>,
     pub caption: Option<String>,
     pub source_href: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_inline: bool,
 }
 
 /// A content block within a chapter — either a text paragraph or an image.

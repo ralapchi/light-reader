@@ -11,6 +11,48 @@ interface ReaderBlockProps {
   onLinkLeave?: () => void
 }
 
+const INLINE_IMG_RE = /(.+?)/g
+
+function renderTextWithInlineImages(
+  text: string,
+  sortedLinks: ReaderTextLinkDto[],
+  imageCache: Record<string, string>,
+  onLinkClick?: (href: string) => void,
+  onLinkHover?: (href: string, target: HTMLElement, title?: string | null) => void,
+  onLinkLeave?: () => void,
+) {
+  const parts: React.ReactNode[] = []
+  let lastIdx = 0
+  let m: RegExpExecArray | null
+  INLINE_IMG_RE.lastIndex = 0
+  while ((m = INLINE_IMG_RE.exec(text)) !== null) {
+    // Text before this inline image — render links
+    if (m.index > lastIdx) {
+      const segment = text.slice(lastIdx, m.index)
+      const segLinks = sortedLinks
+        .filter(l => l.start >= lastIdx && l.end <= m!.index)
+        .map(l => ({ ...l, start: l.start - lastIdx, end: l.end - lastIdx }))
+      parts.push(renderLinkedText(segment, segLinks, onLinkClick, onLinkHover, onLinkLeave))
+    }
+    const assetId = m[1]
+    if (imageCache[assetId]) {
+      parts.push(
+        <img key={`iimg-${assetId}`} className="reader-inline-image" src={imageCache[assetId]} alt="" />,
+      )
+    }
+    lastIdx = m.index + m[0].length
+  }
+  // Remaining text
+  if (lastIdx < text.length) {
+    const segment = text.slice(lastIdx)
+    const segLinks = sortedLinks
+      .filter(l => l.start >= lastIdx && l.end <= text.length)
+      .map(l => ({ ...l, start: l.start - lastIdx, end: l.end - lastIdx }))
+    parts.push(renderLinkedText(segment, segLinks, onLinkClick, onLinkHover, onLinkLeave))
+  }
+  return <>{parts}</>
+}
+
 function renderLinkedText(
   text: string,
   sortedLinks: ReaderTextLinkDto[],
@@ -80,7 +122,7 @@ export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, hi
   if (block.type === 'heading') {
     return (
       <h2 className={`reader-heading${highlight ? ' tts-highlight' : ''}`} style={paragraphStyle} data-para-index={block.index}>
-        {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick, onLinkHover, onLinkLeave)}
+        {renderTextWithInlineImages(block.text, sortedLinks ?? [], imageCache, onLinkClick, onLinkHover, onLinkLeave)}
       </h2>
     )
   }
@@ -88,7 +130,7 @@ export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, hi
   if (block.type === 'quote') {
     return (
       <blockquote className={`reader-paragraph quote${highlight ? ' tts-highlight' : ''}`} style={paragraphStyle} data-para-index={block.index}>
-        {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick, onLinkHover, onLinkLeave)}
+        {renderTextWithInlineImages(block.text, sortedLinks ?? [], imageCache, onLinkClick, onLinkHover, onLinkLeave)}
       </blockquote>
     )
   }
@@ -96,7 +138,7 @@ export default memo(function ReaderBlock({ block, imageCache, paragraphStyle, hi
   const cls = `reader-paragraph indent${highlight ? ' tts-highlight' : ''}`
   return (
     <p className={cls} style={paragraphStyle} data-para-index={block.index}>
-      {renderLinkedText(block.text, sortedLinks ?? [], onLinkClick, onLinkHover, onLinkLeave)}
+      {renderTextWithInlineImages(block.text, sortedLinks ?? [], imageCache, onLinkClick, onLinkHover, onLinkLeave)}
     </p>
   )
 })

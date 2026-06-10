@@ -972,6 +972,13 @@
   border-bottom: none;
 }
 
+.reader-inline-image {
+  display: inline-block;
+  height: 1em;
+  vertical-align: text-bottom;
+  margin: 0 1px;
+}
+
 .reader-footnote-preview {
   position: fixed;
   z-index: 300;

@@ -83,13 +83,13 @@ pub(crate) fn build_chapter(
     let mut blocks: Vec<ChapterBlock> = Vec::new();
 
     if paragraphs.is_empty() {
-        // No paragraphs: render all images
-        for (_pos, img) in img_blocks {
+        // No paragraphs: render all images (skip inline)
+        for (_pos, img) in img_blocks.iter().filter(|(_, img)| !img.is_inline) {
             blocks.push(ChapterBlock::Image(img.clone()));
         }
     } else {
         // pos == -1 的图片放最前面
-        for (pos, img) in img_blocks.iter().filter(|(pos, _)| *pos == -1) {
+        for (pos, img) in img_blocks.iter().filter(|(_, img)| !img.is_inline).filter(|(pos, _)| *pos == -1) {
             let _ = pos;
             blocks.push(ChapterBlock::Image(img.clone()));
         }
@@ -107,13 +107,14 @@ pub(crate) fn build_chapter(
                 }
             }
             // 在该段落之后插入 pos == para.index 的图片
-            for (_pos, img) in img_blocks.iter().filter(|(p, _)| *p == para.index as isize) {
+            for (_pos, img) in img_blocks.iter().filter(|(_, img)| !img.is_inline).filter(|(p, _)| *p == para.index as isize) {
                 blocks.push(ChapterBlock::Image(img.clone()));
             }
         }
         // pos >= paragraphs.len() 的图片放最后
         for (_pos, img) in img_blocks
             .iter()
+            .filter(|(_, img)| !img.is_inline)
             .filter(|(p, _)| *p >= paragraphs.len() as isize)
         {
             blocks.push(ChapterBlock::Image(img.clone()));
@@ -335,6 +336,7 @@ mod tests {
                 alt_text: None,
                 caption: None,
                 source_href: None,
+                is_inline: false,
             },
         )
     }
