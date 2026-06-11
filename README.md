@@ -5,12 +5,15 @@
 ## 功能
 
 - **多格式解析** — 支持 EPUB 和 TXT 格式，自动章节拆分与目录构建
+- **单页 / 双页模式** — 支持传统滚动阅读和双页翻页两种阅读模式
+- **行内图片** — EPUB 中的生僻字替代图片自动内联到段落文本中
+- **脚注预览** — 鼠标悬停脚注链接时显示内容预览，点击跳转后自动隐藏
 - **阅读进度** — 章节级与滚动位置级进度记录，跨会话自动恢复
 - **全文搜索** — 书籍内关键词搜索，结果定位到段落
 - **书签系统** — 添加/移除书签，独立书签管理页，快捷键 `Ctrl+B`
 - **主题与排版** — 多种内置配色主题，可调字体、字号、行距、段间距
 - **TTS 朗读** — 接入小米 TTS 服务，支持播放/暂停/继续/停止，段落级语音缓存
-- **图书馆管理** — 导入、搜索、删除书籍，封面自动提取
+- **图书馆管理** — 导入、搜索、删除书籍，封面自动提取，删除时自动清理进度、书签和缓存
 - **设置持久化** — 全局偏好与阅读设置在本地存储
 
 ## 技术栈
@@ -69,10 +72,18 @@ cargo tauri dev
 ### 构建发布包
 
 ```bash
+# 构建当前平台安装包
 cargo tauri build
+
+# 指定 Apple Silicon 目标
+cargo tauri build --target aarch64-apple-darwin
 ```
 
-产物在 `src-tauri/target/release/bundle/`。
+产物在 `target/<target>/release/bundle/`，macOS 下可生成 `.dmg` 和 `.app`。如需 `.pkg` 安装包：
+
+```bash
+productbuild --component "target/aarch64-apple-darwin/release/bundle/macos/轻看.app" /Applications 轻看.pkg
+```
 
 ### 日志
 
@@ -82,9 +93,13 @@ cargo tauri build
 
 书籍、进度、书签、设置等数据存储在系统应用数据目录：
 
-- **macOS** — `~/Library/Application Support/com.light-reader.app/`
-- **Linux** — `~/.local/share/com.light-reader.app/`
-- **Windows** — `%APPDATA%/com.light-reader.app/`
+- **macOS** — `~/Library/Application Support/light-reader/`
+- **Linux** — `~/.local/share/light-reader/`
+- **Windows** — `%APPDATA%/light-reader/`
+
+## 下载
+
+前往 [GitHub Releases](https://github.com/ralapchi/light-reader/releases) 下载最新版本。
 
 ## License
 
