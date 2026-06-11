@@ -266,8 +266,7 @@ fn find_with_extension(base_dir: &std::path::Path, stem: &str) -> Option<PathBuf
 
 impl AssetService for AssetServiceImpl {
     fn cover_path(&self, book_id: &str) -> Option<PathBuf> {
-        let base_dir = paths::app_data_dir().join("cache/covers");
-        find_with_extension(&base_dir, book_id)
+        paths::find_cover_by_extensions(book_id)
     }
 
     fn image_path(&self, book_id: &str, asset_id: &str) -> Option<PathBuf> {

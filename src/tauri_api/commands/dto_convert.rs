@@ -34,14 +34,8 @@ pub fn item_to_dto(item: &crate::domain::library_item::LibraryItem) -> LibraryBo
             p.exists().then(|| p.to_str().map(|s| s.to_string())).flatten()
         })
         .or_else(|| {
-            let base_dir = crate::storage::paths::app_data_dir().join("cache/covers");
-            for ext in &["png", "jpg", "jpeg", "webp", "gif", "svg"] {
-                let p = base_dir.join(format!("{}.{}", item.book_id, ext));
-                if p.exists() {
-                    return p.to_str().map(|s| s.to_string());
-                }
-            }
-            None
+            crate::storage::paths::find_cover_by_extensions(&item.book_id)
+                .and_then(|p| p.to_str().map(|s| s.to_string()))
         });
     LibraryBookCardDto {
         book_id: item.book_id.clone(),

@@ -4,6 +4,47 @@ use crate::services::library_service_impl::LibraryServiceImpl;
 use super::super::dto::*;
 use super::dto_convert::{item_to_dto, read_file_to_data_uri};
 
+fn cleanup_book_data(
+    book_id: &str,
+    progress_state: &tauri::State<'_, super::ProgressState>,
+    dirty_progress_state: &tauri::State<'_, super::DirtyProgressState>,
+    progress_revision_state: &tauri::State<'_, super::ProgressRevisionState>,
+) {
+    let _ = crate::storage::bookmark_store::save(book_id, &[]);
+    crate::storage::progress_store::delete(book_id);
+    if let Ok(mut map) = progress_state.lock() {
+        map.remove(book_id);
+    }
+    if let Ok(mut dirty) = dirty_progress_state.lock() {
+        dirty.remove(book_id);
+    }
+    if let Ok(mut revs) = progress_revision_state.lock() {
+        revs.remove(book_id);
+    }
+    if let Some(cover_path) = crate::storage::paths::find_cover_by_extensions(book_id) {
+        let _ = std::fs::remove_file(&cover_path);
+    }
+    let img_dir = crate::storage::paths::app_data_dir()
+        .join("cache/images")
+        .join(book_id);
+    if img_dir.exists() {
+        let _ = std::fs::remove_dir_all(&img_dir);
+    }
+    let tts_dir = crate::storage::paths::tts_cache_dir();
+    if tts_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&tts_dir) {
+            for entry in entries.flatten() {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    let book_tts = entry.path().join(book_id);
+                    if book_tts.exists() {
+                        let _ = std::fs::remove_dir_all(&book_tts);
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[tauri::command]
 pub fn library_list(
     index_state: tauri::State<'_, super::LibraryIndexState>,
@@ -114,47 +155,8 @@ pub fn library_remove(
         LibraryServiceImpl::save_index(&index);
     }
 
-    // Clean up bookmarks and reading progress
-    let _ = crate::storage::bookmark_store::save(&book_id, &[]);
-    crate::storage::progress_store::delete(&book_id);
-    // Clear in-memory progress cache so re-imported books don't restore old progress
-    if let Ok(mut map) = progress_state.lock() {
-        map.remove(&book_id);
-    }
-    if let Ok(mut dirty) = dirty_progress_state.lock() {
-        dirty.remove(&book_id);
-    }
-    if let Ok(mut revs) = progress_revision_state.lock() {
-        revs.remove(&book_id);
-    }
-    // Clean up cached assets (best-effort)
-    let cover_dir = crate::storage::paths::app_data_dir().join("cache/covers");
-    for ext in &["png", "jpg", "jpeg", "webp", "gif", "svg"] {
-        let cover_path = cover_dir.join(format!("{}.{}", book_id, ext));
-        if cover_path.exists() {
-            let _ = std::fs::remove_file(&cover_path);
-        }
-    }
-    let img_dir = crate::storage::paths::app_data_dir()
-        .join("cache/images")
-        .join(&book_id);
-    if img_dir.exists() {
-        let _ = std::fs::remove_dir_all(&img_dir);
-    }
-    // Clean up TTS cache (cache/tts/{provider}/{book_id}/)
-    let tts_dir = crate::storage::paths::tts_cache_dir();
-    if tts_dir.exists() {
-        if let Ok(entries) = std::fs::read_dir(&tts_dir) {
-            for entry in entries.flatten() {
-                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                    let book_tts = entry.path().join(&book_id);
-                    if book_tts.exists() {
-                        let _ = std::fs::remove_dir_all(&book_tts);
-                    }
-                }
-            }
-        }
-    }
+    // Clean up bookmarks, reading progress, and cached assets
+    cleanup_book_data(&book_id, &progress_state, &dirty_progress_state, &progress_revision_state);
 
     if delete_files {
         if let Some(source) = source {
@@ -204,33 +206,7 @@ pub fn library_remove_batch(
             if index.items.len() == before {
                 failures.push(format!("{}: 书籍不在书库中", id));
             } else {
-                let _ = crate::storage::bookmark_store::save(id, &[]);
-                crate::storage::progress_store::delete(id);
-                if let Ok(mut map) = progress_state.lock() { map.remove(id); }
-                if let Ok(mut dirty) = dirty_progress_state.lock() { dirty.remove(id); }
-                if let Ok(mut revs) = progress_revision_state.lock() { revs.remove(id); }
-                let cover_dir = crate::storage::paths::app_data_dir().join("cache/covers");
-                for ext in &["png", "jpg", "jpeg", "webp", "gif", "svg"] {
-                    let p = cover_dir.join(format!("{}.{}", id, ext));
-                    if p.exists() { let _ = std::fs::remove_file(&p); }
-                }
-                let img_dir = crate::storage::paths::app_data_dir()
-                    .join("cache/images")
-                    .join(id);
-                if img_dir.exists() { let _ = std::fs::remove_dir_all(&img_dir); }
-                let tts_dir = crate::storage::paths::tts_cache_dir();
-                if tts_dir.exists() {
-                    if let Ok(entries) = std::fs::read_dir(&tts_dir) {
-                        for entry in entries.flatten() {
-                            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                                let book_tts = entry.path().join(id);
-                                if book_tts.exists() {
-                                    let _ = std::fs::remove_dir_all(&book_tts);
-                                }
-                            }
-                        }
-                    }
-                }
+                cleanup_book_data(id, &progress_state, &dirty_progress_state, &progress_revision_state);
             }
         }
         LibraryServiceImpl::save_index(&index);

@@ -53,6 +53,18 @@ pub fn cover_cache_path(book_id: &str, ext: &str) -> PathBuf {
         .join(format!("{}.{}", book_id, ext))
 }
 
+/// Probe the cover cache directory for any matching image extension.
+pub fn find_cover_by_extensions(book_id: &str) -> Option<PathBuf> {
+    let cover_dir = app_data_dir().join("cache/covers");
+    for ext in &["png", "jpg", "jpeg", "webp", "gif", "svg"] {
+        let p = cover_dir.join(format!("{}.{}", book_id, ext));
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
+}
+
 pub fn image_cache_path(book_id: &str, asset_id: &str, ext: &str) -> PathBuf {
     app_data_dir()
         .join("cache/images")
