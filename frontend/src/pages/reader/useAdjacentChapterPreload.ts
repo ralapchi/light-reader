@@ -7,7 +7,7 @@ export function useAdjacentChapterPreload(
   chapterCount: number,
 ) {
   const [extraChapters, setExtraChapters] = useState<ReaderChapterDto[]>([])
-  const [loadingChapterIndex, setLoadingChapterIndex] = useState<number | null>(null)
+  const loadingChapterIndexRef = useRef<number | null>(null)
 
   const flowChapters = useMemo(
     () => chapter ? [chapter, ...extraChapters] : [],
@@ -22,14 +22,14 @@ export function useAdjacentChapterPreload(
     const lastLoaded = chapters[chapters.length - 1]
     if (!lastLoaded) return false
     const nextIndex = lastLoaded.chapter_index + 1
-    if (nextIndex >= chapterCount || loadingChapterIndex === nextIndex) return false
-    setLoadingChapterIndex(nextIndex)
+    if (nextIndex >= chapterCount || loadingChapterIndexRef.current === nextIndex) return false
+    loadingChapterIndexRef.current = nextIndex
     try {
       const nextChapter = await readerGetChapter(nextIndex)
       setExtraChapters(c => c.some(x => x.chapter_index === nextIndex) ? c : [...c, nextChapter])
       return true
-    } finally { setLoadingChapterIndex(null) }
-  }, [chapterCount, loadingChapterIndex])
+    } finally { loadingChapterIndexRef.current = null }
+  }, [chapterCount])
 
   const hasNextChapter = useMemo(() => {
     const lastLoaded = flowChapters[flowChapters.length - 1]

@@ -1,6 +1,8 @@
 import type { TocItemDto, ReaderBlockDto, ReaderAnchor } from '../../services/api'
 import type { TwoPageNav } from './TwoPageReaderContent'
 
+export const INLINE_IMAGE_RE = /\u{E000}(.+?)\u{E001}/gu
+
 export function flattenToc(items: TocItemDto[]): TocItemDto[] {
   const out: TocItemDto[] = []
   for (const item of items) {

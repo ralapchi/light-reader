@@ -1,5 +1,6 @@
 import { memo, useMemo, type CSSProperties } from 'react'
 import type { ReaderBlockDto, ReaderTextLinkDto } from '../../services/api'
+import { INLINE_IMAGE_RE } from './readerUtils'
 
 interface ReaderBlockProps {
   block: ReaderBlockDto
@@ -11,7 +12,6 @@ interface ReaderBlockProps {
   onLinkLeave?: () => void
 }
 
-const INLINE_IMG_RE = /(.+?)/g
 
 function renderTextWithInlineImages(
   text: string,
@@ -24,8 +24,8 @@ function renderTextWithInlineImages(
   const parts: React.ReactNode[] = []
   let lastIdx = 0
   let m: RegExpExecArray | null
-  INLINE_IMG_RE.lastIndex = 0
-  while ((m = INLINE_IMG_RE.exec(text)) !== null) {
+  INLINE_IMAGE_RE.lastIndex = 0
+  while ((m = INLINE_IMAGE_RE.exec(text)) !== null) {
     // Text before this inline image — render links
     if (m.index > lastIdx) {
       const segment = text.slice(lastIdx, m.index)
