@@ -1,9 +1,51 @@
+use crate::domain::book::Book;
 use crate::services::asset_service_impl::AssetServiceImpl;
 use crate::services::reader_service_impl::ReaderServiceImpl;
 
 use super::super::dto::*;
 use super::dto_convert::{block_to_dto, build_reader_book_dto, read_file_to_data_uri};
 use super::BookSession;
+
+/// Split an href into (file_part, fragment). Fragment is the part after '#'.
+fn split_href(href: &str) -> (String, Option<String>) {
+    match href.split_once('#') {
+        Some((f, frag)) => (f.to_string(), Some(frag.to_string())),
+        None => (href.to_string(), None),
+    }
+}
+
+/// Resolve the chapter index for a given file_part within a book.
+/// Falls back to `from_chapter` for fragment-only or empty file_part hrefs.
+fn resolve_chapter_index(book: &Book, file_part: &str, from_chapter: usize, href: &str) -> Option<usize> {
+    if file_part.is_empty() || href.starts_with('#') {
+        return Some(from_chapter);
+    }
+
+    let target_file = file_part.rsplit('/').next().unwrap_or(file_part);
+    if target_file.is_empty() {
+        return None;
+    }
+
+    // Primary match: source_href matches file_part, /target_file, or target_file
+    book.chapters.iter().position(|ch| {
+        ch.source_href
+            .as_ref()
+            .map(|h| h == file_part || h.ends_with(&format!("/{}", target_file)) || h == target_file)
+            .unwrap_or(false)
+    })
+    .or_else(|| {
+        // Fallback: match by filename only
+        book.chapters.iter().position(|ch| {
+            ch.source_href
+                .as_ref()
+                .map(|h| {
+                    let ch_file = h.rsplit('/').next().unwrap_or(h);
+                    ch_file == target_file
+                })
+                .unwrap_or(false)
+        })
+    })
+}
 
 #[tauri::command]
 pub fn reader_get_book(
@@ -170,73 +212,16 @@ pub fn reader_resolve_href(
 ) -> Result<Option<ReaderResolvedLinkDto>, String> {
     let guard = state.lock().map_err(|e| e.to_string())?;
     let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
-    let (file_part, fragment) = match href.split_once('#') {
-        Some((f, frag)) => (f.to_string(), Some(frag.to_string())),
-        None => (href.clone(), None),
+    let (file_part, fragment) = split_href(&href);
+
+    let chapter_index = match resolve_chapter_index(book, &file_part, from_chapter_index.unwrap_or(0), &href) {
+        Some(ci) => ci,
+        None => return Ok(None),
     };
 
-    if file_part.is_empty() {
-        let chapter_index = from_chapter_index.unwrap_or(0);
-        if chapter_index >= book.chapters.len() {
-            return Ok(None);
-        }
-        let paragraph_index = fragment.as_ref().and_then(|fragment| {
-            book.chapters[chapter_index]
-                .anchors
-                .iter()
-                .find(|(id, _)| id == fragment)
-                .map(|(_, pi)| *pi)
-        });
-        return Ok(Some(ReaderResolvedLinkDto {
-            chapter_index,
-            paragraph_index,
-            block_index: paragraph_index,
-            scroll_offset: None,
-        }));
-    }
-
-    // Normalize file part: take just the filename for matching
-    let target_file = file_part.rsplit('/').next().unwrap_or(&file_part);
-    // Guard against bare "/" or empty file paths
-    if target_file.is_empty() {
+    if chapter_index >= book.chapters.len() {
         return Ok(None);
     }
-
-    // 1. Find the chapter by matching source_href ending
-    let chapter_index = book.chapters.iter().position(|ch| {
-        ch.source_href
-            .as_ref()
-            .map(|h| {
-                h == &file_part || h.ends_with(&format!("/{}", target_file)) || h == target_file
-            })
-            .unwrap_or(false)
-    });
-
-    let chapter_index = match chapter_index {
-        Some(ci) => ci,
-        None => {
-            // Fallback: match by href filename only (for EPUBs where paths are inconsistent)
-            match book.chapters.iter().position(|ch| {
-                ch.source_href
-                    .as_ref()
-                    .map(|h| {
-                        let ch_file = h.rsplit('/').next().unwrap_or(h);
-                        ch_file == target_file
-                    })
-                    .unwrap_or(false)
-            }) {
-                Some(ci) => ci,
-                None => {
-                    // Try from_chapter_index as base for fragment-only hrefs
-                    if file_part.is_empty() || href.starts_with('#') {
-                        from_chapter_index.unwrap_or(0)
-                    } else {
-                        return Ok(None);
-                    }
-                }
-            }
-        }
-    };
 
     // 2. If no fragment, just return chapter_index
     let fragment = match fragment {
@@ -276,47 +261,11 @@ pub fn reader_get_link_preview(
 ) -> Result<Option<LinkPreviewDto>, String> {
     let guard = state.lock().map_err(|e| e.to_string())?;
     let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
-    let (file_part, fragment) = match href.split_once('#') {
-        Some((f, frag)) => (f.to_string(), Some(frag.to_string())),
-        None => (href.clone(), None),
-    };
+    let (file_part, fragment) = split_href(&href);
 
-    // Resolve chapter_index
-    let chapter_index = if file_part.is_empty() {
-        from_chapter_index
-    } else {
-        let target_file = file_part.rsplit('/').next().unwrap_or(&file_part);
-        if target_file.is_empty() {
-            return Ok(None);
-        }
-        match book.chapters.iter().position(|ch| {
-            ch.source_href
-                .as_ref()
-                .map(|h| {
-                    h == &file_part || h.ends_with(&format!("/{}", target_file)) || h == target_file
-                })
-                .unwrap_or(false)
-        }) {
-            Some(ci) => ci,
-            None => match book.chapters.iter().position(|ch| {
-                ch.source_href
-                    .as_ref()
-                    .map(|h| {
-                        let ch_file = h.rsplit('/').next().unwrap_or(h);
-                        ch_file == target_file
-                    })
-                    .unwrap_or(false)
-            }) {
-                Some(ci) => ci,
-                None => {
-                    if file_part.is_empty() || href.starts_with('#') {
-                        from_chapter_index
-                    } else {
-                        return Ok(None);
-                    }
-                }
-            },
-        }
+    let chapter_index = match resolve_chapter_index(book, &file_part, from_chapter_index, &href) {
+        Some(ci) => ci,
+        None => return Ok(None),
     };
 
     if chapter_index >= book.chapters.len() {

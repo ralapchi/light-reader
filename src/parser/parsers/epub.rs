@@ -752,59 +752,30 @@ impl EpubParser {
 
     /// 清理标题：去除多余空白和编号前缀
     fn clean_title(title: &str) -> String {
+        use std::sync::LazyLock;
+
+        // 中文章节前缀：第X章/节/回/卷（支持中文数字和阿拉伯数字）
+        static RE_CN_CHAPTER: LazyLock<regex::Regex> = LazyLock::new(|| {
+            regex::Regex::new(r"^第[一二三四五六七八九十百千零\d]+[章节回卷]\s*").unwrap()
+        });
+        // 英文章节前缀：Chapter N / CHAPTER N / CH N
+        static RE_EN_CHAPTER: LazyLock<regex::Regex> = LazyLock::new(|| {
+            regex::Regex::new(r"(?i)^(?:chapter|ch)\s*\d*\s*[:.\-–—\s]*").unwrap()
+        });
+        // 数字+点号前缀：如 "1. 标题"
+        static RE_NUM_DOT: LazyLock<regex::Regex> = LazyLock::new(|| {
+            regex::Regex::new(r"^\d+\.\s+").unwrap()
+        });
+
         let cleaned: String = title.split_whitespace().collect::<Vec<&str>>().join(" ");
         let trimmed = cleaned.trim();
         if trimmed.is_empty() {
             return String::new();
         }
 
-        // 去除常见编号前缀
-        let prefixes = [
-            "第一章 ",
-            "第二章 ",
-            "第三章 ",
-            "第四章 ",
-            "第五章 ",
-            "第六章 ",
-            "第七章 ",
-            "第八章 ",
-            "第九章 ",
-            "第十章 ",
-            "第十一章 ",
-            "第十二章 ",
-            "第十三章 ",
-            "第十四章 ",
-            "第十五章 ",
-            "第十六章 ",
-            "第十七章 ",
-            "第十八章 ",
-            "第十九章 ",
-            "第二十章 ",
-            "Chapter ",
-            "CHAPTER ",
-            "CH ",
-        ];
-
-        for prefix in &prefixes {
-            if trimmed.starts_with(prefix) {
-                let rest = &trimmed[prefix.len()..];
-                // 跳过可能的数字和分隔符
-                let rest = rest.trim_start_matches(|c: char| c.is_ascii_digit());
-                let rest = rest.trim_start_matches(|c: char| {
-                    c == ' ' || c == ':' || c == '.' || c == '-' || c == '–' || c == '—'
-                });
-                let rest = rest.trim();
-                if !rest.is_empty() {
-                    return rest.to_string();
-                }
-            }
-        }
-
-        // 数字+点号前缀：如 "1. 标题"
-        if let Some(pos) = trimmed.find(". ") {
-            let num_part = &trimmed[..pos];
-            if !num_part.is_empty() && num_part.chars().all(|c| c.is_ascii_digit()) {
-                let rest = trimmed[pos + 2..].trim();
+        for re in [&RE_CN_CHAPTER, &RE_EN_CHAPTER, &RE_NUM_DOT] {
+            if let Some(m) = re.find(trimmed) {
+                let rest = trimmed[m.end()..].trim();
                 if !rest.is_empty() {
                     return rest.to_string();
                 }
