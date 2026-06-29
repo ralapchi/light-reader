@@ -39,9 +39,7 @@ export function useLoadingPage() {
     cancelledRef.current = false
 
     const book = books.find(b => b.book_id === bookId)
-    if (opening.status === 'idle') {
-      startOpening(bookId, book?.title ?? '未知书籍', book?.author ?? null, book?.cover_url ?? null)
-    }
+    startOpening(bookId, book?.title ?? '未知书籍', book?.author ?? null, null)
 
     try {
       const startTime = Date.now()
