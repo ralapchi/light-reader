@@ -54,8 +54,11 @@ pub fn search_in_book(
 }
 
 #[tauri::command]
-pub fn bookmark_list(book_id: String) -> Result<Vec<BookmarkDto>, String> {
-    let items = crate::storage::bookmark_store::load(&book_id);
+pub fn bookmark_list(
+    book_id: String,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
+) -> Result<Vec<BookmarkDto>, String> {
+    let items = db.bookmarks().list(&book_id)?;
     Ok(items
         .into_iter()
         .map(|b| BookmarkDto {
@@ -72,8 +75,10 @@ pub fn bookmark_list(book_id: String) -> Result<Vec<BookmarkDto>, String> {
 }
 
 #[tauri::command]
-pub fn bookmark_list_all() -> Result<Vec<BookmarkDto>, String> {
-    let items = crate::storage::bookmark_store::load_all();
+pub fn bookmark_list_all(
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
+) -> Result<Vec<BookmarkDto>, String> {
+    let items = db.bookmarks().list_all()?;
     Ok(items
         .into_iter()
         .map(|b| BookmarkDto {
@@ -96,6 +101,7 @@ pub fn bookmark_add(
     paragraph_index: Option<usize>,
     note: Option<String>,
     state: tauri::State<'_, BookSession>,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<BookmarkDto, String> {
     use crate::domain::bookmark::Bookmark;
 
@@ -135,30 +141,25 @@ pub fn bookmark_add(
         note,
     };
 
-    let mut items = crate::storage::bookmark_store::load(&bm.book_id);
-    items.push(bm);
-    crate::storage::bookmark_store::save(&items.last().unwrap().book_id, &items).map_err(|e| e.to_string())?;
+    db.bookmarks().add(&bm)?;
 
-    let saved = items.into_iter().next_back().unwrap();
     Ok(BookmarkDto {
-        id: saved.id,
-        book_id: saved.book_id,
-        chapter_index: saved.chapter_index,
-        paragraph_index: saved.paragraph_index,
-        title: saved.title,
-        snippet: saved.snippet,
-        created_at: saved.created_at,
-        note: saved.note,
+        id: bm.id,
+        book_id: bm.book_id,
+        chapter_index: bm.chapter_index,
+        paragraph_index: bm.paragraph_index,
+        title: bm.title,
+        snippet: bm.snippet,
+        created_at: bm.created_at,
+        note: bm.note,
     })
 }
 
 #[tauri::command]
-pub fn bookmark_remove(book_id: String, bookmark_id: String) -> Result<(), String> {
-    let mut items = crate::storage::bookmark_store::load(&book_id);
-    let original_len = items.len();
-    items.retain(|b| b.id != bookmark_id);
-    if items.len() == original_len {
-        return Err(format!("书签 {} 不存在", bookmark_id));
-    }
-    crate::storage::bookmark_store::save(&book_id, &items).map_err(|e| e.to_string())
+pub fn bookmark_remove(
+    book_id: String,
+    bookmark_id: String,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
+) -> Result<(), String> {
+    db.bookmarks().remove(&book_id, &bookmark_id)
 }

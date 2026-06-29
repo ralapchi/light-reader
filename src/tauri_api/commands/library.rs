@@ -57,6 +57,7 @@ pub fn library_list(
 pub fn library_import(
     paths: Vec<String>,
     index_state: tauri::State<'_, super::LibraryIndexState>,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<Vec<LibraryBookCardDto>, String> {
     let mut index = index_state.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().to_rfc3339();
@@ -87,7 +88,14 @@ pub fn library_import(
                     index.items.push(item.clone());
                     imported.push(item);
                 }
-                index.last_selected_book_id = Some(book_id);
+                index.last_selected_book_id = Some(book_id.clone());
+                // Write to database
+                if let Some(stored) = index.items.iter().find(|i| i.book_id == book_id) {
+                    if let Err(e) = db.books().upsert(stored) {
+                        log::warn!("导入书籍到数据库失败: {}", e);
+                    }
+                }
+                let _ = db.books().set_last_selected(&book_id);
             }
             Err(e) => {
                 log::warn!("导入书籍失败: {} - {}", path, e);
@@ -129,6 +137,7 @@ pub fn library_remove(
     progress_state: tauri::State<'_, super::ProgressState>,
     dirty_progress_state: tauri::State<'_, super::DirtyProgressState>,
     progress_revision_state: tauri::State<'_, super::ProgressRevisionState>,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<(), String> {
     let source = if delete_files {
         let index = index_state.lock().map_err(|e| e.to_string())?;
@@ -155,7 +164,12 @@ pub fn library_remove(
         LibraryServiceImpl::save_index(&index);
     }
 
-    // Clean up bookmarks, reading progress, and cached assets
+    // Delete from database (CASCADE removes progress, bookmarks, tags, sessions)
+    if let Err(e) = db.books().delete(&book_id) {
+        log::warn!("从数据库删除书籍失败: {}", e);
+    }
+
+    // Clean up in-memory state and cached assets
     cleanup_book_data(&book_id, &progress_state, &dirty_progress_state, &progress_revision_state);
 
     if delete_files {
@@ -178,6 +192,7 @@ pub fn library_remove_batch(
     progress_state: tauri::State<'_, super::ProgressState>,
     dirty_progress_state: tauri::State<'_, super::DirtyProgressState>,
     progress_revision_state: tauri::State<'_, super::ProgressRevisionState>,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<(), String> {
     let source_paths: Vec<String> = {
         let index = index_state.lock().map_err(|e| e.to_string())?;
@@ -210,6 +225,12 @@ pub fn library_remove_batch(
             }
         }
         LibraryServiceImpl::save_index(&index);
+    }
+
+    // Batch delete from database (CASCADE removes all related data)
+    let id_refs: Vec<&str> = book_ids.iter().map(|s| s.as_str()).collect();
+    if let Err(e) = db.books().delete_batch(&id_refs) {
+        log::warn!("批量删除书籍数据库记录失败: {}", e);
     }
 
     if delete_files {
@@ -329,12 +350,23 @@ pub async fn asset_read_file(path: String) -> Result<Option<String>, String> {
         .map_err(|e| e.to_string())?
 }
 
-/// Persist the in-memory library index to disk. Called on navigation back and app exit.
+/// Persist the in-memory library index to disk and database. Called on navigation back and app exit.
 #[tauri::command]
 pub fn library_flush_index(
     index_state: tauri::State<'_, super::LibraryIndexState>,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<(), String> {
     let index = index_state.lock().map_err(|e| e.to_string())?;
+    // Batch upsert to database
+    for item in &index.items {
+        if let Err(e) = db.books().upsert(item) {
+            log::warn!("保存书籍到数据库失败: {}", e);
+        }
+    }
+    if let Some(ref id) = index.last_selected_book_id {
+        let _ = db.books().set_last_selected(id);
+    }
+    // Also save to JSON as fallback
     LibraryServiceImpl::save_index(&index);
     Ok(())
 }

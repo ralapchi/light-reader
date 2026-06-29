@@ -75,3 +75,7 @@ pub fn image_cache_path(book_id: &str, asset_id: &str, ext: &str) -> PathBuf {
 pub fn tts_cache_dir() -> PathBuf {
     app_data_dir().join("cache/tts")
 }
+
+pub fn db_path() -> PathBuf {
+    app_data_dir().join("reader.db")
+}

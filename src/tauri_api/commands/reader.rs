@@ -64,6 +64,7 @@ pub async fn reader_open_book(
     state: tauri::State<'_, BookSession>,
     index_state: tauri::State<'_, super::LibraryIndexState>,
     progress_state: tauri::State<'_, super::ProgressState>,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
     app: tauri::AppHandle,
 ) -> Result<ReaderBookDto, String> {
     use crate::tauri_api::emitter::EventEmitter;
@@ -152,17 +153,20 @@ pub async fn reader_open_book(
     {
         let mut progress_map = progress_state.lock().map_err(|e| e.to_string())?;
         if !progress_map.contains_key(&book_id) {
-            if let Some(progress) = crate::storage::progress_store::load(&book_id) {
+            if let Ok(Some(progress)) = db.progress().load(&book_id) {
                 progress_map.insert(book_id.clone(), progress);
             }
         }
     }
 
-    // Update last_opened_at in cached library index. Disk flush happens on exit/back.
+    // Update last_opened_at in cached library index and persist to DB.
     {
         let mut index = index_state.lock().map_err(|e| e.to_string())?;
         if let Some(item) = index.items.iter_mut().find(|i| i.book_id == book_id) {
             item.last_opened_at = Some(chrono::Utc::now().to_rfc3339());
+            if let Err(e) = db.books().upsert(item) {
+                log::warn!("打开书籍时写入数据库失败: {}", e);
+            }
         }
     }
 
@@ -569,6 +573,7 @@ pub fn reader_save_progress(
     progress_state: tauri::State<'_, super::ProgressState>,
     dirty_progress_state: tauri::State<'_, super::DirtyProgressState>,
     progress_revision_state: tauri::State<'_, super::ProgressRevisionState>,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<(), String> {
     progress.progress_percent = progress.progress_percent.clamp(0.0, 1.0);
     let normalized_offset = progress.scroll_offset.map(|offset| offset.clamp(0.0, 1.0));
@@ -600,7 +605,7 @@ pub fn reader_save_progress(
     let existing = {
         let mut progress_map = progress_state.lock().map_err(|e| e.to_string())?;
         if !progress_map.contains_key(&progress.book_id) {
-            if let Some(saved) = crate::storage::progress_store::load(&progress.book_id) {
+            if let Ok(Some(saved)) = db.progress().load(&progress.book_id) {
                 progress_map.insert(progress.book_id.clone(), saved);
             }
         }
@@ -668,13 +673,14 @@ pub fn reader_save_progress(
 pub fn reader_get_progress(
     book_id: String,
     progress_state: tauri::State<'_, super::ProgressState>,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Option<SaveProgressDto> {
     let progress = {
         let mut progress_map = progress_state.lock().ok()?;
         if let Some(progress) = progress_map.get(&book_id) {
             Some(progress.clone())
         } else {
-            let saved = crate::storage::progress_store::load(&book_id);
+            let saved = db.progress().load(&book_id).ok().flatten();
             if let Some(progress) = saved.as_ref() {
                 progress_map.insert(book_id, progress.clone());
             }
@@ -688,10 +694,49 @@ pub fn reader_get_progress(
 pub fn reader_flush_progress(
     progress_state: tauri::State<'_, super::ProgressState>,
     dirty_progress_state: tauri::State<'_, super::DirtyProgressState>,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<(), String> {
-    flush_dirty_progress_states(progress_state.inner(), dirty_progress_state.inner())
+    flush_dirty_progress_to_db(progress_state.inner(), dirty_progress_state.inner(), db.inner())
 }
 
+/// Flush dirty progress entries from in-memory cache to the database.
+pub fn flush_dirty_progress_to_db(
+    progress_state: &super::ProgressState,
+    dirty_progress_state: &super::DirtyProgressState,
+    db: &Box<dyn crate::storage::traits::DatabaseBackend>,
+) -> Result<(), String> {
+    let dirty_ids: Vec<String> = dirty_progress_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .iter()
+        .cloned()
+        .collect();
+    if dirty_ids.is_empty() {
+        return Ok(());
+    }
+
+    let entries = {
+        let progress_map = progress_state.lock().map_err(|e| e.to_string())?;
+        dirty_ids
+            .iter()
+            .filter_map(|book_id| progress_map.get(book_id).map(|progress| (book_id.clone(), progress.clone())))
+            .collect::<Vec<_>>()
+    };
+
+    let saved_ids: Vec<String> = entries.iter().map(|(id, _)| id.clone()).collect();
+    db.progress().save_batch(&entries)?;
+
+    if !saved_ids.is_empty() {
+        let mut dirty = dirty_progress_state.lock().map_err(|e| e.to_string())?;
+        for book_id in saved_ids {
+            dirty.remove(&book_id);
+        }
+    }
+
+    Ok(())
+}
+
+/// Legacy JSON-based flush kept for fallback compatibility.
 pub fn flush_dirty_progress_states(
     progress_state: &super::ProgressState,
     dirty_progress_state: &super::DirtyProgressState,

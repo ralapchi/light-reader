@@ -4,10 +4,8 @@ EPUB 阅读器主入口
 
 use std::io::Write;
 use std::sync::Mutex;
-use tauri::Manager;
 
-use log::info;
-
+mod bootstrap;
 mod domain;
 mod parser;
 mod services;
@@ -56,7 +54,7 @@ fn init_logging() {
             env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&level_var))
                 .target(env_logger::Target::Pipe(Box::new(tee)))
                 .init();
-            info!("日志启动 (级别={}, 文件={})", level_var, log_path.display());
+            log::info!("日志启动 (级别={}, 文件={})", level_var, log_path.display());
         }
         Err(e) => {
             env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&level_var))
@@ -72,16 +70,17 @@ fn main() {
 
     use tauri_api::commands::*;
 
-    info!("Tauri 模式启动");
-    let library_index = storage::library_store::load();
+    let app = bootstrap::init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(ReaderState::new()))
         .manage(Mutex::new(TtsSession::new()))
-        .manage(Mutex::new(library_index))
+        .manage(Mutex::new(app.library_index))
         .manage(ProgressState::new(std::collections::HashMap::new()))
         .manage(DirtyProgressState::new(std::collections::HashSet::new()))
         .manage(ProgressRevisionState::new(std::collections::HashMap::new()))
+        .manage(app.db)
         .invoke_handler(tauri::generate_handler![
             // Library
             library_list,
@@ -129,19 +128,7 @@ fn main() {
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
-                if let Some(guard) = window.try_state::<Mutex<crate::domain::library_item::LibraryIndex>>() {
-                    if let Ok(index) = guard.lock() {
-                        crate::services::library_service_impl::LibraryServiceImpl::save_index(&index);
-                    }
-                }
-                if let (Some(progress), Some(dirty)) = (
-                    window.try_state::<ProgressState>(),
-                    window.try_state::<DirtyProgressState>(),
-                ) {
-                    if let Err(e) = flush_dirty_progress_states(progress.inner(), dirty.inner()) {
-                        log::warn!("退出时保存阅读进度失败: {}", e);
-                    }
-                }
+                bootstrap::on_window_close(window);
             }
         })
         .run(tauri::generate_context!())

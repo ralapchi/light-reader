@@ -1,6 +1,7 @@
 use log::warn;
 use serde::{Deserialize, Serialize};
 
+use crate::domain::database_config::DatabaseConfig;
 use crate::domain::reader_settings::ReaderSettings;
 use crate::storage::paths;
 use crate::tts::config::TtsConfig;
@@ -17,6 +18,9 @@ pub struct SettingsFile {
     /// TTS configuration (BYOK). TRANSITIONAL: API key stored as plaintext.
     /// Migrate to OS keychain in a future iteration.
     pub tts_config: Option<TtsConfig>,
+    /// Database configuration. None = use defaults (SQLite in app data dir).
+    #[serde(default)]
+    pub database: Option<DatabaseConfig>,
 }
 
 impl Default for SettingsFile {
@@ -28,6 +32,7 @@ impl Default for SettingsFile {
             window_pos: None,
             last_opened_book_id: None,
             tts_config: None,
+            database: None,
         }
     }
 }
@@ -46,6 +51,7 @@ impl SettingsFile {
             window_pos: None,
             last_opened_book_id,
             tts_config,
+            database: None,
         }
     }
 }
