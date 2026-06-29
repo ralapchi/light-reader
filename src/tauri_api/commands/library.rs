@@ -10,8 +10,6 @@ fn cleanup_book_data(
     dirty_progress_state: &tauri::State<'_, super::DirtyProgressState>,
     progress_revision_state: &tauri::State<'_, super::ProgressRevisionState>,
 ) {
-    let _ = crate::storage::bookmark_store::save(book_id, &[]);
-    crate::storage::progress_store::delete(book_id);
     if let Ok(mut map) = progress_state.lock() {
         map.remove(book_id);
     }
@@ -103,8 +101,6 @@ pub fn library_import(
         }
     }
 
-    LibraryServiceImpl::save_index(&index);
-
     if imported.is_empty() && !paths.is_empty() {
         Err("所有书籍导入失败".to_string())
     } else {
@@ -161,10 +157,9 @@ pub fn library_remove(
         if index.items.len() == before {
             return Err(format!("书籍 {} 不在书库中", book_id));
         }
-        LibraryServiceImpl::save_index(&index);
     }
 
-    // Delete from database (CASCADE removes progress, bookmarks, tags, sessions)
+    // Delete from database (code-level cascade removes progress, bookmarks, tags, sessions)
     if let Err(e) = db.books().delete(&book_id) {
         log::warn!("从数据库删除书籍失败: {}", e);
     }
@@ -224,7 +219,6 @@ pub fn library_remove_batch(
                 cleanup_book_data(id, &progress_state, &dirty_progress_state, &progress_revision_state);
             }
         }
-        LibraryServiceImpl::save_index(&index);
     }
 
     // Batch delete from database (CASCADE removes all related data)
@@ -275,6 +269,7 @@ pub fn library_repair_path(
     book_id: String,
     new_path: String,
     index_state: tauri::State<'_, super::LibraryIndexState>,
+    db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<(), String> {
     use crate::parser::ParserFactory;
     let mut index = index_state.lock().map_err(|e| e.to_string())?;
@@ -288,7 +283,11 @@ pub fn library_repair_path(
         return Err("修复路径不存在".to_string());
     }
     LibraryServiceImpl::repair_item_path(&mut index, &book_id, &new_path);
-    LibraryServiceImpl::save_index(&index);
+    if let Some(item) = index.items.iter().find(|i| i.book_id == book_id) {
+        if let Err(e) = db.books().upsert(item) {
+            log::warn!("修复路径后写入数据库失败: {}", e);
+        }
+    }
     Ok(())
 }
 
@@ -366,7 +365,5 @@ pub fn library_flush_index(
     if let Some(ref id) = index.last_selected_book_id {
         let _ = db.books().set_last_selected(id);
     }
-    // Also save to JSON as fallback
-    LibraryServiceImpl::save_index(&index);
     Ok(())
 }

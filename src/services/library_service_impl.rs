@@ -3,7 +3,6 @@ use crate::domain::book_format::BookFormat;
 use crate::domain::error_codes;
 use crate::domain::library_item::{FileHealth, LibraryIndex, LibraryItem, ReadingStatsSnapshot};
 use crate::parser::ParserFactory;
-use crate::storage;
 
 pub struct LibraryServiceImpl;
 
@@ -73,13 +72,6 @@ impl LibraryServiceImpl {
             } else {
                 FileHealth::Missing
             };
-        }
-    }
-
-    /// Save library index to disk.
-    pub fn save_index(index: &LibraryIndex) {
-        if let Err(e) = storage::library_store::save(index) {
-            log::warn!("保存书库索引失败: {}", e);
         }
     }
 }

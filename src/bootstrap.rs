@@ -21,16 +21,14 @@ pub fn init() -> AppData {
     let db: Box<dyn DatabaseBackend> = crate::storage::factory::create_backend(&db_config, &data_dir)
         .expect("数据库初始化失败");
 
-    let library_index = match db.books().list_all() {
-        Ok(items) if !items.is_empty() => {
-            let last_selected = db.books().get_last_selected().ok().flatten();
-            LibraryIndex {
-                version: 1,
-                items,
-                last_selected_book_id: last_selected,
-            }
+    let library_index = {
+        let items = db.books().list_all().unwrap_or_default();
+        let last_selected = db.books().get_last_selected().ok().flatten();
+        LibraryIndex {
+            version: 1,
+            items,
+            last_selected_book_id: last_selected,
         }
-        _ => crate::storage::library_store::load(),
     };
 
     AppData { db, library_index }
@@ -69,6 +67,4 @@ fn flush_library(window: &tauri::Window) {
             let _ = db.books().set_last_selected(id);
         }
     }
-
-    crate::services::library_service_impl::LibraryServiceImpl::save_index(&index);
 }

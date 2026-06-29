@@ -736,55 +736,6 @@ pub fn flush_dirty_progress_to_db(
     Ok(())
 }
 
-/// Legacy JSON-based flush kept for fallback compatibility.
-pub fn flush_dirty_progress_states(
-    progress_state: &super::ProgressState,
-    dirty_progress_state: &super::DirtyProgressState,
-) -> Result<(), String> {
-    let dirty_ids: Vec<String> = dirty_progress_state
-        .lock()
-        .map_err(|e| e.to_string())?
-        .iter()
-        .cloned()
-        .collect();
-    if dirty_ids.is_empty() {
-        return Ok(());
-    }
-
-    let entries = {
-        let progress_map = progress_state.lock().map_err(|e| e.to_string())?;
-        dirty_ids
-            .iter()
-            .filter_map(|book_id| progress_map.get(book_id).map(|progress| (book_id.clone(), progress.clone())))
-            .collect::<Vec<_>>()
-    };
-
-    let mut saved_ids = Vec::new();
-    let mut first_error: Option<String> = None;
-    for (book_id, progress) in entries {
-        match crate::storage::progress_store::save(&book_id, &progress) {
-            Ok(()) => saved_ids.push(book_id),
-            Err(e) => {
-                if first_error.is_none() {
-                    first_error = Some(e);
-                }
-            }
-        }
-    }
-
-    if !saved_ids.is_empty() {
-        let mut dirty = dirty_progress_state.lock().map_err(|e| e.to_string())?;
-        for book_id in saved_ids {
-            dirty.remove(&book_id);
-        }
-    }
-
-    match first_error {
-        Some(e) => Err(e),
-        None => Ok(()),
-    }
-}
-
 fn progress_to_dto(rp: crate::domain::reading_progress::ReadingProgress) -> SaveProgressDto {
     SaveProgressDto {
         book_id: rp.book_id,
