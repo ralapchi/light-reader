@@ -18,11 +18,3 @@ pub fn write_json_atomic<T: serde::Serialize>(path: &Path, value: &T) -> std::io
     })?;
     write_atomic_impl(path, &data)
 }
-
-/// Write a serializable value as compact JSON atomically.
-pub fn write_json_atomic_compact<T: serde::Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
-    let data = serde_json::to_string(value).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-    })?;
-    write_atomic_impl(path, &data)
-}

@@ -161,8 +161,6 @@ function LibraryPage() {
                     </button>
                   )}
                 </div>
-                <div className="book-title">{item.title}</div>
-                <div className="book-author">{item.author ?? '未知作者'}</div>
                 <div className="book-progress">{formatProgress(item)}</div>
               </div>
             ))}

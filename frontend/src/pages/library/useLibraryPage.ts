@@ -40,8 +40,13 @@ export function useLibraryPage() {
   const deletion = useBookDeletion(books, loadBooks)
 
   useEffect(() => {
-    loadBooks()
-  }, [loadBooks])
+    if (books.length === 0) {
+      loadBooks()
+    } else {
+      pruneCovers(books)
+      loadCovers(books)
+    }
+  }, [loadBooks, pruneCovers, loadCovers, books.length])
 
   useEffect(() => {
     setSidebarFooter(`${books.length} 本藏书`)

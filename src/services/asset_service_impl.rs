@@ -5,7 +5,7 @@ use crate::parser::epub_assets;
 use crate::parser::opf_utils;
 use crate::storage::paths;
 
-/// Concrete implementation of AssetService.
+/// Asset service: cover/image path resolution and caching.
 ///
 /// Wraps `storage::paths` path computation and file existence checks.
 pub struct AssetServiceImpl;

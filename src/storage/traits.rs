@@ -11,14 +11,18 @@ pub trait BooksRepo: Send + Sync {
     fn delete(&self, book_id: &str) -> Result<(), String>;
     fn delete_batch(&self, book_ids: &[&str]) -> Result<(), String>;
     fn list_all(&self) -> Result<Vec<LibraryItem>, String>;
+    #[allow(dead_code)]
     fn get(&self, book_id: &str) -> Result<Option<LibraryItem>, String>;
+    #[allow(dead_code)]
     fn search(&self, query: &str) -> Result<Vec<LibraryItem>, String>;
+    #[allow(dead_code)]
     fn update_progress(
         &self,
         book_id: &str,
         percent: f32,
         last_opened_at: &str,
     ) -> Result<(), String>;
+    #[allow(dead_code)]
     fn update_stats(&self, book_id: &str, stats: &ReadingStatsSnapshot) -> Result<(), String>;
     fn get_last_selected(&self) -> Result<Option<String>, String>;
     fn set_last_selected(&self, book_id: &str) -> Result<(), String>;
@@ -28,15 +32,19 @@ pub trait BooksRepo: Send + Sync {
 
 pub trait ProgressRepo: Send + Sync {
     fn load(&self, book_id: &str) -> Result<Option<ReadingProgress>, String>;
+    #[allow(dead_code)]
     fn save(&self, book_id: &str, progress: &ReadingProgress) -> Result<(), String>;
     fn save_batch(&self, entries: &[(String, ReadingProgress)]) -> Result<(), String>;
+    #[allow(dead_code)]
     fn mark_dirty(
         &self,
         book_id: &str,
         progress: &ReadingProgress,
         revision: u64,
     ) -> Result<(), String>;
+    #[allow(dead_code)]
     fn flush_dirty(&self) -> Result<Vec<String>, String>;
+    #[allow(dead_code)]
     fn load_all(&self) -> Result<Vec<(String, ReadingProgress)>, String>;
 }
 
@@ -47,19 +55,22 @@ pub trait BookmarksRepo: Send + Sync {
     fn list_all(&self) -> Result<Vec<Bookmark>, String>;
     fn add(&self, bookmark: &Bookmark) -> Result<(), String>;
     fn remove(&self, book_id: &str, bookmark_id: &str) -> Result<(), String>;
+    #[allow(dead_code)]
     fn clear_for_book(&self, book_id: &str) -> Result<(), String>;
 }
 
-// -- Tags --
+// -- Tags (stats feature, not yet wired to commands) --
 
+#[allow(dead_code)]
 pub trait TagsRepo: Send + Sync {
     fn get_tags(&self, book_id: &str) -> Result<Vec<String>, String>;
     fn set_tags(&self, book_id: &str, tags: &[String]) -> Result<(), String>;
     fn all_tags(&self) -> Result<Vec<(String, u32)>, String>;
 }
 
-// -- Reading Sessions --
+// -- Reading Sessions (stats feature, not yet wired to commands) --
 
+#[allow(dead_code)]
 pub trait SessionsRepo: Send + Sync {
     fn save(&self, session: &ReadingSession) -> Result<(), String>;
     fn load_all(&self) -> Result<Vec<ReadingSession>, String>;
@@ -67,8 +78,9 @@ pub trait SessionsRepo: Send + Sync {
     fn load_for_book(&self, book_id: &str) -> Result<Vec<ReadingSession>, String>;
 }
 
-// -- Aggregates --
+// -- Aggregates (stats feature, not yet wired to commands) --
 
+#[allow(dead_code)]
 pub trait AggregatesRepo: Send + Sync {
     fn load(&self) -> Result<Option<ReadingAggregates>, String>;
     fn save(&self, agg: &ReadingAggregates) -> Result<(), String>;
@@ -80,8 +92,11 @@ pub trait DatabaseBackend: Send + Sync {
     fn books(&self) -> &dyn BooksRepo;
     fn progress(&self) -> &dyn ProgressRepo;
     fn bookmarks(&self) -> &dyn BookmarksRepo;
+    #[allow(dead_code)]
     fn tags(&self) -> &dyn TagsRepo;
+    #[allow(dead_code)]
     fn sessions(&self) -> &dyn SessionsRepo;
+    #[allow(dead_code)]
     fn aggregates(&self) -> &dyn AggregatesRepo;
 
     /// Run schema migrations (create tables, etc.)
