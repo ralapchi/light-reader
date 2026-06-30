@@ -202,7 +202,7 @@
 .toc-item {
   padding: 8px 12px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary, #8A8680);
   cursor: pointer;
   transition: all 0.15s;
@@ -224,7 +224,7 @@
 }
 
 .toc-item .chapter-num {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-tertiary, #B5AFA8);
   flex-shrink: 0;
   min-width: 20px;
@@ -444,16 +444,13 @@
   margin: 1.5em 0;
 }
 
-.chapter-title {
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-bottom: 32px;
-  line-height: 1.4;
-}
-
 /* Align heading to line-height grid in two-page mode to prevent column clipping */
-.reader-content.two-page .reader-heading {
+.reader-heading {
+  font-size: inherit;
   font-weight: 700;
+  margin: 0;
+}
+.reader-content.two-page .reader-heading {
   line-height: 1.85;
   margin-top: 0;
   margin-bottom: 1.85em;
@@ -466,14 +463,6 @@
 
 .reader-paragraph.indent {
   text-indent: 2em;
-}
-
-.reader-content.two-page .reader-paragraph.indent {
-  text-indent: 2em;
-}
-
-.reader-paragraph.continuation {
-  text-indent: 0;
 }
 
 .reader-paragraph.quote {
@@ -645,12 +634,6 @@
   background: var(--accent, #C8553D);
   color: white;
   border-color: var(--accent, #C8553D);
-}
-
-/* Preset chip row */
-.option-chips {
-  display: flex;
-  gap: 4px;
 }
 
 /* Layout toggle icon buttons */
@@ -846,16 +829,6 @@
 
 .tts-toggle input:checked + .tts-toggle-track::after {
   transform: translateX(16px);
-}
-
-.tts-pro-badge {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--accent, #C8553D);
-  color: white;
-  letter-spacing: 0.03em;
 }
 
 .tts-actions {
