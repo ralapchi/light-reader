@@ -1,3 +1,6 @@
+use std::fmt;
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 use crate::domain::book_format::BookFormat;
@@ -8,6 +11,31 @@ pub enum FileHealth {
     Missing,
     Moved,
     ParseWarning,
+}
+
+impl fmt::Display for FileHealth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FileHealth::Ok => write!(f, "Ok"),
+            FileHealth::Missing => write!(f, "Missing"),
+            FileHealth::Moved => write!(f, "Moved"),
+            FileHealth::ParseWarning => write!(f, "ParseWarning"),
+        }
+    }
+}
+
+impl FromStr for FileHealth {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Ok" => Ok(FileHealth::Ok),
+            "Missing" => Ok(FileHealth::Missing),
+            "Moved" => Ok(FileHealth::Moved),
+            "ParseWarning" => Ok(FileHealth::ParseWarning),
+            other => Err(format!("Unknown FileHealth: {}", other)),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

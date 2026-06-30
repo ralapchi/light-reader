@@ -74,13 +74,13 @@ impl EpubParser {
                 Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    if name.starts_with(&b"nav"[..]) {
+                    if name.eq_ignore_ascii_case(b"nav") {
                         if strict_type {
                             for attr in e.attributes() {
                                 if let Ok(attr) = attr {
                                     let attr_name = attr.key.as_ref();
-                                    if attr_name.starts_with(&b"type"[..])
-                                        || attr_name.starts_with(&b"epub:type"[..])
+                                    if attr_name.eq_ignore_ascii_case(b"type")
+                                        || attr_name.eq_ignore_ascii_case(b"epub:type")
                                     {
                                         if let Ok(value) = std::str::from_utf8(attr.value.as_ref())
                                         {
@@ -94,14 +94,14 @@ impl EpubParser {
                         } else {
                             in_nav = true;
                         }
-                    } else if in_nav && name.starts_with(&b"ol"[..]) {
+                    } else if in_nav && name.eq_ignore_ascii_case(b"ol") {
                         in_ol = true;
                         depth += 1;
-                    } else if in_nav && in_ol && name.starts_with(&b"a"[..]) {
+                    } else if in_nav && in_ol && name.eq_ignore_ascii_case(b"a") {
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let attr_name = attr.key.as_ref();
-                                if attr_name.starts_with(&b"href"[..]) {
+                                if attr_name.eq_ignore_ascii_case(b"href") {
                                     if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
                                         current_href = value.to_string();
                                     }
@@ -115,15 +115,15 @@ impl EpubParser {
                 Ok(Event::End(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    if name.starts_with(&b"nav"[..]) {
+                    if name.eq_ignore_ascii_case(b"nav") {
                         in_nav = false;
                         if !strict_type && !items.is_empty() {
                             // 非严格模式下找到第一个有意义 nav 即停止
                         }
-                    } else if in_nav && name.starts_with(&b"ol"[..]) {
+                    } else if in_nav && name.eq_ignore_ascii_case(b"ol") {
                         in_ol = false;
                         depth = depth.saturating_sub(1);
-                    } else if in_nav && in_ol && name.starts_with(&b"a"[..]) {
+                    } else if in_nav && in_ol && name.eq_ignore_ascii_case(b"a") {
                         if collecting && !current_text.is_empty() {
                             let full_href = if current_href.starts_with('#') {
                                 current_href.clone()
@@ -186,23 +186,23 @@ impl EpubParser {
                 Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    if name.starts_with(&b"navMap"[..]) {
+                    if name.eq_ignore_ascii_case(b"navMap") {
                         in_nav_map = true;
-                    } else if in_nav_map && name.starts_with(&b"navPoint"[..]) {
+                    } else if in_nav_map && name.eq_ignore_ascii_case(b"navPoint") {
                         in_nav_point = true;
                         depth += 1;
-                    } else if in_nav_point && name.starts_with(&b"content"[..]) {
+                    } else if in_nav_point && name.eq_ignore_ascii_case(b"content") {
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let attr_name = attr.key.as_ref();
-                                if attr_name.starts_with(&b"src"[..]) {
+                                if attr_name.eq_ignore_ascii_case(b"src") {
                                     if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
                                         current_src = value.to_string();
                                     }
                                 }
                             }
                         }
-                    } else if in_nav_point && name.starts_with(&b"text"[..]) {
+                    } else if in_nav_point && name.eq_ignore_ascii_case(b"text") {
                         collecting_text = true;
                         current_text.clear();
                     }
@@ -210,9 +210,9 @@ impl EpubParser {
                 Ok(Event::End(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    if name.starts_with(&b"navMap"[..]) {
+                    if name.eq_ignore_ascii_case(b"navMap") {
                         in_nav_map = false;
-                    } else if name.starts_with(&b"navPoint"[..]) {
+                    } else if name.eq_ignore_ascii_case(b"navPoint") {
                         if in_nav_point && !current_text.is_empty() {
                             let full_src = if current_src.starts_with('#') {
                                 current_src.clone()
@@ -232,7 +232,7 @@ impl EpubParser {
                         in_nav_point = false;
                         depth = depth.saturating_sub(1);
                         current_src.clear();
-                    } else if name.starts_with(&b"text"[..]) {
+                    } else if name.eq_ignore_ascii_case(b"text") {
                         collecting_text = false;
                     }
                 }

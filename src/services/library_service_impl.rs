@@ -3,6 +3,7 @@ use crate::domain::book_format::BookFormat;
 use crate::domain::error_codes;
 use crate::domain::library_item::{FileHealth, LibraryIndex, LibraryItem, ReadingStatsSnapshot};
 use crate::parser::ParserFactory;
+use crate::storage::traits::DatabaseBackend;
 
 pub struct LibraryServiceImpl;
 
@@ -21,11 +22,7 @@ impl LibraryServiceImpl {
             err
         })?;
 
-        let result = parser.parse(path).map_err(|e| {
-            let mut err = AppError::with_detail(error_codes::FILE_OPEN_FAILED, "解析失败", e);
-            err.recoverable = true;
-            err
-        })?;
+        let result = parser.parse(path)?;
 
         let file_stem = std::path::Path::new(path)
             .file_stem()
@@ -73,5 +70,17 @@ impl LibraryServiceImpl {
                 FileHealth::Missing
             };
         }
+    }
+}
+
+/// 将书库索引中的所有书籍和最后选中记录刷新到数据库。
+pub fn flush_library_to_db(index: &LibraryIndex, db: &dyn DatabaseBackend) {
+    for item in &index.items {
+        if let Err(e) = db.books().upsert(item) {
+            log::warn!("保存书籍到数据库失败: {}", e);
+        }
+    }
+    if let Some(ref id) = index.last_selected_book_id {
+        let _ = db.books().set_last_selected(id);
     }
 }

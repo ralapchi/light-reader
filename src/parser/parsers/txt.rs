@@ -4,6 +4,8 @@ TXT 解析器模块
 实现 TXT 格式书籍的解析逻辑，支持章节检测和段落分割。
 */
 
+use crate::domain::app_error::{AppError, AppResult};
+use crate::domain::error_codes;
 use crate::parser::parsers::base::{BookParser, ParseResult};
 use std::fs::File;
 use std::io::Read;
@@ -179,12 +181,19 @@ impl BookParser for TxtParser {
     ///
     /// # 返回值
     /// * `Ok(ParseResult)` - 解析成功，返回解析结果
-    /// * `Err(String)` - 解析失败，返回错误信息
-    fn parse(&self, path: &str) -> Result<ParseResult, String> {
-        let mut file = File::open(path).map_err(|e| format!("文件打开失败: {}", e))?;
+    /// * `Err(AppError)` - 解析失败，返回结构化错误
+    fn parse(&self, path: &str) -> AppResult<ParseResult> {
+        let mut file = File::open(path).map_err(|e| {
+            let mut err = AppError::with_detail(error_codes::FILE_OPEN_FAILED, "文件打开失败", e.to_string());
+            err.recoverable = true;
+            err
+        })?;
         let mut content_str = String::new();
-        file.read_to_string(&mut content_str)
-            .map_err(|e| format!("文件读取失败: {}", e))?;
+        file.read_to_string(&mut content_str).map_err(|e| {
+            let mut err = AppError::with_detail(error_codes::FILE_OPEN_FAILED, "文件读取失败", e.to_string());
+            err.recoverable = true;
+            err
+        })?;
 
         let lines: Vec<&str> = content_str.lines().collect();
 

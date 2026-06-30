@@ -2,7 +2,7 @@ use crate::tts::cache::TtsCache;
 use crate::tts::config::TtsConfig;
 use crate::tts::segmenter::Segment;
 use crate::tts::synthesis_service::TtsSynthesisService;
-use crate::tts::types::PlaybackStatus;
+use crate::tts::types::{PlaybackStatus, TtsRequest};
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -190,121 +190,22 @@ pub fn tts_test_connection(
     }
 }
 
-#[tauri::command]
-pub fn tts_start(
+/// Pre-fetch the next segment in a background thread (best-effort).
+fn prefetch_next_segment(
+    next_segment: Option<&Segment>,
+    book_id: &str,
     chapter_index: usize,
-    book_state: tauri::State<'_, BookSession>,
-    tts_state: tauri::State<'_, TtsSessionLock>,
-    app: tauri::AppHandle,
-) -> Result<(), String> {
-    use crate::tauri_api::emitter::EventEmitter;
-    use crate::tauri_api::events::TtsPlaying;
-    let emitter = EventEmitter::new(&app);
-
-    // Extract book data from ReaderState (short lock)
-    let (book_id, paragraphs) = {
-        let book_guard = book_state.lock().map_err(|e| e.to_string())?;
-        let book = book_guard.book.as_ref().ok_or("没有打开的书籍")?;
-        let book_id = book.id.clone();
-        let chapter = book
-            .chapters
-            .get(chapter_index)
-            .ok_or_else(|| format!("章节 {} 不存在", chapter_index))?;
-        let paragraphs: Vec<_> = chapter.text_paragraphs().cloned().collect();
-        if paragraphs.is_empty() {
-            return Err("当前章节没有内容".to_string());
-        }
-        (book_id, paragraphs)
-    };
-
-    let mut guard = tts_state.lock().map_err(|e| e.to_string())?;
-
-    // Stop any existing playback first
-    if let Some(tx) = &guard.playback_tx {
-        let _ = tx.send(PlaybackCmd::Stop);
-    }
-    guard.stop_flag.store(true, Ordering::Relaxed);
-    guard.playback_state = Default::default();
-    guard.playback_state.current_chapter_index = Some(chapter_index);
-
-    // Reset stop flag for new session
-    guard.stop_flag = Arc::new(AtomicBool::new(false));
-    let stop_flag = Arc::clone(&guard.stop_flag);
-
-    let config = guard.tts_config.clone();
-    let cache = Arc::clone(&guard.cache);
-
-    // Segment the chapter
-    let max_chars = tts_max_text_length(&config);
-    let segments = crate::tts::segmenter::segment_chapter(chapter_index, &paragraphs, max_chars);
-    if segments.is_empty() {
-        return Err("章节分割结果为空".to_string());
-    }
-
-    let total_segments = segments.len();
-    guard.segments = segments;
-    let segments_for_poll = guard.segments.clone();
-
-    // Spawn playback thread
-    let (playback_tx, is_playing_flag) = spawn_playback_thread();
-    guard.playback_tx = Some(playback_tx.clone());
-    guard.is_playing_flag = Arc::clone(&is_playing_flag);
-
-    // Synthesize and play segment 0
-    let segment = guard.segments[0].clone();
-    let paragraph_indices = segment.paragraph_indices.clone();
-    let prefetch_segment = guard.segments.get(1).cloned();
-
-    guard.playback_state.status = PlaybackStatus::Buffering;
-    guard.playback_state.current_book_id = Some(book_id.clone());
-    guard.playback_state.current_chapter_index = Some(chapter_index);
-    guard.playback_state.total_segments = total_segments;
-    drop(guard);
-
-    if let Err(e) = synthesize_and_play(
-        &segment,
-        &book_id,
-        chapter_index,
-        &config,
-        &cache,
-        &playback_tx,
-        &app,
-    ) {
-        let mut guard = tts_state.lock().map_err(|lock_err| lock_err.to_string())?;
-        guard.stop_flag.store(true, Ordering::Relaxed);
-        guard.playback_state.status = PlaybackStatus::Error(e.clone());
-        guard.playback_tx = None;
-        guard.is_playing_flag.store(false, Ordering::Relaxed);
-        return Err(e);
-    }
-
-    let mut guard = tts_state.lock().map_err(|e| e.to_string())?;
-
-    // Update playback state
-    guard.playback_state.status = PlaybackStatus::Playing;
-    guard.playback_state.current_book_id = Some(book_id.clone());
-    guard.playback_state.current_chapter_index = Some(chapter_index);
-    guard.playback_state.current_segment_index = Some(0);
-    guard.playback_state.current_paragraph_indices = paragraph_indices.clone();
-    guard.playback_state.total_segments = total_segments;
-
-    emitter.tts_playing(&TtsPlaying {
-        book_id: book_id.clone(),
-        chapter_index,
-        segment_index: 0,
-        total_segments,
-        paragraph_indices: paragraph_indices.clone(),
-    });
-    drop(guard);
-
-    // Pre-fetch segment 1
-    if let Some(next) = prefetch_segment {
+    config: &TtsConfig,
+    cache: &Arc<TtsCache>,
+) {
+    if let Some(next) = next_segment {
         let cfg = config.clone();
-        let c = Arc::clone(&cache);
-        let bid = book_id.clone();
-        let vid = tts_voice_id(&config);
+        let c = Arc::clone(cache);
+        let bid = book_id.to_string();
+        let vid = tts_voice_id(config);
+        let next = next.clone();
         std::thread::spawn(move || {
-            let req = crate::tts::types::TtsRequest {
+            let req = TtsRequest {
                 book_id: bid,
                 chapter_index,
                 segment_index: next.segment_index,
@@ -315,16 +216,29 @@ pub fn tts_start(
             let _ = TtsSynthesisService::synthesize_blocking(&req, &cfg, &vid, &c);
         });
     }
+}
 
-    // Start polling thread for auto-advance
-    let poll_playing = Arc::clone(&is_playing_flag);
-    let poll_stop = Arc::clone(&stop_flag);
+/// Spawn a polling thread that auto-advances segments when playback finishes.
+fn spawn_auto_advance_thread(
+    is_playing_flag: &Arc<AtomicBool>,
+    stop_flag: &Arc<AtomicBool>,
+    playback_tx: &mpsc::Sender<PlaybackCmd>,
+    segments: Vec<Segment>,
+    book_id: String,
+    chapter_index: usize,
+    total_segments: usize,
+    config: &TtsConfig,
+    cache: &Arc<TtsCache>,
+    app: &tauri::AppHandle,
+) {
+    let poll_playing = Arc::clone(is_playing_flag);
+    let poll_stop = Arc::clone(stop_flag);
     let poll_tx = playback_tx.clone();
     let poll_app = app.clone();
-    let poll_segments = segments_for_poll;
     let poll_config = config.clone();
-    let poll_cache = Arc::clone(&cache);
+    let poll_cache = Arc::clone(cache);
     std::thread::spawn(move || {
+        use crate::tauri_api::emitter::EventEmitter;
         let emitter = EventEmitter::new(&poll_app);
         let mut current_seg_idx: usize = 0;
         let mut was_playing = true;
@@ -346,7 +260,7 @@ pub fn tts_start(
                     });
                     break;
                 }
-                if let Some(next_seg) = poll_segments.get(current_seg_idx) {
+                if let Some(next_seg) = segments.get(current_seg_idx) {
                     if synthesize_and_play(
                         next_seg,
                         &book_id,
@@ -377,6 +291,151 @@ pub fn tts_start(
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
     });
+}
+
+/// Reset playback state for a new TTS session. Returns (stop_flag, config, cache).
+fn reset_playback_state(
+    tts_state: &TtsSessionLock,
+    chapter_index: usize,
+) -> Result<(Arc<AtomicBool>, TtsConfig, Arc<TtsCache>), String> {
+    let mut guard = tts_state.lock().map_err(|e| e.to_string())?;
+
+    // Stop any existing playback
+    if let Some(tx) = &guard.playback_tx {
+        let _ = tx.send(PlaybackCmd::Stop);
+    }
+    guard.stop_flag.store(true, Ordering::Relaxed);
+
+    // Reset playback state
+    guard.playback_state = Default::default();
+    guard.playback_state.current_chapter_index = Some(chapter_index);
+
+    // Reset stop flag for new session
+    guard.stop_flag = Arc::new(AtomicBool::new(false));
+    let stop_flag = Arc::clone(&guard.stop_flag);
+
+    let config = guard.tts_config.clone();
+    let cache = Arc::clone(&guard.cache);
+
+    Ok((stop_flag, config, cache))
+}
+
+#[tauri::command]
+pub fn tts_start(
+    chapter_index: usize,
+    book_state: tauri::State<'_, BookSession>,
+    tts_state: tauri::State<'_, TtsSessionLock>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    use crate::tauri_api::emitter::EventEmitter;
+    use crate::tauri_api::events::TtsPlaying;
+    let emitter = EventEmitter::new(&app);
+
+    // Extract book data from ReaderState (short lock)
+    let (book_id, paragraphs) = {
+        let book_guard = book_state.lock().map_err(|e| e.to_string())?;
+        let book = book_guard.book.as_ref().ok_or("没有打开的书籍")?;
+        let book_id = book.id.clone();
+        let chapter = book
+            .chapters
+            .get(chapter_index)
+            .ok_or_else(|| format!("章节 {} 不存在", chapter_index))?;
+        let paragraphs: Vec<_> = chapter.text_paragraphs().cloned().collect();
+        if paragraphs.is_empty() {
+            return Err("当前章节没有内容".to_string());
+        }
+        (book_id, paragraphs)
+    };
+
+    // Reset playback state for new session
+    let (stop_flag, config, cache) = reset_playback_state(&tts_state, chapter_index)?;
+
+    // Segment the chapter
+    let max_chars = tts_max_text_length(&config);
+    let segments = crate::tts::segmenter::segment_chapter(chapter_index, &paragraphs, max_chars);
+    if segments.is_empty() {
+        return Err("章节分割结果为空".to_string());
+    }
+
+    let total_segments = segments.len();
+    let mut guard = tts_state.lock().map_err(|e| e.to_string())?;
+    guard.segments = segments;
+    let segments_for_poll = guard.segments.clone();
+
+    // Spawn playback thread
+    let (playback_tx, is_playing_flag) = spawn_playback_thread();
+    guard.playback_tx = Some(playback_tx.clone());
+    guard.is_playing_flag = Arc::clone(&is_playing_flag);
+
+    // Prepare first segment and prefetch target
+    let segment = guard.segments[0].clone();
+    let paragraph_indices = segment.paragraph_indices.clone();
+    let prefetch_segment = guard.segments.get(1).cloned();
+
+    guard.playback_state.status = PlaybackStatus::Buffering;
+    guard.playback_state.current_book_id = Some(book_id.clone());
+    guard.playback_state.current_chapter_index = Some(chapter_index);
+    guard.playback_state.total_segments = total_segments;
+    drop(guard);
+
+    // Synthesize and play segment 0
+    if let Err(e) = synthesize_and_play(
+        &segment,
+        &book_id,
+        chapter_index,
+        &config,
+        &cache,
+        &playback_tx,
+        &app,
+    ) {
+        let mut guard = tts_state.lock().map_err(|lock_err| lock_err.to_string())?;
+        guard.stop_flag.store(true, Ordering::Relaxed);
+        guard.playback_state.status = PlaybackStatus::Error(e.clone());
+        guard.playback_tx = None;
+        guard.is_playing_flag.store(false, Ordering::Relaxed);
+        return Err(e);
+    }
+
+    // Update playback state to Playing
+    let mut guard = tts_state.lock().map_err(|e| e.to_string())?;
+    guard.playback_state.status = PlaybackStatus::Playing;
+    guard.playback_state.current_book_id = Some(book_id.clone());
+    guard.playback_state.current_chapter_index = Some(chapter_index);
+    guard.playback_state.current_segment_index = Some(0);
+    guard.playback_state.current_paragraph_indices = paragraph_indices.clone();
+    guard.playback_state.total_segments = total_segments;
+    drop(guard);
+
+    emitter.tts_playing(&TtsPlaying {
+        book_id: book_id.clone(),
+        chapter_index,
+        segment_index: 0,
+        total_segments,
+        paragraph_indices: paragraph_indices.clone(),
+    });
+
+    // Pre-fetch segment 1 in background
+    prefetch_next_segment(
+        prefetch_segment.as_ref(),
+        &book_id,
+        chapter_index,
+        &config,
+        &cache,
+    );
+
+    // Start polling thread for auto-advance
+    spawn_auto_advance_thread(
+        &is_playing_flag,
+        &stop_flag,
+        &playback_tx,
+        segments_for_poll,
+        book_id,
+        chapter_index,
+        total_segments,
+        &config,
+        &cache,
+        &app,
+    );
 
     Ok(())
 }

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use rusqlite::params;
 
 use crate::domain::book_format::BookFormat;
@@ -13,40 +15,6 @@ pub struct SqliteBooksRepo {
 impl SqliteBooksRepo {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
-    }
-}
-
-fn format_to_str(f: &BookFormat) -> &'static str {
-    match f {
-        BookFormat::Epub => "Epub",
-        BookFormat::Txt => "Txt",
-    }
-}
-
-fn str_to_format(s: &str) -> Result<BookFormat, String> {
-    match s {
-        "Epub" => Ok(BookFormat::Epub),
-        "Txt" => Ok(BookFormat::Txt),
-        other => Err(format!("Unknown BookFormat: {}", other)),
-    }
-}
-
-fn health_to_str(h: &FileHealth) -> &'static str {
-    match h {
-        FileHealth::Ok => "Ok",
-        FileHealth::Missing => "Missing",
-        FileHealth::Moved => "Moved",
-        FileHealth::ParseWarning => "ParseWarning",
-    }
-}
-
-fn str_to_health(s: &str) -> Result<FileHealth, String> {
-    match s {
-        "Ok" => Ok(FileHealth::Ok),
-        "Missing" => Ok(FileHealth::Missing),
-        "Moved" => Ok(FileHealth::Moved),
-        "ParseWarning" => Ok(FileHealth::ParseWarning),
-        other => Err(format!("Unknown FileHealth: {}", other)),
     }
 }
 
@@ -71,14 +39,14 @@ fn row_to_library_item(row: &rusqlite::Row) -> rusqlite::Result<LibraryItem> {
         book_id: row.get("book_id")?,
         title: row.get("title")?,
         author: row.get("author")?,
-        format: str_to_format(&format_str).map_err(|e| rusqlite::Error::InvalidParameterName(e))?,
+        format: BookFormat::from_str(&format_str).map_err(|e| rusqlite::Error::InvalidParameterName(e))?,
         source_path: row.get("source_path")?,
         cover_cache_key: row.get("cover_ext")?,
         progress_percent: row.get("progress_percent")?,
         last_opened_at: row.get("last_opened_at")?,
         imported_at: row.get("imported_at")?,
         chapter_count: row.get::<_, usize>("chapter_count")?,
-        file_health: str_to_health(&health_str)
+        file_health: FileHealth::from_str(&health_str)
             .map_err(|e| rusqlite::Error::InvalidParameterName(e))?,
         stats: ReadingStatsSnapshot {
             total_read_seconds,
@@ -93,6 +61,8 @@ impl BooksRepo for SqliteBooksRepo {
     fn upsert(&self, item: &LibraryItem) -> Result<(), String> {
         let conn = self.pool.get().map_err(|e| e.to_string())?;
         let now = chrono::Utc::now().to_rfc3339();
+        let format_str = item.format.to_string();
+        let health_str = item.file_health.to_string();
         conn.execute(
             "INSERT INTO books (
                 book_id, title, author, format, source_path, cover_ext,
@@ -112,11 +82,11 @@ impl BooksRepo for SqliteBooksRepo {
                 item.book_id,
                 item.title,
                 item.author,
-                format_to_str(&item.format),
+                format_str,
                 item.source_path,
                 item.cover_cache_key,
                 item.chapter_count,
-                health_to_str(&item.file_health),
+                health_str,
                 item.stats.total_read_seconds,
                 item.stats.last_read_at,
                 item.stats.bookmark_count,

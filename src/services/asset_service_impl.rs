@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use crate::domain::book::Book;
 use crate::parser::epub_assets;
 use crate::parser::opf_utils;
-use crate::services::asset_service::AssetService;
 use crate::storage::paths;
 
 /// Concrete implementation of AssetService.
@@ -12,10 +11,6 @@ use crate::storage::paths;
 pub struct AssetServiceImpl;
 
 impl AssetServiceImpl {
-    pub fn new() -> Self {
-        Self
-    }
-
     /// Returns `true` if the book has a cover that is not yet cached on disk.
     pub fn needs_cover_caching(book_id: &str, book: &Book) -> bool {
         if let Some(ref bytes) = book.assets.cover_image_bytes {
@@ -37,7 +32,6 @@ impl AssetServiceImpl {
 
     /// Cache a single chapter image. Called on-demand.
     pub fn cache_chapter_image(
-        &self,
         book_id: &str,
         asset_id: &str,
         cache_key: &str,
@@ -46,6 +40,17 @@ impl AssetServiceImpl {
         let ext = cache_key.rsplit('.').next().unwrap_or("png");
         let cache_path = paths::image_cache_path(book_id, asset_id, ext);
         write_cache_if_changed(&cache_path, bytes);
+    }
+
+    /// Get the cached cover image path for a book.
+    pub fn cover_path(book_id: &str) -> Option<PathBuf> {
+        paths::find_cover_by_extensions(book_id)
+    }
+
+    /// Get the cached inline image path for a specific asset.
+    pub fn image_path(book_id: &str, asset_id: &str) -> Option<PathBuf> {
+        let base_dir = paths::app_data_dir().join("cache/images").join(book_id);
+        find_with_extension(&base_dir, asset_id)
     }
 }
 
@@ -138,15 +143,4 @@ fn find_with_extension(base_dir: &std::path::Path, stem: &str) -> Option<PathBuf
         }
     }
     None
-}
-
-impl AssetService for AssetServiceImpl {
-    fn cover_path(&self, book_id: &str) -> Option<PathBuf> {
-        paths::find_cover_by_extensions(book_id)
-    }
-
-    fn image_path(&self, book_id: &str, asset_id: &str) -> Option<PathBuf> {
-        let base_dir = paths::app_data_dir().join("cache/images").join(book_id);
-        find_with_extension(&base_dir, asset_id)
-    }
 }

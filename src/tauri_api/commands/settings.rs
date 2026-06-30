@@ -28,8 +28,8 @@ pub fn tts_config_load() -> Result<TtsConfigDto, String> {
 
 #[tauri::command]
 pub fn tts_config_save(config: TtsConfigDto) -> Result<(), String> {
-    let existing = SettingsServiceImpl::new().load_tts_config();
-    let full = dto_to_tts_config(&config, existing.api_key);
     let svc = SettingsServiceImpl::new();
+    let existing = svc.load_tts_config();
+    let full = dto_to_tts_config(&config, existing.api_key);
     svc.save_tts_config(&full).map_err(|e| e.to_string())
 }

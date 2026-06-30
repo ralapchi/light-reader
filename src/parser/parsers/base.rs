@@ -4,6 +4,7 @@
 定义解析器的通用接口和结果结构体，为所有具体解析器提供统一的标准。
 */
 
+use crate::domain::app_error::AppResult;
 use crate::domain::book_metadata::BookMetadata;
 use crate::domain::paragraph::TextLink;
 use crate::domain::toc_item::TocItem;
@@ -51,6 +52,6 @@ pub trait BookParser {
     ///
     /// # 返回值
     /// * `Ok(ParseResult)` - 解析成功，返回解析结果
-    /// * `Err(String)` - 解析失败，返回错误信息
-    fn parse(&self, path: &str) -> Result<ParseResult, String>;
+    /// * `Err(AppError)` - 解析失败，返回结构化错误
+    fn parse(&self, path: &str) -> AppResult<ParseResult>;
 }

@@ -4,6 +4,9 @@ EPUB 解析器模块
 实现 EPUB 格式书籍的解析逻辑，包括解析 container.xml、OPF 文件和 HTML 内容。
 */
 
+use super::epub_content::HtmlExtractionResult;
+use crate::domain::app_error::{AppError, AppResult};
+use crate::domain::error_codes;
 use crate::domain::paragraph::TextLink;
 use crate::domain::toc_item::TocItem;
 use crate::parser::epub_assets;
@@ -116,11 +119,15 @@ impl BookParser for EpubParser {
     ///
     /// # 返回值
     /// * `Ok(ParseResult)` - 解析成功，返回解析结果
-    /// * `Err(String)` - 解析失败，返回错误信息
-    fn parse(&self, path: &str) -> Result<ParseResult, String> {
-        let file = File::open(path).map_err(|e| format!("文件打开失败: {}", e))?;
+    /// * `Err(AppError)` - 解析失败，返回结构化错误
+    fn parse(&self, path: &str) -> AppResult<ParseResult> {
+        let file = File::open(path).map_err(|e| {
+            let mut err = AppError::with_detail(error_codes::FILE_OPEN_FAILED, "文件打开失败", e.to_string());
+            err.recoverable = true;
+            err
+        })?;
         let mut archive =
-            ZipArchive::new(BufReader::new(file)).map_err(|e| format!("ZIP 解析失败: {}", e))?;
+            ZipArchive::new(BufReader::new(file)).map_err(|e| AppError::with_detail(error_codes::FILE_OPEN_FAILED, "ZIP 解析失败", e.to_string()))?;
         let mut warnings = Vec::new();
 
         let opf_path = {
@@ -232,8 +239,14 @@ impl BookParser for EpubParser {
                     content
                 };
                 if !html_content.is_empty() {
-                    let (paragraphs, images_with_pos, paragraph_links, raw_anchors, para_heading_flags, inline_images_from_html) =
-                        self.extract_html_with_positions(&html_content);
+                    let HtmlExtractionResult {
+                        paragraphs,
+                        images: images_with_pos,
+                        paragraph_links,
+                        anchors: raw_anchors,
+                        heading_flags: para_heading_flags,
+                        inline_images: inline_images_from_html,
+                    } = self.extract_html_with_positions(&html_content);
                     // 过滤 XML/SVG 噪声段落，同步更新链接和锚点索引
                     let keep: Vec<bool> =
                         paragraphs.iter().map(|p| !Self::is_xml_noise(p)).collect();

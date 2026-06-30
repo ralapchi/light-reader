@@ -1,16 +1,8 @@
-use crate::domain::book_format::BookFormat;
 use crate::domain::paragraph::TextLink;
 use crate::tts::config::TtsConfig;
 use crate::tts::types::TtsProviderKind;
 
 use super::super::dto::*;
-
-fn format_str(format: &BookFormat) -> &'static str {
-    match format {
-        BookFormat::Epub => "epub",
-        BookFormat::Txt => "txt",
-    }
-}
 
 fn links_to_dto(links: &[TextLink]) -> Vec<ReaderTextLinkDto> {
     links
@@ -41,7 +33,7 @@ pub fn item_to_dto(item: &crate::domain::library_item::LibraryItem) -> LibraryBo
         book_id: item.book_id.clone(),
         title: item.title.clone(),
         author: item.author.clone(),
-        format: format_str(&item.format).to_string(),
+        format: item.format.to_string().to_lowercase(),
         cover_url,
         progress_percent: item.progress_percent,
         chapter_count: item.chapter_count,
@@ -105,7 +97,7 @@ pub fn build_reader_book_dto(book: &crate::domain::book::Book) -> ReaderBookDto 
         book_id: book.id.clone(),
         title: book.metadata.title.clone(),
         author: book.metadata.author.clone(),
-        format: format_str(&book.format).to_string(),
+        format: book.format.to_string().to_lowercase(),
         chapter_count: book.chapters.len(),
         toc: book.toc.iter().map(toc_to_dto).collect(),
     }
@@ -136,6 +128,19 @@ pub fn dto_to_tts_config(dto: &TtsConfigDto, api_key: Option<String>) -> TtsConf
         base_url: dto.base_url.clone(),
         model: dto.model.clone(),
         voice_id: dto.voice_id.clone(),
+    }
+}
+
+pub fn bookmark_to_dto(b: crate::domain::bookmark::Bookmark) -> BookmarkDto {
+    BookmarkDto {
+        id: b.id,
+        book_id: b.book_id,
+        chapter_index: b.chapter_index,
+        paragraph_index: b.paragraph_index,
+        title: b.title,
+        snippet: b.snippet,
+        created_at: b.created_at,
+        note: b.note,
     }
 }
 

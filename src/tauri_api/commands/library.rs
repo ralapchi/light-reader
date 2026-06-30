@@ -1,5 +1,7 @@
 use crate::domain::book_format::BookFormat;
+use crate::domain::library_item::{LibraryIndex, LibraryItem};
 use crate::services::library_service_impl::LibraryServiceImpl;
+use crate::storage::traits::DatabaseBackend;
 
 use super::super::dto::*;
 use super::dto_convert::{item_to_dto, read_file_to_data_uri};
@@ -43,6 +45,56 @@ fn cleanup_book_data(
     }
 }
 
+/// Import a single book file into the library index and persist to database.
+/// Returns the imported LibraryItem on success, or None on failure.
+fn import_single_book(
+    path: &str,
+    now: &str,
+    index: &mut LibraryIndex,
+    db: &dyn DatabaseBackend,
+) -> Option<LibraryItem> {
+    let mut item = match LibraryServiceImpl::parse_book_item(path, now) {
+        Ok(item) => item,
+        Err(e) => {
+            log::warn!("导入书籍失败: {} - {}", path, e);
+            return None;
+        }
+    };
+
+    let book_id = item.book_id.clone();
+    if item.format == BookFormat::Epub {
+        let epub_path = std::path::Path::new(&item.source_path);
+        if epub_path.exists() {
+            if let Some(cover_path) =
+                crate::services::asset_service_impl::extract_and_cache_cover(epub_path, &book_id)
+            {
+                if let Some(ext) = cover_path.extension().and_then(|e| e.to_str()) {
+                    item.cover_cache_key = Some(ext.to_string());
+                }
+            }
+        }
+    }
+
+    if let Some(existing) = index.items.iter_mut().find(|i| i.book_id == book_id) {
+        let imported_at = existing.imported_at.clone();
+        *existing = item.clone();
+        existing.imported_at = imported_at;
+    } else {
+        index.items.push(item.clone());
+    }
+    index.last_selected_book_id = Some(book_id.clone());
+
+    // Write to database
+    if let Some(stored) = index.items.iter().find(|i| i.book_id == book_id) {
+        if let Err(e) = db.books().upsert(stored) {
+            log::warn!("导入书籍到数据库失败: {}", e);
+        }
+    }
+    let _ = db.books().set_last_selected(&book_id);
+
+    Some(item)
+}
+
 #[tauri::command]
 pub fn library_list(
     index_state: tauri::State<'_, super::LibraryIndexState>,
@@ -62,42 +114,8 @@ pub fn library_import(
     let mut imported = Vec::new();
 
     for path in &paths {
-        match LibraryServiceImpl::parse_book_item(path, &now) {
-            Ok(mut item) => {
-                let book_id = item.book_id.clone();
-                if item.format == BookFormat::Epub {
-                    let epub_path = std::path::Path::new(&item.source_path);
-                    if epub_path.exists() {
-                        if let Some(cover_path) = crate::services::asset_service_impl::extract_and_cache_cover(
-                            epub_path, &book_id,
-                        ) {
-                            if let Some(ext) = cover_path.extension().and_then(|e| e.to_str()) {
-                                item.cover_cache_key = Some(ext.to_string());
-                            }
-                        }
-                    }
-                }
-                if let Some(existing) = index.items.iter_mut().find(|i| i.book_id == book_id) {
-                    let imported_at = existing.imported_at.clone();
-                    imported.push(item.clone());
-                    *existing = item;
-                    existing.imported_at = imported_at;
-                } else {
-                    index.items.push(item.clone());
-                    imported.push(item);
-                }
-                index.last_selected_book_id = Some(book_id.clone());
-                // Write to database
-                if let Some(stored) = index.items.iter().find(|i| i.book_id == book_id) {
-                    if let Err(e) = db.books().upsert(stored) {
-                        log::warn!("导入书籍到数据库失败: {}", e);
-                    }
-                }
-                let _ = db.books().set_last_selected(&book_id);
-            }
-            Err(e) => {
-                log::warn!("导入书籍失败: {} - {}", path, e);
-            }
+        if let Some(item) = import_single_book(path, &now, &mut index, db.as_ref()) {
+            imported.push(item);
         }
     }
 
@@ -297,9 +315,7 @@ pub fn library_cover(
     book_id: String,
     index_state: tauri::State<'_, super::LibraryIndexState>,
 ) -> Result<Option<String>, String> {
-    use crate::services::asset_service::AssetService;
-    let svc = crate::services::asset_service_impl::AssetServiceImpl::new();
-    let path = svc.cover_path(&book_id).or_else(|| {
+    let path = crate::services::asset_service_impl::AssetServiceImpl::cover_path(&book_id).or_else(|| {
         let index = index_state.lock().ok()?;
         let item = index.items.iter().find(|i| i.book_id == book_id)?;
         if item.format == BookFormat::Epub {
@@ -356,14 +372,6 @@ pub fn library_flush_index(
     db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<(), String> {
     let index = index_state.lock().map_err(|e| e.to_string())?;
-    // Batch upsert to database
-    for item in &index.items {
-        if let Err(e) = db.books().upsert(item) {
-            log::warn!("保存书籍到数据库失败: {}", e);
-        }
-    }
-    if let Some(ref id) = index.last_selected_book_id {
-        let _ = db.books().set_last_selected(id);
-    }
+    crate::services::library_service_impl::flush_library_to_db(&index, db.as_ref());
     Ok(())
 }

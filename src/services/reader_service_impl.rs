@@ -28,12 +28,7 @@ impl ReaderServiceImpl {
             err
         })?;
 
-        let result = parser.parse(path).map_err(|err| {
-            let mut app_error =
-                AppError::with_detail(error_codes::FILE_OPEN_FAILED, "解析失败", err);
-            app_error.recoverable = true;
-            app_error
-        })?;
+        let result = parser.parse(path)?;
 
         let format = if path.ends_with(".epub") {
             BookFormat::Epub

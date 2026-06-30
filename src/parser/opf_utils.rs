@@ -1,9 +1,32 @@
 /*!
-OPF 解析工具函数
+OPF 解析工具函数（轻量字符串解析）
 
 提供轻量级的 OPF (Open Packaging Format) 解析功能，用于从 EPUB 文件中提取
 封面信息和 OPF 路径。使用简单的字符串解析而非完整 XML 解析器，适用于
 只需提取少量信息的场景（如封面缓存）。
+
+## 为什么有两套 OPF 解析
+
+项目中存在两套 OPF 解析实现：
+
+1. **本模块（`opf_utils`）** —— 轻量字符串解析
+   - 使用逐行字符串匹配（`contains`、`find`）提取属性
+   - 适用于只需提取少量字段的场景（如封面缓存、OPF 路径定位）
+   - 优点：无需引入 XML 解析器，代码简洁，启动快
+   - 缺点：不处理 XML 命名空间，不支持复杂嵌套结构
+
+2. **`epub_metadata.rs`** —— 完整 XML 解析（基于 `quick_xml`）
+   - 使用 `quick_xml::Reader` 进行事件驱动的 XML 解析
+   - 适用于完整的 EPUB 导入流程（manifest、spine、元信息等）
+   - 优点：正确处理 XML 结构、命名空间、转义字符
+   - 缺点：依赖 XML 解析器，代码更复杂
+
+## 使用场景
+
+- **封面提取**：`asset_service_impl.rs` 调用 `parse_opf_cover` 快速获取封面
+- **完整导入**：`epub_parser.rs` 调用 `epub_metadata` 中的方法进行完整解析
+
+两套实现共存是合理的：轻量解析满足快速预览需求，完整解析满足导入需求。
 */
 
 use std::collections::HashMap;

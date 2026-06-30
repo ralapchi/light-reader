@@ -58,13 +58,6 @@ fn flush_library(window: &tauri::Window) {
     let Ok(index) = guard.lock() else { return };
 
     if let Some(db) = window.try_state::<Box<dyn DatabaseBackend>>() {
-        for item in &index.items {
-            if let Err(e) = db.books().upsert(item) {
-                log::warn!("退出时保存书籍到数据库失败: {}", e);
-            }
-        }
-        if let Some(ref id) = index.last_selected_book_id {
-            let _ = db.books().set_last_selected(id);
-        }
+        crate::services::library_service_impl::flush_library_to_db(&index, db.as_ref());
     }
 }

@@ -1,5 +1,5 @@
 use super::super::dto::*;
-use super::dto_convert::snap_to_char_boundary;
+use super::dto_convert::{bookmark_to_dto, snap_to_char_boundary};
 use super::BookSession;
 
 #[tauri::command]
@@ -18,10 +18,12 @@ pub fn search_in_book(
     for chapter in &book.chapters {
         let text_para_count = chapter.text_paragraphs().count();
         for para in chapter.text_paragraphs() {
-            if let Some(pos) = para.text.find(&query) {
+            let text_lower = para.text.to_lowercase();
+            let query_lower = query.to_lowercase();
+            if let Some(pos) = text_lower.find(&query_lower) {
                 let raw_start = pos.saturating_sub(30);
                 let start = snap_to_char_boundary(&para.text, raw_start);
-                let raw_end = (pos + query.len() + 30).min(para.text.len());
+                let raw_end = (pos + query_lower.len() + 30).min(para.text.len());
                 let end = snap_to_char_boundary(&para.text, raw_end);
                 let mut context = String::new();
                 if start > 0 {
@@ -59,19 +61,7 @@ pub fn bookmark_list(
     db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<Vec<BookmarkDto>, String> {
     let items = db.bookmarks().list(&book_id)?;
-    Ok(items
-        .into_iter()
-        .map(|b| BookmarkDto {
-            id: b.id,
-            book_id: b.book_id,
-            chapter_index: b.chapter_index,
-            paragraph_index: b.paragraph_index,
-            title: b.title,
-            snippet: b.snippet,
-            created_at: b.created_at,
-            note: b.note,
-        })
-        .collect())
+    Ok(items.into_iter().map(bookmark_to_dto).collect())
 }
 
 #[tauri::command]
@@ -79,19 +69,7 @@ pub fn bookmark_list_all(
     db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<Vec<BookmarkDto>, String> {
     let items = db.bookmarks().list_all()?;
-    Ok(items
-        .into_iter()
-        .map(|b| BookmarkDto {
-            id: b.id,
-            book_id: b.book_id,
-            chapter_index: b.chapter_index,
-            paragraph_index: b.paragraph_index,
-            title: b.title,
-            snippet: b.snippet,
-            created_at: b.created_at,
-            note: b.note,
-        })
-        .collect())
+    Ok(items.into_iter().map(bookmark_to_dto).collect())
 }
 
 #[tauri::command]
@@ -143,16 +121,7 @@ pub fn bookmark_add(
 
     db.bookmarks().add(&bm)?;
 
-    Ok(BookmarkDto {
-        id: bm.id,
-        book_id: bm.book_id,
-        chapter_index: bm.chapter_index,
-        paragraph_index: bm.paragraph_index,
-        title: bm.title,
-        snippet: bm.snippet,
-        created_at: bm.created_at,
-        note: bm.note,
-    })
+    Ok(bookmark_to_dto(bm))
 }
 
 #[tauri::command]

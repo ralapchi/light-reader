@@ -10,20 +10,22 @@ use quick_xml::events::Event;
 
 use super::epub_parser::{EpubParser, is_img_tag, read_img_attrs, record_anchor};
 
+/// `extract_html_with_positions` 的返回结果，包含从 HTML 中提取的各类数据。
+pub(super) struct HtmlExtractionResult {
+    pub paragraphs: Vec<String>,
+    pub images: Vec<(isize, String, Option<String>)>,
+    pub paragraph_links: Vec<Vec<TextLink>>,
+    pub anchors: Vec<(String, usize)>,
+    pub heading_flags: Vec<bool>,
+    pub inline_images: Vec<(usize, String, Option<String>)>,
+}
+
 impl EpubParser {
     /// 单次遍历 HTML，同时提取段落文本、图片位置、链接片段和锚点。
-    /// 返回 (paragraphs, images, paragraph_links, anchors, heading_flags, inline_images)。
     pub(super) fn extract_html_with_positions(
         &self,
         html: &str,
-    ) -> (
-        Vec<String>,
-        Vec<(isize, String, Option<String>)>,
-        Vec<Vec<TextLink>>,
-        Vec<(String, usize)>,
-        Vec<bool>,
-        Vec<(usize, String, Option<String>)>,
-    ) {
+    ) -> HtmlExtractionResult {
         let mut paragraphs: Vec<String> = Vec::new();
         let mut current_para = String::new();
         let mut text_indent = false;
@@ -270,7 +272,14 @@ impl EpubParser {
             heading_flags.push(heading_depth > 0);
         }
 
-        (paragraphs, images, paragraph_links, anchors, heading_flags, inline_images)
+        HtmlExtractionResult {
+            paragraphs,
+            images,
+            paragraph_links,
+            anchors,
+            heading_flags,
+            inline_images,
+        }
     }
 
     /// 从 HTML 内容中提取标题

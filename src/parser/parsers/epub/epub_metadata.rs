@@ -31,11 +31,11 @@ impl EpubParser {
                 Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    if name.starts_with(&b"rootfile"[..]) {
+                    if name.eq_ignore_ascii_case(b"rootfile") {
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let attr_name = attr.key.as_ref();
-                                if attr_name.starts_with(&b"full-path"[..]) {
+                                if attr_name.eq_ignore_ascii_case(b"full-path") {
                                     if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
                                         return Some(value.to_string());
                                     }
@@ -83,13 +83,13 @@ impl EpubParser {
                 Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    if name.starts_with(&b"metadata"[..]) {
+                    if name.eq_ignore_ascii_case(b"metadata") {
                         in_metadata = true;
-                    } else if name.starts_with(&b"manifest"[..]) {
+                    } else if name.eq_ignore_ascii_case(b"manifest") {
                         in_manifest = true;
-                    } else if name.starts_with(&b"spine"[..]) {
+                    } else if name.eq_ignore_ascii_case(b"spine") {
                         in_spine = true;
-                    } else if name.starts_with(&b"item"[..]) && in_manifest {
+                    } else if name.eq_ignore_ascii_case(b"item") && in_manifest {
                         let mut id = String::new();
                         let mut href = String::new();
                         let mut properties = String::new();
@@ -97,15 +97,15 @@ impl EpubParser {
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let attr_name = attr.key.as_ref();
-                                if attr_name.starts_with(&b"id"[..]) {
+                                if attr_name.eq_ignore_ascii_case(b"id") {
                                     if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
                                         id = value.to_string();
                                     }
-                                } else if attr_name.starts_with(&b"href"[..]) {
+                                } else if attr_name.eq_ignore_ascii_case(b"href") {
                                     if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
                                         href = value.to_string();
                                     }
-                                } else if attr_name.starts_with(&b"properties"[..]) {
+                                } else if attr_name.eq_ignore_ascii_case(b"properties") {
                                     if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
                                         properties = value.to_string();
                                     }
@@ -121,18 +121,18 @@ impl EpubParser {
                         if !id.is_empty() && !href.is_empty() {
                             manifest.insert(id, href);
                         }
-                    } else if name.starts_with(&b"meta"[..]) && in_metadata {
+                    } else if name.eq_ignore_ascii_case(b"meta") && in_metadata {
                         // EPUB 2: <meta name="cover" content="cover-image-id"/>
                         let mut meta_name = String::new();
                         let mut meta_content = String::new();
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let attr_name = attr.key.as_ref();
-                                if attr_name.starts_with(&b"name"[..]) {
+                                if attr_name.eq_ignore_ascii_case(b"name") {
                                     if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
                                         meta_name = value.to_string();
                                     }
-                                } else if attr_name.starts_with(&b"content"[..]) {
+                                } else if attr_name.eq_ignore_ascii_case(b"content") {
                                     if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
                                         meta_content = value.to_string();
                                     }
@@ -149,11 +149,11 @@ impl EpubParser {
                                 cover_id = Some(format!("__id__:{}", meta_content));
                             }
                         }
-                    } else if name.starts_with(&b"itemref"[..]) && in_spine {
+                    } else if name.eq_ignore_ascii_case(b"itemref") && in_spine {
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let attr_name = attr.key.as_ref();
-                                if attr_name.starts_with(&b"idref"[..]) {
+                                if attr_name.eq_ignore_ascii_case(b"idref") {
                                     if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
                                         spine_ids.push(value.to_string());
                                     }
@@ -165,11 +165,11 @@ impl EpubParser {
                 Ok(Event::End(ref e)) => {
                     let qname = e.name();
                     let name = qname.as_ref();
-                    if name.starts_with(&b"metadata"[..]) {
+                    if name.eq_ignore_ascii_case(b"metadata") {
                         in_metadata = false;
-                    } else if name.starts_with(&b"manifest"[..]) {
+                    } else if name.eq_ignore_ascii_case(b"manifest") {
                         in_manifest = false;
-                    } else if name.starts_with(&b"spine"[..]) {
+                    } else if name.eq_ignore_ascii_case(b"spine") {
                         in_spine = false;
                     }
                 }

@@ -169,6 +169,9 @@ pub struct TtsConfigDto {
 
 // ── Bookmark DTOs ───────────────────────────────────────────
 
+/// 与 `domain::bookmark::Bookmark` 字段完全一致。
+/// 保留 DTO 层的原因：前端展示逻辑与领域模型解耦，便于未来裁剪/扩展字段
+/// （例如隐藏 note、添加 book_title 等）而无需修改领域层。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BookmarkDto {
     pub id: String,
