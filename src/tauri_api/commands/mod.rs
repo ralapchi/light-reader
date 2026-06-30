@@ -7,7 +7,10 @@
 mod bookmark;
 mod dto_convert;
 mod library;
-mod reader;
+mod reader_book;
+mod reader_chapter;
+mod reader_image;
+mod reader_progress;
 mod settings;
 mod tts;
 
@@ -91,6 +94,9 @@ pub type ProgressRevisionState = Mutex<HashMap<String, u64>>;
 // Re-export all command functions so `use tauri_api::commands::*` still works.
 pub use bookmark::*;
 pub use library::*;
-pub use reader::*;
+pub use reader_book::*;
+pub use reader_chapter::*;
+pub use reader_image::*;
+pub use reader_progress::*;
 pub use settings::*;
 pub use tts::*;
