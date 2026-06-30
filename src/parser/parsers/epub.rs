@@ -403,7 +403,7 @@ impl EpubParser {
         let mut link_title: Option<String> = None;
         let mut link_start: usize = 0;
         let mut in_title_tag = false;
-        let mut in_heading = false;
+        let mut heading_depth: u32 = 0;
         let mut heading_flags: Vec<bool> = Vec::new();
         let mut in_sup = false;
         let mut link_is_footnote = false;
@@ -497,13 +497,15 @@ impl EpubParser {
                         || name.eq_ignore_ascii_case(b"h5")
                         || name.eq_ignore_ascii_case(b"h6");
 
+                    if is_heading_tag {
+                        heading_depth += 1;
+                    }
                     if name.eq_ignore_ascii_case(b"p") || name.eq_ignore_ascii_case(b"div") || name.eq_ignore_ascii_case(b"li") || is_heading_tag {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
-                            heading_flags.push(in_heading);
+                            heading_flags.push(heading_depth > 0);
                         }
-                        in_heading = is_heading_tag;
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let attr_name = attr.key.as_ref();
@@ -518,7 +520,7 @@ impl EpubParser {
                         }
                     } else if name.eq_ignore_ascii_case(b"br") || name.eq_ignore_ascii_case(b"hr") {
                         if !current_para.trim().is_empty() {
-                            heading_flags.push(in_heading);
+                            heading_flags.push(heading_depth > 0);
                         }
                         flush_para(&mut current_para, &mut paragraphs, &mut paragraph_links, &mut current_links, &mut text_indent, &mut para_count);
                     } else if name.eq_ignore_ascii_case(b"sup") {
@@ -551,7 +553,7 @@ impl EpubParser {
                         }
                     } else if name.eq_ignore_ascii_case(b"br") || name.eq_ignore_ascii_case(b"hr") {
                         if !current_para.trim().is_empty() {
-                            heading_flags.push(in_heading);
+                            heading_flags.push(heading_depth > 0);
                         }
                         flush_para(&mut current_para, &mut paragraphs, &mut paragraph_links, &mut current_links, &mut text_indent, &mut para_count);
                     } else if name.eq_ignore_ascii_case(b"a") {
@@ -580,11 +582,13 @@ impl EpubParser {
                         if !current_para.trim().is_empty() {
                             paragraphs.push(std::mem::take(&mut current_para));
                             paragraph_links.push(std::mem::take(&mut current_links));
-                            heading_flags.push(in_heading);
+                            heading_flags.push(heading_depth > 0);
                         }
                         text_indent = false;
                         para_count += 1;
-                        in_heading = false;
+                        if is_heading_tag {
+                            heading_depth = heading_depth.saturating_sub(1);
+                        }
                     } else if name.eq_ignore_ascii_case(b"sup") {
                         in_sup = false;
                     } else if name.eq_ignore_ascii_case(b"a") && in_link {
@@ -628,7 +632,7 @@ impl EpubParser {
         if !current_para.trim().is_empty() {
             paragraphs.push(current_para);
             paragraph_links.push(std::mem::take(&mut current_links));
-            heading_flags.push(in_heading);
+            heading_flags.push(heading_depth > 0);
         }
 
         (paragraphs, images, paragraph_links, anchors, heading_flags, inline_images)
