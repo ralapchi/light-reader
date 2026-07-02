@@ -11,9 +11,11 @@ use crate::domain::paragraph::TextLink;
 use crate::domain::toc_item::TocItem;
 use crate::parser::epub_assets;
 use crate::parser::parsers::base::{BookParser, ParseResult};
+use log::info;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
+use std::time::Instant;
 use zip::ZipArchive;
 
 /// 判断标签是否为图片元素
@@ -531,6 +533,7 @@ impl BookParser for EpubParser {
     /// * `Ok(ParseResult)` - 解析成功，返回解析结果
     /// * `Err(AppError)` - 解析失败，返回结构化错误
     fn parse(&self, path: &str) -> AppResult<ParseResult> {
+        let total_start = Instant::now();
         let file = File::open(path).map_err(|e| {
             let mut err = AppError::with_detail(error_codes::FILE_OPEN_FAILED, "文件打开失败", e.to_string());
             err.recoverable = true;
@@ -540,13 +543,36 @@ impl BookParser for EpubParser {
             ZipArchive::new(BufReader::new(file)).map_err(|e| AppError::with_detail(error_codes::FILE_OPEN_FAILED, "ZIP 解析失败", e.to_string()))?;
         let mut warnings = Vec::new();
 
+        let opf_start = Instant::now();
         let (opf_base_path, manifest, spine_ids, opf_cover_href, metadata) =
             self.parse_container_and_opf(&mut archive, &mut warnings)?;
+        info!(
+            "EPUB OPF 解析完成: manifest={}, spine={}, elapsed={}ms",
+            manifest.len(),
+            spine_ids.len(),
+            opf_start.elapsed().as_millis()
+        );
+
+        let toc_start = Instant::now();
         let toc_items = self.parse_toc(&mut archive, &opf_base_path, &manifest, &mut warnings);
+        info!(
+            "EPUB 目录解析完成: has_toc={}, elapsed={}ms",
+            toc_items.is_some(),
+            toc_start.elapsed().as_millis()
+        );
+
+        let title_map_start = Instant::now();
         let toc_title_map = toc_items
             .as_ref()
             .map(|toc| Self::build_toc_title_map(toc))
             .unwrap_or_default();
+        info!(
+            "EPUB 目录标题索引完成: titles={}, elapsed={}ms",
+            toc_title_map.len(),
+            title_map_start.elapsed().as_millis()
+        );
+
+        let chapters_start = Instant::now();
         let ch = self.build_chapters_from_spine(
             &mut archive,
             &opf_base_path,
@@ -555,11 +581,28 @@ impl BookParser for EpubParser {
             &toc_title_map,
             &mut warnings,
         );
+        info!(
+            "EPUB 章节内容解析完成: chapters={}, images={}, elapsed={}ms",
+            ch.content.len(),
+            ch.image_assets.len(),
+            chapters_start.elapsed().as_millis()
+        );
+
+        let cover_start = Instant::now();
         let (cover_image, cover_media_type) = self.extract_cover(
             &mut archive,
             &opf_base_path,
             &manifest,
             &opf_cover_href,
+        );
+        info!(
+            "EPUB 封面提取完成: has_cover={}, elapsed={}ms",
+            cover_image.is_some(),
+            cover_start.elapsed().as_millis()
+        );
+        info!(
+            "EPUB 总解析完成: elapsed={}ms",
+            total_start.elapsed().as_millis()
         );
 
         Ok(ParseResult {
