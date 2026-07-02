@@ -1,5 +1,5 @@
 use crate::domain::bookmark::Bookmark;
-use crate::domain::library_item::{LibraryItem, ReadingStatsSnapshot};
+use crate::domain::library_item::LibraryItem;
 use crate::domain::reading_aggregates::ReadingAggregates;
 use crate::domain::reading_progress::ReadingProgress;
 use crate::domain::reading_session::ReadingSession;
@@ -11,19 +11,6 @@ pub trait BooksRepo: Send + Sync {
     fn delete(&self, book_id: &str) -> Result<(), String>;
     fn delete_batch(&self, book_ids: &[&str]) -> Result<(), String>;
     fn list_all(&self) -> Result<Vec<LibraryItem>, String>;
-    #[allow(dead_code)]
-    fn get(&self, book_id: &str) -> Result<Option<LibraryItem>, String>;
-    #[allow(dead_code)]
-    fn search(&self, query: &str) -> Result<Vec<LibraryItem>, String>;
-    #[allow(dead_code)]
-    fn update_progress(
-        &self,
-        book_id: &str,
-        percent: f32,
-        last_opened_at: &str,
-    ) -> Result<(), String>;
-    #[allow(dead_code)]
-    fn update_stats(&self, book_id: &str, stats: &ReadingStatsSnapshot) -> Result<(), String>;
     fn get_last_selected(&self) -> Result<Option<String>, String>;
     fn set_last_selected(&self, book_id: &str) -> Result<(), String>;
 }
@@ -32,20 +19,7 @@ pub trait BooksRepo: Send + Sync {
 
 pub trait ProgressRepo: Send + Sync {
     fn load(&self, book_id: &str) -> Result<Option<ReadingProgress>, String>;
-    #[allow(dead_code)]
-    fn save(&self, book_id: &str, progress: &ReadingProgress) -> Result<(), String>;
     fn save_batch(&self, entries: &[(String, ReadingProgress)]) -> Result<(), String>;
-    #[allow(dead_code)]
-    fn mark_dirty(
-        &self,
-        book_id: &str,
-        progress: &ReadingProgress,
-        revision: u64,
-    ) -> Result<(), String>;
-    #[allow(dead_code)]
-    fn flush_dirty(&self) -> Result<Vec<String>, String>;
-    #[allow(dead_code)]
-    fn load_all(&self) -> Result<Vec<(String, ReadingProgress)>, String>;
 }
 
 // -- Bookmarks --
@@ -55,8 +29,6 @@ pub trait BookmarksRepo: Send + Sync {
     fn list_all(&self) -> Result<Vec<Bookmark>, String>;
     fn add(&self, bookmark: &Bookmark) -> Result<(), String>;
     fn remove(&self, book_id: &str, bookmark_id: &str) -> Result<(), String>;
-    #[allow(dead_code)]
-    fn clear_for_book(&self, book_id: &str) -> Result<(), String>;
 }
 
 // -- Tags (stats feature, not yet wired to commands) --

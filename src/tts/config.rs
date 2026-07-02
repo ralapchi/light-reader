@@ -48,5 +48,3 @@ impl Default for TtsConfig {
         }
     }
 }
-
-impl TtsConfig {}

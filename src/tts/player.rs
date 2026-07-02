@@ -62,12 +62,6 @@ impl AudioPlayer {
     pub fn is_empty(&self) -> bool {
         self.sink.empty()
     }
-
-    /// Number of audio sources still queued.
-    #[allow(dead_code)]
-    pub fn len(&self) -> usize {
-        self.sink.len()
-    }
 }
 
 /// Wrap raw PCM16 data in a valid WAV header.

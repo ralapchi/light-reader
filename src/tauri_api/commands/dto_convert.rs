@@ -63,14 +63,14 @@ pub fn block_to_dto(
             index: p.index,
             block_id: format!("p-{}", p.index),
             text: p.text.clone(),
-            kind: format!("{:?}", p.kind).to_lowercase(),
+            kind: p.kind.as_str().to_string(),
             links: links_to_dto(&p.links),
         },
         crate::domain::chapter_block::ChapterBlock::Heading(p) => ReaderBlockDto::Heading {
             index: p.index,
             block_id: format!("h-{}", p.index),
             text: p.text.clone(),
-            kind: format!("{:?}", p.kind).to_lowercase(),
+            kind: p.kind.as_str().to_string(),
             links: links_to_dto(&p.links),
         },
         crate::domain::chapter_block::ChapterBlock::Quote(p) => ReaderBlockDto::Quote {
@@ -106,7 +106,7 @@ pub fn build_reader_book_dto(book: &crate::domain::book::Book) -> ReaderBookDto 
 pub fn tts_config_to_dto(config: &TtsConfig) -> TtsConfigDto {
     TtsConfigDto {
         enabled: config.enabled,
-        provider: format!("{:?}", config.provider).to_lowercase(),
+        provider: config.provider.as_str().to_string(),
         has_api_key: config.api_key.is_some(),
         api_key: None,
         base_url: config.base_url.clone(),

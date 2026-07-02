@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { readerChapterImages } from '../../services/api'
 import type { ReaderBlockDto } from '../../services/api'
-import { INLINE_IMAGE_RE } from './readerUtils'
+import { matchInlineImages } from '../../utils/inlineImage'
 
 type ImageState = 'loading' | 'loaded' | 'failed'
 
@@ -32,11 +32,7 @@ export function useChapterImages(bookId: string | undefined) {
     const inlineImageIds: string[] = []
     for (const b of blocks) {
       if ('text' in b) {
-        INLINE_IMAGE_RE.lastIndex = 0
-        let m: RegExpExecArray | null
-        while ((m = INLINE_IMAGE_RE.exec(b.text)) !== null) {
-          inlineImageIds.push(m[1])
-        }
+        inlineImageIds.push(...matchInlineImages(b.text))
       }
     }
 

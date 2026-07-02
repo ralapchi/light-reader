@@ -7,6 +7,16 @@ pub enum TtsProviderKind {
     Aliyun,
 }
 
+impl TtsProviderKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Xiaomi => "xiaomi",
+            #[cfg(feature = "tts-aliyun")]
+            Self::Aliyun => "aliyun",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum PlaybackStatus {
     Idle,

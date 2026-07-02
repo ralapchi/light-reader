@@ -84,11 +84,4 @@ impl BookmarksRepo for SqliteBookmarksRepo {
         .map_err(|e| e.to_string())?;
         Ok(())
     }
-
-    fn clear_for_book(&self, book_id: &str) -> Result<(), String> {
-        let conn = self.pool.get().map_err(|e| e.to_string())?;
-        conn.execute("DELETE FROM bookmarks WHERE book_id = ?1", params![book_id])
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    }
 }

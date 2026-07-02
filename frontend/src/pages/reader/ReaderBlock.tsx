@@ -1,6 +1,6 @@
 import { memo, useMemo, type CSSProperties } from 'react'
 import type { ReaderBlockDto, ReaderTextLinkDto } from '../../services/api'
-import { INLINE_IMAGE_RE } from './readerUtils'
+import { forEachInlineImage } from '../../utils/inlineImage'
 
 interface ReaderBlockProps {
   block: ReaderBlockDto
@@ -23,14 +23,12 @@ function renderTextWithInlineImages(
 ) {
   const parts: React.ReactNode[] = []
   let lastIdx = 0
-  let m: RegExpExecArray | null
-  INLINE_IMAGE_RE.lastIndex = 0
-  while ((m = INLINE_IMAGE_RE.exec(text)) !== null) {
+  forEachInlineImage(text, (m) => {
     // Text before this inline image — render links
     if (m.index > lastIdx) {
       const segment = text.slice(lastIdx, m.index)
       const segLinks = sortedLinks
-        .filter(l => l.start >= lastIdx && l.end <= m!.index)
+        .filter(l => l.start >= lastIdx && l.end <= m.index)
         .map(l => ({ ...l, start: l.start - lastIdx, end: l.end - lastIdx }))
       parts.push(renderLinkedText(segment, segLinks, onLinkClick, onLinkHover, onLinkLeave))
     }
@@ -41,7 +39,7 @@ function renderTextWithInlineImages(
       )
     }
     lastIdx = m.index + m[0].length
-  }
+  })
   // Remaining text
   if (lastIdx < text.length) {
     const segment = text.slice(lastIdx)

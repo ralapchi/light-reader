@@ -164,7 +164,7 @@ pub fn tts_test_connection(
 ) -> Result<bool, String> {
     let guard = state.lock().map_err(|e| e.to_string())?;
     let full_config = dto_to_tts_config(&config, guard.tts_config.api_key.clone());
-    let mut svc = TtsSynthesisService::new(crate::storage::paths::tts_cache_dir());
+    let mut svc = TtsSynthesisService::new();
     svc.register_provider(Box::new(
         crate::tts::xiaomi_provider::XiaomiTtsProvider::new(),
     ));

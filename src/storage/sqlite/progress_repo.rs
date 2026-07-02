@@ -90,11 +90,6 @@ impl ProgressRepo for SqliteProgressRepo {
         }
     }
 
-    fn save(&self, book_id: &str, progress: &ReadingProgress) -> Result<(), String> {
-        let conn = self.pool.get().map_err(|e| e.to_string())?;
-        upsert_progress(&conn, book_id, progress, 0, 0)
-    }
-
     fn save_batch(&self, entries: &[(String, ReadingProgress)]) -> Result<(), String> {
         let mut conn = self.pool.get().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -102,51 +97,5 @@ impl ProgressRepo for SqliteProgressRepo {
             upsert_progress(&tx, book_id, progress, 0, 0)?;
         }
         tx.commit().map_err(|e| e.to_string())
-    }
-
-    fn mark_dirty(
-        &self,
-        book_id: &str,
-        progress: &ReadingProgress,
-        revision: u64,
-    ) -> Result<(), String> {
-        let conn = self.pool.get().map_err(|e| e.to_string())?;
-        upsert_progress(&conn, book_id, progress, 1, revision as i64)
-    }
-
-    fn flush_dirty(&self) -> Result<Vec<String>, String> {
-        let mut conn = self.pool.get().map_err(|e| e.to_string())?;
-        let tx = conn.transaction().map_err(|e| e.to_string())?;
-        let mut stmt = tx
-            .prepare("SELECT book_id FROM reading_progress WHERE dirty = 1")
-            .map_err(|e| e.to_string())?;
-        let ids: Vec<String> = stmt
-            .query_map([], |row| row.get(0))
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
-        drop(stmt);
-
-        tx.execute("UPDATE reading_progress SET dirty = 0 WHERE dirty = 1", [])
-            .map_err(|e| e.to_string())?;
-        tx.commit().map_err(|e| e.to_string())?;
-
-        Ok(ids)
-    }
-
-    fn load_all(&self) -> Result<Vec<(String, ReadingProgress)>, String> {
-        let conn = self.pool.get().map_err(|e| e.to_string())?;
-        let mut stmt = conn
-            .prepare("SELECT * FROM reading_progress")
-            .map_err(|e| e.to_string())?;
-        let items = stmt
-            .query_map([], |row| {
-                let p = row_to_progress(row)?;
-                Ok((p.book_id.clone(), p))
-            })
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
-        Ok(items)
     }
 }
