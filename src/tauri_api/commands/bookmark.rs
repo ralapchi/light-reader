@@ -14,12 +14,12 @@ pub fn search_in_book(
     let guard = state.lock().map_err(|e| e.to_string())?;
     let book = guard.book.as_ref().ok_or("没有打开的书籍")?;
 
+    let query_lower = query.to_lowercase();
     let mut hits = Vec::new();
     for chapter in &book.chapters {
         let text_para_count = chapter.text_paragraphs().count();
         for para in chapter.text_paragraphs() {
             let text_lower = para.text.to_lowercase();
-            let query_lower = query.to_lowercase();
             if let Some(pos) = text_lower.find(&query_lower) {
                 let raw_start = pos.saturating_sub(30);
                 let start = snap_to_char_boundary(&para.text, raw_start);

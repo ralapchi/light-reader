@@ -10,7 +10,8 @@ pub fn create_pool(db_path: &Path) -> Result<SqlitePool, String> {
     let manager = SqliteConnectionManager::file(db_path).with_init(|conn| {
         conn.execute_batch(
             "PRAGMA journal_mode=WAL;
-             PRAGMA busy_timeout=10000;",
+             PRAGMA busy_timeout=10000;
+             PRAGMA foreign_keys=ON;",
         )
     });
     let pool = Pool::builder()

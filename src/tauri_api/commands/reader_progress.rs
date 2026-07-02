@@ -37,13 +37,19 @@ pub fn reader_save_progress(
     );
     use crate::domain::reading_progress::ReadingProgress;
     let existing = {
-        let mut progress_map = progress_state.lock().map_err(|e| e.to_string())?;
-        if !progress_map.contains_key(&progress.book_id) {
-            if let Ok(Some(saved)) = db.progress().load(&progress.book_id) {
-                progress_map.insert(progress.book_id.clone(), saved);
-            }
-        }
+        let progress_map = progress_state.lock().map_err(|e| e.to_string())?;
         progress_map.get(&progress.book_id).cloned()
+    };
+    // DB 加载在锁外进行
+    let existing = if existing.is_some() {
+        existing
+    } else {
+        let saved = db.progress().load(&progress.book_id).ok().flatten();
+        if let Some(ref saved) = saved {
+            let mut progress_map = progress_state.lock().map_err(|e| e.to_string())?;
+            progress_map.insert(progress.book_id.clone(), saved.clone());
+        }
+        saved
     };
     let same_chapter_existing = existing
         .as_ref()

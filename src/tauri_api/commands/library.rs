@@ -1,7 +1,6 @@
 use crate::domain::book_format::BookFormat;
-use crate::domain::library_item::{LibraryIndex, LibraryItem};
+use crate::domain::library_item::LibraryItem;
 use crate::services::library_service_impl::LibraryServiceImpl;
-use crate::storage::traits::DatabaseBackend;
 
 use super::super::dto::*;
 use super::dto_convert::{item_to_dto, read_file_to_data_uri};
@@ -45,14 +44,8 @@ fn cleanup_book_data(
     }
 }
 
-/// Import a single book file into the library index and persist to database.
-/// Returns the imported LibraryItem on success, or None on failure.
-fn import_single_book(
-    path: &str,
-    now: &str,
-    index: &mut LibraryIndex,
-    db: &dyn DatabaseBackend,
-) -> Option<LibraryItem> {
+/// Parse a single book file and extract its cover (heavy I/O, suitable for spawn_blocking).
+fn parse_single_book(path: &str, now: &str) -> Option<LibraryItem> {
     let mut item = match LibraryServiceImpl::parse_book_item(path, now) {
         Ok(item) => item,
         Err(e) => {
@@ -75,49 +68,71 @@ fn import_single_book(
         }
     }
 
-    if let Some(existing) = index.items.iter_mut().find(|i| i.book_id == book_id) {
-        let imported_at = existing.imported_at.clone();
-        *existing = item.clone();
-        existing.imported_at = imported_at;
-    } else {
-        index.items.push(item.clone());
-    }
-    index.last_selected_book_id = Some(book_id.clone());
-
-    // Write to database
-    if let Some(stored) = index.items.iter().find(|i| i.book_id == book_id) {
-        if let Err(e) = db.books().upsert(stored) {
-            log::warn!("导入书籍到数据库失败: {}", e);
-        }
-    }
-    let _ = db.books().set_last_selected(&book_id);
-
     Some(item)
 }
 
 #[tauri::command]
-pub fn library_list(
+pub async fn library_list(
     index_state: tauri::State<'_, super::LibraryIndexState>,
 ) -> Result<Vec<LibraryBookCardDto>, String> {
-    let index = index_state.lock().map_err(|e| e.to_string())?;
-    Ok(index.items.iter().map(|i| item_to_dto(i)).collect())
+    let items = {
+        let index = index_state.lock().map_err(|e| e.to_string())?;
+        index.items.clone()
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        items.iter().map(item_to_dto).collect()
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn library_import(
+pub async fn library_import(
     paths: Vec<String>,
     index_state: tauri::State<'_, super::LibraryIndexState>,
     db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
 ) -> Result<Vec<LibraryBookCardDto>, String> {
-    let mut index = index_state.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().to_rfc3339();
-    let mut imported = Vec::new();
 
-    for path in &paths {
-        if let Some(item) = import_single_book(path, &now, &mut index, db.as_ref()) {
+    // Heavy I/O: parse books and extract covers in spawn_blocking
+    let parsed: Vec<LibraryItem> = {
+        let paths_clone = paths.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            paths_clone
+                .iter()
+                .filter_map(|path| parse_single_book(path, &now))
+                .collect::<Vec<_>>()
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    };
+
+    // Update index and write to DB (relatively fast)
+    let imported = {
+        let mut index = index_state.lock().map_err(|e| e.to_string())?;
+        let mut imported = Vec::new();
+        for item in parsed {
+            let book_id = item.book_id.clone();
+            if let Some(existing) = index.items.iter_mut().find(|i| i.book_id == book_id) {
+                let imported_at = existing.imported_at.clone();
+                *existing = item.clone();
+                existing.imported_at = imported_at;
+            } else {
+                index.items.push(item.clone());
+            }
+            index.last_selected_book_id = Some(book_id.clone());
+
+            if let Some(stored) = index.items.iter().find(|i| i.book_id == book_id) {
+                if let Err(e) = db.books().upsert(stored) {
+                    log::warn!("导入书籍到数据库失败: {}", e);
+                }
+            }
+            let _ = db.books().set_last_selected(&book_id);
+
             imported.push(item);
         }
-    }
+        imported
+    };
 
     if imported.is_empty() && !paths.is_empty() {
         Err("所有书籍导入失败".to_string())
@@ -262,24 +277,29 @@ pub fn library_remove_batch(
 }
 
 #[tauri::command]
-pub fn library_search(
+pub async fn library_search(
     query: String,
     index_state: tauri::State<'_, super::LibraryIndexState>,
 ) -> Result<Vec<LibraryBookCardDto>, String> {
-    let index = index_state.lock().map_err(|e| e.to_string())?;
-    let q = query.to_lowercase();
-    Ok(index
-        .items
-        .iter()
-        .filter(|item| {
-            item.title.to_lowercase().contains(&q)
-                || item
-                    .author
-                    .as_ref()
-                    .map_or(false, |a| a.to_lowercase().contains(&q))
-        })
-        .map(|i| item_to_dto(i))
-        .collect())
+    let (items, q) = {
+        let index = index_state.lock().map_err(|e| e.to_string())?;
+        (index.items.clone(), query.to_lowercase())
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        items
+            .iter()
+            .filter(|item| {
+                item.title.to_lowercase().contains(&q)
+                    || item
+                        .author
+                        .as_ref()
+                        .map_or(false, |a| a.to_lowercase().contains(&q))
+            })
+            .map(item_to_dto)
+            .collect()
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -311,7 +331,7 @@ pub fn library_repair_path(
 
 /// Get a book's cover image as a data URI by book_id.
 #[tauri::command]
-pub fn library_cover(
+pub async fn library_cover(
     book_id: String,
     index_state: tauri::State<'_, super::LibraryIndexState>,
 ) -> Result<Option<String>, String> {
@@ -330,7 +350,12 @@ pub fn library_cover(
         }
     });
     match path {
-        Some(p) => read_file_to_data_uri(p.to_str().unwrap_or("")),
+        Some(p) => {
+            let path_str = p.to_str().unwrap_or("").to_string();
+            tauri::async_runtime::spawn_blocking(move || read_file_to_data_uri(&path_str))
+                .await
+                .map_err(|e| e.to_string())?
+        }
         None => Ok(None),
     }
 }

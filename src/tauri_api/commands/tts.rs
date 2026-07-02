@@ -13,8 +13,11 @@ use super::dto_convert::dto_to_tts_config;
 use super::{BookSession, PlaybackCmd, TtsSessionLock};
 
 /// Spawn a dedicated audio playback thread (rodio OutputStream is !Send).
-fn spawn_playback_thread() -> (mpsc::Sender<PlaybackCmd>, Arc<AtomicBool>) {
+/// Returns (command sender, is_playing flag, completion receiver).
+/// The completion receiver receives () each time the sink finishes playing naturally.
+fn spawn_playback_thread() -> (mpsc::Sender<PlaybackCmd>, Arc<AtomicBool>, mpsc::Receiver<()>) {
     let (tx, rx) = mpsc::channel::<PlaybackCmd>();
+    let (completion_tx, completion_rx) = mpsc::channel::<()>();
     let is_playing = Arc::new(AtomicBool::new(false));
 
     let playing_flag = Arc::clone(&is_playing);
@@ -43,6 +46,7 @@ fn spawn_playback_thread() -> (mpsc::Sender<PlaybackCmd>, Arc<AtomicBool>) {
             // Detect when sink finishes playing naturally
             if playing_flag.load(Ordering::Relaxed) && p.is_empty() && !p.is_paused() {
                 playing_flag.store(false, Ordering::Relaxed);
+                let _ = completion_tx.send(());
             }
 
             match rx.recv_timeout(std::time::Duration::from_millis(100)) {
@@ -77,7 +81,7 @@ fn spawn_playback_thread() -> (mpsc::Sender<PlaybackCmd>, Arc<AtomicBool>) {
         }
     });
 
-    (tx, is_playing)
+    (tx, is_playing, completion_rx)
 }
 
 /// Get voice_id from config, with default fallback.
@@ -198,9 +202,9 @@ fn prefetch_next_segment(
     }
 }
 
-/// Spawn a polling thread that auto-advances segments when playback finishes.
+/// Spawn an event-driven thread that auto-advances segments when playback finishes.
+/// Waits on completion_rx for playback completion signals instead of polling.
 fn spawn_auto_advance_thread(
-    is_playing_flag: &Arc<AtomicBool>,
     stop_flag: &Arc<AtomicBool>,
     playback_tx: &mpsc::Sender<PlaybackCmd>,
     segments: Vec<Segment>,
@@ -210,8 +214,8 @@ fn spawn_auto_advance_thread(
     config: &TtsConfig,
     cache: &Arc<TtsCache>,
     app: &tauri::AppHandle,
+    completion_rx: mpsc::Receiver<()>,
 ) {
-    let poll_playing = Arc::clone(is_playing_flag);
     let poll_stop = Arc::clone(stop_flag);
     let poll_tx = playback_tx.clone();
     let poll_app = app.clone();
@@ -221,54 +225,51 @@ fn spawn_auto_advance_thread(
         use crate::tauri_api::emitter::EventEmitter;
         let emitter = EventEmitter::new(&poll_app);
         let mut current_seg_idx: usize = 0;
-        let mut was_playing = true;
 
         loop {
             if poll_stop.load(Ordering::Relaxed) {
                 break;
             }
 
-            // Auto-advance when playback finishes
-            let currently_playing = poll_playing.load(Ordering::Relaxed);
-            if was_playing && !currently_playing && !poll_stop.load(Ordering::Relaxed) {
-                was_playing = false;
-                current_seg_idx += 1;
-                if current_seg_idx >= total_segments {
-                    emitter.tts_finished(&crate::tauri_api::events::TtsFinished {
-                        book_id: book_id.clone(),
-                        chapter_index,
-                    });
-                    break;
-                }
-                if let Some(next_seg) = segments.get(current_seg_idx) {
-                    if synthesize_and_play(
-                        next_seg,
-                        &book_id,
-                        chapter_index,
-                        &poll_config,
-                        &poll_cache,
-                        &poll_tx,
-                        &poll_app,
-                    )
-                    .is_err()
-                    {
+            match completion_rx.recv_timeout(std::time::Duration::from_secs(60)) {
+                Ok(()) => {
+                    if poll_stop.load(Ordering::Relaxed) {
                         break;
                     }
-                    emitter.tts_playing(&crate::tauri_api::events::TtsPlaying {
-                        book_id: book_id.clone(),
-                        chapter_index,
-                        segment_index: current_seg_idx,
-                        total_segments,
-                        paragraph_indices: next_seg.paragraph_indices.clone(),
-                    });
-                    was_playing = true;
+                    current_seg_idx += 1;
+                    if current_seg_idx >= total_segments {
+                        emitter.tts_finished(&crate::tauri_api::events::TtsFinished {
+                            book_id: book_id.clone(),
+                            chapter_index,
+                        });
+                        break;
+                    }
+                    if let Some(next_seg) = segments.get(current_seg_idx) {
+                        if synthesize_and_play(
+                            next_seg,
+                            &book_id,
+                            chapter_index,
+                            &poll_config,
+                            &poll_cache,
+                            &poll_tx,
+                            &poll_app,
+                        )
+                        .is_err()
+                        {
+                            break;
+                        }
+                        emitter.tts_playing(&crate::tauri_api::events::TtsPlaying {
+                            book_id: book_id.clone(),
+                            chapter_index,
+                            segment_index: current_seg_idx,
+                            total_segments,
+                            paragraph_indices: next_seg.paragraph_indices.clone(),
+                        });
+                    }
                 }
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
-
-            if poll_stop.load(Ordering::Relaxed) {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(200));
         }
     });
 }
@@ -338,13 +339,13 @@ pub async fn tts_start(
     }
 
     let total_segments = segments.len();
-    let (segments_for_poll, playback_tx, is_playing_flag, segment, paragraph_indices, prefetch_segment) = {
+    let (segments_for_poll, playback_tx, completion_rx, segment, paragraph_indices, prefetch_segment) = {
         let mut guard = tts_state.lock().map_err(|e| e.to_string())?;
         guard.segments = segments;
         let segments_for_poll = guard.segments.clone();
 
         // Spawn playback thread
-        let (playback_tx, is_playing_flag) = spawn_playback_thread();
+        let (playback_tx, is_playing_flag, completion_rx) = spawn_playback_thread();
         guard.playback_tx = Some(playback_tx.clone());
         guard.is_playing_flag = Arc::clone(&is_playing_flag);
 
@@ -358,7 +359,7 @@ pub async fn tts_start(
         guard.playback_state.current_chapter_index = Some(chapter_index);
         guard.playback_state.total_segments = total_segments;
 
-        (segments_for_poll, playback_tx, is_playing_flag, segment, paragraph_indices, prefetch_segment)
+        (segments_for_poll, playback_tx, completion_rx, segment, paragraph_indices, prefetch_segment)
     };
 
     // Synthesize and play segment 0 (off the async runtime to avoid blocking)
@@ -411,9 +412,8 @@ pub async fn tts_start(
         &cache,
     );
 
-    // Start polling thread for auto-advance
+    // Start event-driven auto-advance thread
     spawn_auto_advance_thread(
-        &is_playing_flag,
         &stop_flag,
         &playback_tx,
         segments_for_poll,
@@ -423,6 +423,7 @@ pub async fn tts_start(
         &config,
         &cache,
         &app,
+        completion_rx,
     );
 
     Ok(())

@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS reading_progress (
     session_read_seconds INTEGER NOT NULL DEFAULT 0,
     total_read_seconds   INTEGER NOT NULL DEFAULT 0,
     revision             INTEGER NOT NULL DEFAULT 0,
-    dirty                INTEGER NOT NULL DEFAULT 0
+    dirty                INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS bookmarks (
@@ -53,7 +54,8 @@ CREATE TABLE IF NOT EXISTS bookmarks (
     title           TEXT NOT NULL,
     snippet         TEXT NOT NULL,
     created_at      TEXT NOT NULL,
-    note            TEXT
+    note            TEXT,
+    FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_bookmarks_book ON bookmarks(book_id);
@@ -61,7 +63,8 @@ CREATE INDEX IF NOT EXISTS idx_bookmarks_book ON bookmarks(book_id);
 CREATE TABLE IF NOT EXISTS book_tags (
     book_id TEXT NOT NULL,
     tag     TEXT NOT NULL,
-    PRIMARY KEY (book_id, tag)
+    PRIMARY KEY (book_id, tag),
+    FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_book_tags_tag ON book_tags(tag);
@@ -75,7 +78,8 @@ CREATE TABLE IF NOT EXISTS reading_sessions (
     chapter_start  INTEGER NOT NULL,
     chapter_end    INTEGER NOT NULL,
     nav_events     INTEGER NOT NULL DEFAULT 0,
-    device_id      TEXT
+    device_id      TEXT,
+    FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_book  ON reading_sessions(book_id);
