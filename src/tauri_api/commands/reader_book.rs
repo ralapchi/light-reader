@@ -2,8 +2,8 @@ use crate::services::asset_service_impl::AssetServiceImpl;
 use crate::services::reader_service_impl::ReaderServiceImpl;
 
 use super::super::dto::*;
-use super::dto_convert::build_reader_book_dto;
 use super::BookSession;
+use super::dto_convert::build_reader_book_dto;
 
 #[tauri::command]
 pub fn reader_get_book(
@@ -68,6 +68,22 @@ pub async fn reader_open_book(
         });
         item.source_path.clone()
     };
+
+    {
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        if let Some(book) = guard.book.as_ref() {
+            if book.id == book_id {
+                let dto = build_reader_book_dto(book);
+                log::info!("复用已打开书籍: book={}", book_id);
+                emitter.book_opening_finished(&BookOpeningFinished {
+                    book_id: book_id.clone(),
+                    chapter_count: dto.chapter_count,
+                    load_duration_ms: start.elapsed().as_millis() as u64,
+                });
+                return Ok(dto);
+            }
+        }
+    }
 
     emitter.book_opening_progress(&BookOpeningProgress {
         book_id: book_id.clone(),

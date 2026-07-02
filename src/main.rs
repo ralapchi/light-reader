@@ -114,6 +114,7 @@ fn main() {
             // Settings
             settings_load,
             settings_save,
+            book_cache_clear,
             tts_config_load,
             tts_config_save,
             // Assets

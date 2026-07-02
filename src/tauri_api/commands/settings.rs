@@ -20,6 +20,15 @@ pub fn settings_save(settings: serde_json::Value) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn book_cache_clear() -> Result<(), String> {
+    let cache_dir = crate::storage::paths::book_cache_dir();
+    if cache_dir.exists() {
+        std::fs::remove_dir_all(&cache_dir).map_err(|e| e.to_string())?;
+    }
+    std::fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn tts_config_load() -> Result<TtsConfigDto, String> {
     let svc = SettingsServiceImpl::new();
     let config = svc.load_tts_config();

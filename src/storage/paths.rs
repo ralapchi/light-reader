@@ -19,6 +19,7 @@ pub(crate) fn app_data_dir() -> PathBuf {
 pub fn ensure_dirs() -> std::io::Result<()> {
     let base = app_data_dir();
     std::fs::create_dir_all(&base)?;
+    std::fs::create_dir_all(base.join("cache/books"))?;
     std::fs::create_dir_all(base.join("cache/covers"))?;
     std::fs::create_dir_all(base.join("cache/images"))?;
     std::fs::create_dir_all(base.join("cache/tts"))?;
@@ -33,6 +34,14 @@ pub fn cover_cache_path(book_id: &str, ext: &str) -> PathBuf {
     app_data_dir()
         .join("cache/covers")
         .join(format!("{}.{}", book_id, ext))
+}
+
+pub fn book_cache_path(book_id: &str) -> PathBuf {
+    book_cache_dir().join(format!("{}.json", book_id))
+}
+
+pub fn book_cache_dir() -> PathBuf {
+    app_data_dir().join("cache/books")
 }
 
 /// Probe the cover cache directory for any matching image extension.
