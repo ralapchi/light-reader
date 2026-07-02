@@ -67,23 +67,53 @@ impl TtsSynthesisService {
     /// Synthesize audio via the configured provider, write result to cache.
     /// Designed to be called from background threads — takes no `&self`,
     /// only explicit params so callers don't need a service handle.
+    /// Checks cache first; only calls the provider API on cache miss.
     pub fn synthesize_blocking(
         request: &TtsRequest,
         config: &TtsConfig,
         voice_id: &str,
         cache: &TtsCache,
     ) -> Result<TtsResponse, TtsError> {
-        let provider = create_provider_from_config(config);
-        let resp = provider.synthesize(request, config)?;
+        let provider_label = provider_cache_label(config);
         let path = cache.segment_path(
-            &provider_cache_label(config),
+            &provider_label,
             &request.book_id,
             request.chapter_index,
             request.segment_index,
             voice_id,
             "pcm16",
         );
-        let _ = cache.write(&path, &resp.audio_bytes);
+
+        // Check cache first — avoids redundant API calls during prefetch
+        if cache.exists(&path) {
+            match cache.read(&path) {
+                Ok(audio_bytes) => {
+                    log::info!(
+                        "TTS 缓存命中: book={} ch={} seg={}",
+                        &request.book_id,
+                        request.chapter_index,
+                        request.segment_index
+                    );
+                    return Ok(TtsResponse {
+                        audio_bytes,
+                        media_type: "audio/pcm16".to_string(),
+                        duration_ms: None,
+                    });
+                }
+                Err(e) => {
+                    log::warn!("TTS 缓存读取失败，重新合成: {}", e);
+                }
+            }
+        }
+
+        // Cache miss — synthesize via provider
+        let provider = create_provider_from_config(config);
+        let resp = provider.synthesize(request, config)?;
+
+        // Write to cache (best-effort)
+        if let Err(e) = cache.write(&path, &resp.audio_bytes) {
+            log::warn!("TTS 缓存写入失败: {}", e);
+        }
         cache.prune_if_over_limit();
         Ok(resp)
     }

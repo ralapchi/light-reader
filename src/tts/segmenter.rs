@@ -30,8 +30,11 @@ pub fn segment_chapter(
         if para_text.is_empty() {
             continue;
         }
-        // If adding this paragraph would exceed max_chars, flush current segment
-        if !current_text.is_empty() && current_text.len() + para_text.len() + 1 > max_chars {
+        // If adding this paragraph would exceed max_chars, flush current segment.
+        // Use char count (not byte length) so CJK text isn't split 3x too short.
+        if !current_text.is_empty()
+            && current_text.chars().count() + para_text.chars().count() + 1 > max_chars
+        {
             segments.push(Segment {
                 chapter_index,
                 segment_index,
@@ -198,5 +201,25 @@ mod tests {
         }];
         let segments = segment_chapter(0, &paras, 1000);
         assert_eq!(segments[0].char_count, 4);
+    }
+
+    #[test]
+    fn chinese_text_uses_char_count_not_byte_count() {
+        // 3 paragraphs, each 6 CJK chars (6 chars = 18 bytes in UTF-8)
+        let paras: Vec<Paragraph> = (0..3)
+            .map(|i| Paragraph {
+                index: i,
+                text: "你好世界测试".to_string(), // 6 chars = 18 bytes
+                kind: ParagraphKind::Body,
+                indent_level: 0,
+                source_line_hint: None,
+                links: Vec::new(),
+            })
+            .collect();
+        // max_chars=13: by char count → 2 segments (6+1+6=13 ≤ 13, 3rd triggers split)
+        // by byte count → 3 segments (18+18+1=37 > 13 every time)
+        let segments = segment_chapter(0, &paras, 13);
+        assert_eq!(segments.len(), 2, "CJK text should split by char count, not byte count");
+        assert_eq!(segments[0].char_count, 13); // 6 + '\n' + 6 = 13 chars
     }
 }

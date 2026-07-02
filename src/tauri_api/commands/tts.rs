@@ -2,7 +2,7 @@ use crate::tts::cache::TtsCache;
 use crate::tts::config::TtsConfig;
 use crate::tts::segmenter::Segment;
 use crate::tts::synthesis_service::TtsSynthesisService;
-use crate::tts::types::{PlaybackStatus, TtsRequest};
+use crate::tts::types::{PlaybackStatus, TtsRequest, TtsProviderKind};
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -88,10 +88,11 @@ fn tts_voice_id(config: &TtsConfig) -> String {
         .unwrap_or_else(|| "default_zh".to_string())
 }
 
-/// Get the max text length from a provider for the given config.
-/// TODO: query provider dynamically when multiple providers are supported.
-fn tts_max_text_length(_config: &TtsConfig) -> usize {
-    200 // Xiaomi provider limit
+/// Get the max text length for the configured provider.
+fn tts_max_text_length(config: &TtsConfig) -> usize {
+    match config.provider {
+        TtsProviderKind::Xiaomi => 500,
+    }
 }
 
 fn synthesize_and_play(
@@ -123,41 +124,20 @@ fn synthesize_and_play(
         voice_id: Some(voice_id.clone()),
     };
 
-    // Check cache first
-    let segment_path = cache.segment_path(
-        &format!("{:?}", config.provider).to_lowercase(),
-        book_id,
-        chapter_index,
-        segment.segment_index,
-        &voice_id,
-        "pcm16",
-    );
-    let audio_result = if segment_path.exists() {
-        std::fs::read(&segment_path)
-            .ok()
-            .map(|bytes| (bytes, "audio/pcm16".to_string()))
-    } else {
-        None
-    };
-
-    let (audio_bytes, media_type) = match audio_result {
-        Some(r) => r,
-        None => {
-            // Synthesize on current thread (blocking)
-            match TtsSynthesisService::synthesize_blocking(&request, config, &voice_id, cache) {
-                Ok(resp) => (resp.audio_bytes, resp.media_type),
-                Err(e) => {
-                    let msg = format!("TTS 合成失败: {}", e);
-                    log::error!("{}", msg);
-                    emitter.tts_error(&TtsError {
-                        book_id: Some(book_id.to_string()),
-                        error_message: msg.clone(),
-                    });
-                    return Err(msg);
-                }
+    // synthesize_blocking checks cache internally — no manual check needed here
+    let (audio_bytes, media_type) =
+        match TtsSynthesisService::synthesize_blocking(&request, config, &voice_id, cache) {
+            Ok(resp) => (resp.audio_bytes, resp.media_type),
+            Err(e) => {
+                let msg = format!("TTS 合成失败: {}", e);
+                log::error!("{}", msg);
+                emitter.tts_error(&TtsError {
+                    book_id: Some(book_id.to_string()),
+                    error_message: msg.clone(),
+                });
+                return Err(msg);
             }
-        }
-    };
+        };
 
     // Send to playback thread
     playback_tx
