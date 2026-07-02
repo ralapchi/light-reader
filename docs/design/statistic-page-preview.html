@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>阅读统计 - 轻看</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500;600&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #FAF8F5; --surface: #FFFFFF; --text-primary: #1A1A1A;
+    --text-secondary: #8A8680; --text-tertiary: #B5AFA8;
+    --accent: #C8553D; --accent-soft: #F2E0D9; --border: #E8E4DF;
+    --radius: 12px;
+    --gold: #b8915a; --gold-lt: #e8d4b0;
+    font-family: "DM Sans", "PingFang SC", -apple-system, sans-serif;
+    color: var(--text-primary); background: var(--bg);
+  }
+  body { min-height: 100vh; display: flex; }
+
+  /* ── Sidebar ── */
+  .sidebar { width: 160px; min-height: 100vh; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; display: flex; flex-direction: column; flex-shrink: 0; }
+  .sidebar-brand { font-family: "Noto Serif SC", serif; font-size: 20px; font-weight: 700; padding: 0 8px 20px; }
+  .sidebar-section-title { font-size: 11px; color: var(--text-tertiary); padding: 16px 8px 6px; letter-spacing: 0.5px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; font-size: 14px; color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
+  .sidebar-item:hover { background: #F5F2EE; color: var(--text-primary); }
+  .sidebar-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .sidebar-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+  .main { flex: 1; overflow-y: auto; padding: 28px 32px 60px; display: flex; flex-direction: column; }
+
+  /* ── Header ── */
+  .page-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 28px; }
+  .page-header h1 { font-size: 22px; font-weight: 700; }
+  .week-tag { font-size: 12px; color: var(--text-tertiary); }
+
+  /* ── Section Head ── */
+  .sh { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .sh-title { font-size: 11px; color: var(--text-tertiary); letter-spacing: 0.1em; white-space: nowrap; text-transform: uppercase; }
+  .sh-line { flex: 1; height: 1px; background: var(--border); }
+
+  /* ── Tag Cloud ── */
+  .tag-cloud { position: relative; min-height: 120px; }
+  .tag-cloud span { position: absolute; line-height: 1.3; cursor: default; transition: color 0.2s, transform 0.2s; white-space: nowrap; }
+  .tag-cloud span:hover { color: var(--text-primary) !important; transform: scale(1.1) !important; }
+
+  /* ── Hero Row ── */
+  .hero-row { display: grid; grid-template-columns: 200px 1fr; gap: 16px; margin-bottom: 24px; }
+
+  .rings-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  }
+  .rings-wrap { position: relative; width: 130px; height: 130px; }
+  .rings-svg { width: 130px; height: 130px; transform: rotate(-90deg); }
+  .ring-track { fill: none; stroke: var(--border); }
+  .ring-fill { fill: none; stroke-linecap: round; }
+  .ring-fill.r0 { stroke: #d0c8be; stroke-width: 7; cursor: pointer; }
+  .ring-fill.r0:hover { stroke: #b5a899; }
+  .ring-fill.r1 { stroke: var(--accent); stroke-width: 10; }
+  .ring-fill.r2 { stroke: var(--gold); stroke-width: 7; }
+  .rings-center-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+  .rings-center-text .big { font-size: 24px; font-weight: 700; line-height: 1; font-family: "Noto Serif SC", serif; }
+  .rings-center-text .sub { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+  .ring-legend { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+  .ring-legend-row { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-secondary); }
+  .ring-legend-row .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .ring-legend-row strong { color: var(--text-primary); margin-left: auto; }
+
+  .report-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px 28px;
+    display: flex; flex-direction: row; gap: 24px;
+  }
+  .report-left { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; }
+  .report-right { flex: 1; display: flex; flex-direction: column; justify-content: space-between; padding-left: 24px; border-left: 1px solid var(--border); }
+  .report-headline { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+  .report-headline .num { font-size: 34px; font-weight: 300; color: var(--text-primary); line-height: 1.1; font-family: "Noto Serif SC", serif; }
+  .report-headline em { font-style: normal; color: var(--gold); font-weight: 500; }
+  .report-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .rs-item { text-align: center; }
+  .rs-val { font-size: 18px; font-weight: 600; color: var(--text-primary); font-family: "Noto Serif SC", serif; }
+  .rs-lbl { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; letter-spacing: 0.05em; }
+
+  /* ── Personality ── */
+  .personality-card {
+    background: var(--text-primary); border-radius: var(--radius);
+    padding: 22px 28px; margin-bottom: 24px;
+    display: flex; align-items: center; gap: 28px;
+    position: relative; overflow: hidden;
+  }
+  .personality-card::before {
+    content: ''; position: absolute; right: -20px; top: -20px;
+    width: 120px; height: 120px; border-radius: 50%;
+    background: rgba(184,145,90,0.1);
+  }
+  .p-left { flex-shrink: 0; }
+  .p-eyebrow { font-size: 10px; color: var(--gold); letter-spacing: 0.15em; margin-bottom: 4px; }
+  .p-title { font-size: 22px; font-weight: 500; color: #FAF8F5; font-family: "Noto Serif SC", serif; letter-spacing: 0.05em; }
+  .p-divider { width: 1px; height: 48px; background: rgba(255,255,255,0.1); flex-shrink: 0; }
+  .p-right { flex: 1; }
+  .p-desc { font-size: 13px; color: rgba(250,248,245,0.5); line-height: 1.7; margin-bottom: 10px; }
+  .p-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .p-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 11px; border-radius: 10px; font-size: 11px; border: 1px solid rgba(184,145,90,0.35); color: var(--gold-lt); letter-spacing: 0.03em; }
+
+  /* ── Trend + Books ── */
+  .trend-row-wrap { display: grid; grid-template-columns: 1fr 280px; gap: 16px; margin-bottom: 24px; flex: 1; min-height: 0; }
+
+  .trend-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; display: flex; flex-direction: column; }
+  .card-title { font-size: 11px; color: var(--text-tertiary); letter-spacing: 0.1em; margin-bottom: 14px; text-transform: uppercase; }
+  .trend-list { flex: 1; display: flex; flex-direction: column; justify-content: space-around; }
+  .trend-item { display: flex; align-items: center; gap: 10px; }
+  .trend-label { width: 36px; font-size: 12px; color: var(--text-tertiary); text-align: right; flex-shrink: 0; }
+  .trend-label.today { color: var(--gold); font-weight: 600; }
+  .trend-track { flex: 1; height: 22px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+  .trend-bar { height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding: 0 8px; font-size: 10px; font-weight: 600; color: #fff; min-width: 20px; }
+  .trend-bar.tb { background: var(--gold-lt); }
+  .trend-bar.tb-peak { background: var(--gold); }
+
+  .books-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; display: flex; flex-direction: column; }
+  .books-card .book-list { flex: 1; display: flex; flex-direction: column; justify-content: space-around; }
+  .book-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .book-item:last-child { border-bottom: none; }
+  .book-rank { font-size: 12px; color: var(--gold-lt); font-family: "Noto Serif SC", serif; width: 16px; text-align: center; flex-shrink: 0; }
+  .book-item:first-child .book-rank { color: var(--gold); font-size: 15px; }
+  .book-spine { width: 5px; border-radius: 1px; align-self: stretch; flex-shrink: 0; min-height: 32px; }
+  .book-info { flex: 1; min-width: 0; }
+  .book-name { font-size: 13px; font-weight: 500; }
+  .book-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+  .book-time { font-size: 13px; color: var(--gold); font-family: "Noto Serif SC", serif; flex-shrink: 0; }
+
+  /* ── Bottom: Milestone Timeline ── */
+  .milestone-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 32px 24px; overflow-x: auto; }
+  .milestone-track { display: flex; align-items: flex-start; justify-content: space-between; position: relative; min-width: 700px; padding-top: 20px; }
+  .milestone-line { position: absolute; top: 24px; left: 24px; right: 24px; height: 2px; background: var(--border); }
+  .ms { display: flex; flex-direction: column; align-items: center; position: relative; flex: 1; min-width: 0; padding-top: 24px; }
+  .ms-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); border: 2px solid var(--surface); position: absolute; top: -10px; z-index: 1; }
+  .ms.done .ms-dot { background: var(--gold); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .ms.done.book .ms-dot { background: #7a8a6a; box-shadow: 0 0 0 3px rgba(122,138,106,0.2); }
+  .ms.active .ms-dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); animation: pulse 2s infinite; }
+  .ms.active.book .ms-dot { background: #7a8a6a; box-shadow: 0 0 0 3px rgba(122,138,106,0.2); animation: pulse-book 2s infinite; }
+  @keyframes pulse-book { 0%, 100% { box-shadow: 0 0 0 3px rgba(122,138,106,0.2); } 50% { box-shadow: 0 0 0 6px rgba(122,138,106,0.12); } }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft); } 50% { box-shadow: 0 0 0 6px rgba(200,85,61,0.15); } }
+  .ms-label { font-size: 11px; font-weight: 500; color: var(--text-primary); text-align: center; white-space: nowrap; }
+  .ms:not(.done):not(.active) .ms-label { color: var(--text-tertiary); }
+  .ms.active .ms-label { color: var(--accent); font-weight: 600; }
+  .ms-date { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; text-align: center; white-space: nowrap; }
+  .ms.active .ms-date { color: var(--accent); }
+
+  @keyframes up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .hero-row { animation: up 0.4s ease both; }
+  .personality-card { animation: up 0.4s ease 0.05s both; }
+  .trend-row-wrap { animation: up 0.4s ease 0.1s both; }
+  .milestone-card { animation: up 0.4s ease 0.15s both; }
+</style>
+</head>
+<body>
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">轻看</div>
+    <div class="sidebar-section-title">书库</div>
+    <div class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>全部</span></div>
+    <div class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg><span>书签</span></div>
+    <div class="sidebar-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span>统计</span></div>
+    <div class="sidebar-section-title">设置</div>
+    <div class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>设置</span></div>
+  </nav>
+
+  <main class="main">
+
+    <div class="page-header">
+      <h1>阅读统计</h1>
+      <div class="week-tag">6 月 9 日 — 6 月 15 日</div>
+    </div>
+
+    <!-- Hero -->
+    <div class="hero-row">
+      <div class="rings-card">
+        <div class="rings-wrap">
+          <svg class="rings-svg" viewBox="0 0 200 200">
+            <circle class="ring-track" cx="100" cy="100" r="84" stroke-width="7"/>
+            <circle class="ring-track" cx="100" cy="100" r="70" stroke-width="10"/>
+            <circle class="ring-track" cx="100" cy="100" r="56" stroke-width="7"/>
+            <circle class="ring-fill r0" cx="100" cy="100" r="84" stroke-dasharray="528" stroke-dashoffset="211">
+              <title>14:00</title>
+            </circle>
+            <circle class="ring-fill r2" cx="100" cy="100" r="70" stroke-dasharray="440" stroke-dashoffset="110"/>
+            <circle class="ring-fill r1" cx="100" cy="100" r="56" stroke-dasharray="352" stroke-dashoffset="123"/>
+          </svg>
+          <div class="rings-center-text">
+            <div class="big">Lv.5</div>
+          </div>
+        </div>
+        <div class="ring-legend">
+          <div class="ring-legend-row"><span class="dot" style="background:var(--accent)"></span>升级进度<strong>65%</strong></div>
+          <div class="ring-legend-row"><span class="dot" style="background:var(--gold)"></span>今日经验<strong>420 / 500</strong></div>
+        </div>
+      </div>
+
+      <div class="report-card">
+        <div class="report-left">
+          <div class="report-headline">
+            本周你花了 <span class="num">12.6</span> 小时<br/>
+            连续阅读 <em>7 天</em>，日均 <em>1 小时 48 分钟</em>。
+          </div>
+        </div>
+        <div class="report-right">
+          <div class="tag-cloud" id="tagCloud"></div>
+          <div class="report-stats">
+            <div class="rs-item"><div class="rs-val">12h 36m</div><div class="rs-lbl">阅读时长</div></div>
+            <div class="rs-item"><div class="rs-val">7</div><div class="rs-lbl">连续天数</div></div>
+            <div class="rs-item"><div class="rs-val">1h 48m</div><div class="rs-lbl">日均阅读</div></div>
+            <div class="rs-item"><div class="rs-val">49 页</div><div class="rs-lbl">日均翻阅</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Personality -->
+    <div class="sh"><span class="sh-title">本周阅读人格</span><div class="sh-line"></div></div>
+    <section class="personality-card">
+      <div class="p-left">
+        <div class="p-eyebrow">READING PERSONA</div>
+        <div class="p-title">深夜沉浸者</div>
+      </div>
+      <div class="p-divider"></div>
+      <div class="p-right">
+        <div class="p-desc">62% 的阅读发生在 18 点之后，偏好长篇连续阅读，单次平均阅读 1.5 小时。</div>
+        <div class="p-badges">
+          <span class="p-badge">夜猫子</span>
+          <span class="p-badge">沉浸阅读</span>
+          <span class="p-badge">7 天全勤</span>
+          <span class="p-badge">长篇偏好</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Trend + Books -->
+    <div class="sh"><span class="sh-title">每日趋势 & 本周最爱</span><div class="sh-line"></div></div>
+    <div class="trend-row-wrap">
+      <div class="trend-card">
+        <div class="trend-list">
+          <div class="trend-item">
+            <div class="trend-label today">今天</div>
+            <div class="trend-track"><div class="trend-bar tb" style="width:18%"></div></div>
+          </div>
+          <div class="trend-item">
+            <div class="trend-label">周六</div>
+            <div class="trend-track"><div class="trend-bar tb-peak" style="width:100%">3.0h</div></div>
+          </div>
+          <div class="trend-item">
+            <div class="trend-label">周五</div>
+            <div class="trend-track"><div class="trend-bar tb" style="width:60%">1.8h</div></div>
+          </div>
+          <div class="trend-item">
+            <div class="trend-label">周四</div>
+            <div class="trend-track"><div class="trend-bar tb-peak" style="width:83%">2.5h</div></div>
+          </div>
+          <div class="trend-item">
+            <div class="trend-label">周三</div>
+            <div class="trend-track"><div class="trend-bar tb" style="width:40%">1.2h</div></div>
+          </div>
+          <div class="trend-item">
+            <div class="trend-label">周二</div>
+            <div class="trend-track"><div class="trend-bar tb-peak" style="width:67%">2.0h</div></div>
+          </div>
+          <div class="trend-item">
+            <div class="trend-label">周一</div>
+            <div class="trend-track"><div class="trend-bar tb" style="width:50%">1.5h</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="books-card">
+        <div class="book-list">
+          <div class="book-item">
+            <div class="book-rank">1</div>
+            <div class="book-spine" style="background:#8a7a60"></div>
+            <div class="book-info"><div class="book-name">西游记</div><div class="book-meta">吴承恩 · 读至第 68 章</div></div>
+            <div class="book-time">5h 20m</div>
+          </div>
+          <div class="book-item">
+            <div class="book-rank">2</div>
+            <div class="book-spine" style="background:#6a8060"></div>
+            <div class="book-info"><div class="book-name">红楼梦</div><div class="book-meta">曹雪芹 · 读至第 35 章</div></div>
+            <div class="book-time">4h 10m</div>
+          </div>
+          <div class="book-item">
+            <div class="book-rank">3</div>
+            <div class="book-spine" style="background:#706080"></div>
+            <div class="book-info"><div class="book-name">三体</div><div class="book-meta">刘慈欣 · 读至第 92 章</div></div>
+            <div class="book-time">2h 45m</div>
+          </div>
+          <div class="book-item">
+            <div class="book-rank">4</div>
+            <div class="book-spine" style="background:#806a50"></div>
+            <div class="book-info"><div class="book-name">围城</div><div class="book-meta">钱钟书 · 读至第 15 章</div></div>
+            <div class="book-time">21m</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Milestones -->
+    <div class="sh"><span class="sh-title">阅读里程碑</span><div class="sh-line"></div></div>
+    <div class="milestone-card">
+      <div class="milestone-track">
+        <div class="milestone-line"></div>
+        <div class="ms done"><div class="ms-dot"></div><div class="ms-label">1 小时</div><div class="ms-date">3月12日</div></div>
+        <div class="ms done book"><div class="ms-dot"></div><div class="ms-label">1 本</div><div class="ms-date">4月18日</div></div>
+        <div class="ms done"><div class="ms-dot"></div><div class="ms-label">10 小时</div><div class="ms-date">5月20日</div></div>
+        <div class="ms active"><div class="ms-dot"></div><div class="ms-label">50 小时</div><div class="ms-date">12.6 / 50</div></div>
+        <div class="ms book"><div class="ms-dot"></div><div class="ms-label">5 本</div><div class="ms-date">1 / 5</div></div>
+        <div class="ms"><div class="ms-dot"></div><div class="ms-label">100 小时</div><div class="ms-date">12.6 / 100</div></div>
+        <div class="ms book"><div class="ms-dot"></div><div class="ms-label">10 本</div><div class="ms-date">1 / 10</div></div>
+        <div class="ms"><div class="ms-dot"></div><div class="ms-label">500 小时</div><div class="ms-date">12.6 / 500</div></div>
+        <div class="ms book"><div class="ms-dot"></div><div class="ms-label">50 本</div><div class="ms-date">1 / 50</div></div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // ── Tag Cloud ──
+    requestAnimationFrame(function() { (function() {
+      var tags = [
+        { name: '古典文学', w: 5.2 },
+        { name: '小说', w: 4.1 },
+        { name: '科幻', w: 2.45 },
+        { name: '散文', w: 1.2 },
+        { name: '历史', w: 0.8 },
+        { name: '诗词', w: 0.6 },
+        { name: '哲学', w: 0.45 },
+        { name: '纪实', w: 0.3 },
+        { name: '游记', w: 0.25 },
+      ];
+      var maxW = tags[0].w, minW = tags[tags.length - 1].w;
+      var minSize = 10, maxSize = 24;
+      var weights = [300, 400, 500, 600];
+      var tc = document.getElementById('tagCloud');
+      var cw = tc.offsetWidth, ch = 120;
+      // Fisher-Yates shuffle
+      for (var i = tags.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = tags[i]; tags[i] = tags[j]; tags[j] = tmp;
+      }
+      // Place tags with simple collision avoidance
+      var placed = [];
+      tags.forEach(function(t) {
+        var span = document.createElement('span');
+        var ratio = (t.w - minW) / (maxW - minW || 1);
+        var size = minSize + ratio * (maxSize - minSize);
+        var weight = weights[Math.min(Math.floor(ratio * weights.length), weights.length - 1)];
+        var useGold = ratio > 0.6 && Math.random() > 0.3;
+        span.style.fontSize = size.toFixed(1) + 'px';
+        span.style.fontWeight = weight;
+        span.style.color = useGold ? 'var(--gold)' : 'var(--text-tertiary)';
+        span.style.opacity = (0.3 + ratio * 0.6).toFixed(2);
+        span.textContent = t.name;
+        tc.appendChild(span);
+        // Estimate rendered size
+        var tw = span.offsetWidth || t.name.length * size * 0.6;
+        var th = size * 1.4;
+        // Find a non-overlapping position
+        var bestX = 0, bestY = 0, found = false;
+        for (var attempt = 0; attempt < 60; attempt++) {
+          var x = Math.random() * Math.max(0, cw - tw);
+          var y = Math.random() * Math.max(0, ch - th);
+          var overlap = false;
+          for (var k = 0; k < placed.length; k++) {
+            var p = placed[k];
+            if (x < p.x + p.w + 4 && x + tw + 4 > p.x && y < p.y + p.h + 2 && y + th + 2 > p.y) {
+              overlap = true; break;
+            }
+          }
+          if (!overlap) { bestX = x; bestY = y; found = true; break; }
+        }
+        if (!found) { bestX = Math.random() * Math.max(0, cw - tw); bestY = Math.random() * Math.max(0, ch - th); }
+        var rot = (Math.random() - 0.5) * 20;
+        var skew = (Math.random() - 0.5) * 8;
+        span.style.left = bestX.toFixed(1) + 'px';
+        span.style.top = bestY.toFixed(1) + 'px';
+        span.style.transform = 'rotate(' + rot.toFixed(1) + 'deg) skewX(' + skew.toFixed(1) + 'deg)';
+        placed.push({ x: bestX, y: bestY, w: tw, h: th });
+      });
+    })(); });
+  </script>
+</body>
+</html>
