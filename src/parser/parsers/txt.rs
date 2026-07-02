@@ -10,6 +10,34 @@ use crate::parser::parsers::base::{BookParser, ParseResult};
 use std::fs::File;
 use std::io::Read;
 
+/// 检测编码并解码为 UTF-8 字符串
+///
+/// 检测顺序：BOM (UTF-8/UTF-16) → UTF-8 有效性 → GBK 回退
+fn decode_text(raw: &[u8]) -> String {
+    // UTF-8 BOM
+    if raw.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        return String::from_utf8_lossy(&raw[3..]).into_owned();
+    }
+    // UTF-16 LE/BE BOM
+    if raw.starts_with(&[0xFF, 0xFE]) || raw.starts_with(&[0xFE, 0xFF]) {
+        let (cow, _, _) = encoding_rs::UTF_16LE.decode(raw);
+        return cow.into_owned();
+    }
+
+    // 尝试 UTF-8
+    if let Ok(s) = std::str::from_utf8(raw) {
+        return s.to_string();
+    }
+
+    // 回退到 GBK（中文 TXT 最常见的非 UTF-8 编码）
+    log::info!("文件非 UTF-8 编码，尝试 GBK 解码");
+    let (cow, _, had_errors) = encoding_rs::GBK.decode(raw);
+    if had_errors {
+        log::warn!("GBK 解码存在不可识别字符");
+    }
+    cow.into_owned()
+}
+
 /// Skip a number prefix (Arabic digits or Chinese numerals), returning the remainder.
 fn skip_number(s: &str) -> &str {
     // Arabic digits
@@ -188,12 +216,16 @@ impl BookParser for TxtParser {
             err.recoverable = true;
             err
         })?;
-        let mut content_str = String::new();
-        file.read_to_string(&mut content_str).map_err(|e| {
+
+        // 读取原始字节，检测编码后解码为 UTF-8
+        let mut raw_bytes = Vec::new();
+        file.read_to_end(&mut raw_bytes).map_err(|e| {
             let mut err = AppError::with_detail(error_codes::FILE_OPEN_FAILED, "文件读取失败", e.to_string());
             err.recoverable = true;
             err
         })?;
+
+        let content_str = decode_text(&raw_bytes);
 
         let lines: Vec<&str> = content_str.lines().collect();
 

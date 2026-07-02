@@ -301,7 +301,7 @@ fn reset_playback_state(
 }
 
 #[tauri::command]
-pub fn tts_start(
+pub async fn tts_start(
     chapter_index: usize,
     book_state: tauri::State<'_, BookSession>,
     tts_state: tauri::State<'_, TtsSessionLock>,
@@ -338,36 +338,44 @@ pub fn tts_start(
     }
 
     let total_segments = segments.len();
-    let mut guard = tts_state.lock().map_err(|e| e.to_string())?;
-    guard.segments = segments;
-    let segments_for_poll = guard.segments.clone();
+    let (segments_for_poll, playback_tx, is_playing_flag, segment, paragraph_indices, prefetch_segment) = {
+        let mut guard = tts_state.lock().map_err(|e| e.to_string())?;
+        guard.segments = segments;
+        let segments_for_poll = guard.segments.clone();
 
-    // Spawn playback thread
-    let (playback_tx, is_playing_flag) = spawn_playback_thread();
-    guard.playback_tx = Some(playback_tx.clone());
-    guard.is_playing_flag = Arc::clone(&is_playing_flag);
+        // Spawn playback thread
+        let (playback_tx, is_playing_flag) = spawn_playback_thread();
+        guard.playback_tx = Some(playback_tx.clone());
+        guard.is_playing_flag = Arc::clone(&is_playing_flag);
 
-    // Prepare first segment and prefetch target
-    let segment = guard.segments[0].clone();
-    let paragraph_indices = segment.paragraph_indices.clone();
-    let prefetch_segment = guard.segments.get(1).cloned();
+        // Prepare first segment and prefetch target
+        let segment = guard.segments[0].clone();
+        let paragraph_indices = segment.paragraph_indices.clone();
+        let prefetch_segment = guard.segments.get(1).cloned();
 
-    guard.playback_state.status = PlaybackStatus::Buffering;
-    guard.playback_state.current_book_id = Some(book_id.clone());
-    guard.playback_state.current_chapter_index = Some(chapter_index);
-    guard.playback_state.total_segments = total_segments;
-    drop(guard);
+        guard.playback_state.status = PlaybackStatus::Buffering;
+        guard.playback_state.current_book_id = Some(book_id.clone());
+        guard.playback_state.current_chapter_index = Some(chapter_index);
+        guard.playback_state.total_segments = total_segments;
 
-    // Synthesize and play segment 0
-    if let Err(e) = synthesize_and_play(
-        &segment,
-        &book_id,
-        chapter_index,
-        &config,
-        &cache,
-        &playback_tx,
-        &app,
-    ) {
+        (segments_for_poll, playback_tx, is_playing_flag, segment, paragraph_indices, prefetch_segment)
+    };
+
+    // Synthesize and play segment 0 (off the async runtime to avoid blocking)
+    let seg = segment.clone();
+    let bid = book_id.clone();
+    let cfg = config.clone();
+    let c = Arc::clone(&cache);
+    let ptx = playback_tx.clone();
+    let app_clone = app.clone();
+
+    let synth_result = tauri::async_runtime::spawn_blocking(move || {
+        synthesize_and_play(&seg, &bid, chapter_index, &cfg, &c, &ptx, &app_clone)
+    })
+    .await
+    .map_err(|e| format!("TTS 合成任务失败: {}", e))?;
+
+    if let Err(e) = synth_result {
         let mut guard = tts_state.lock().map_err(|lock_err| lock_err.to_string())?;
         guard.stop_flag.store(true, Ordering::Relaxed);
         guard.playback_state.status = PlaybackStatus::Error(e.clone());
