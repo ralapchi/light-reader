@@ -11,6 +11,8 @@ function errorMessage(error: unknown): string {
   return '打开书籍失败'
 }
 
+const MIN_FAST_OPEN_LOADING_MS = 300
+
 export function useLoadingPage() {
   const { bookId } = useParams<{ bookId: string }>()
   const navigate = useNavigate()
@@ -55,15 +57,15 @@ export function useLoadingPage() {
 
       if (cancelledRef.current) return
 
-      const elapsed = Date.now() - startTime
-      const remaining = Math.max(0, 600 - elapsed)
-      if (remaining > 0) await new Promise(r => setTimeout(r, remaining))
-
-      if (cancelledRef.current) return
-
       const resumeChapter = saved?.chapter_index ?? 0
       const clamped = Math.min(resumeChapter, readerBook.chapter_count - 1)
       const chapter = await readerGetChapter(clamped)
+
+      if (cancelledRef.current) return
+
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, MIN_FAST_OPEN_LOADING_MS - elapsed)
+      if (remaining > 0) await new Promise(r => setTimeout(r, remaining))
 
       if (cancelledRef.current) return
 

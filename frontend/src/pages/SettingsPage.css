@@ -485,6 +485,30 @@
   color: white;
 }
 
+.settings-action-btn.compact {
+  flex: 0 0 auto;
+  min-width: 92px;
+}
+
+.settings-row-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-action-status {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-action-status.success {
+  color: #2F7A44;
+}
+
+.settings-action-status.error {
+  color: #B4432F;
+}
+
 .settings-inline-status {
   padding: 9px 10px;
   border-radius: 6px;

@@ -14,6 +14,8 @@ function SettingsPage() {
     activeFont,
     activeSection,
     activeTheme,
+    bookCacheClearStatus,
+    clearBookCache,
     clearTtsCache,
     handleTtsSave,
     previewFontFamily,
@@ -371,6 +373,23 @@ function SettingsPage() {
                 <div className="settings-row">
                   <span className="settings-label">格式支持</span>
                   <span className="settings-value-text">EPUB, TXT</span>
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label-block">
+                    <span className="settings-label">清理缓存</span>
+                  </span>
+                  <div className="settings-row-action">
+                    {bookCacheClearStatus !== 'idle' && (
+                      <span className={`settings-action-status ${bookCacheClearStatus}`}>
+                        {bookCacheClearStatus === 'success' ? '已清理' : '清理失败'}
+                      </span>
+                    )}
+                    <button
+                      className="settings-action-btn compact"
+                      type="button"
+                      onClick={clearBookCache}
+                    >清理缓存</button>
+                  </div>
                 </div>
               </div>
             </div>

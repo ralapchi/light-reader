@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ttsClearCache, ttsConfigLoad, ttsConfigSave, ttsTestConnection } from '../../services/api'
+import { bookCacheClear, ttsClearCache, ttsConfigLoad, ttsConfigSave, ttsTestConnection } from '../../services/api'
 import type { TtsConfigDto } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
 import { findReaderFont, findReaderTheme, readerFontFamily } from '../../utils/readerOptions'
@@ -7,6 +7,7 @@ import { useSettingsPersistence } from '../../hooks/useSettingsPersistence'
 
 export type SettingsSection = 'general' | 'tts' | 'reading' | 'about'
 export type TtsTestStatus = 'idle' | 'success' | 'error'
+export type CacheClearStatus = 'idle' | 'success' | 'error'
 
 export function useSettingsPage() {
   const setSidebarFooter = useAppStore(s => s.setSidebarFooter)
@@ -15,6 +16,7 @@ export function useSettingsPage() {
   const [ttsConfig, setTtsConfig] = useState<TtsConfigDto | null>(null)
   const [ttsLoaded, setTtsLoaded] = useState(false)
   const [ttsTestStatus, setTtsTestStatus] = useState<TtsTestStatus>('idle')
+  const [bookCacheClearStatus, setBookCacheClearStatus] = useState<CacheClearStatus>('idle')
 
   useEffect(() => {
     setSidebarFooter('设置')
@@ -56,12 +58,24 @@ export function useSettingsPage() {
     setTtsTestStatus(ok ? 'success' : 'error')
   }, [ttsConfig])
 
+  const clearBookCache = useCallback(async () => {
+    setBookCacheClearStatus('idle')
+    try {
+      await bookCacheClear()
+      setBookCacheClearStatus('success')
+    } catch {
+      setBookCacheClearStatus('error')
+    }
+  }, [])
+
   const updateAndSave = useSettingsPersistence()
 
   return {
     activeFont: findReaderFont(settings.font_family)?.label ?? '自定义',
     activeSection,
     activeTheme: findReaderTheme(settings.theme),
+    bookCacheClearStatus,
+    clearBookCache,
     clearTtsCache: ttsClearCache,
     handleTtsSave,
     previewFontFamily: readerFontFamily(settings.font_family),

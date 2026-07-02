@@ -257,6 +257,10 @@ export function settingsSave(settings: ReaderSettings): Promise<void> {
   return invoke('settings_save', { settings })
 }
 
+export function bookCacheClear(): Promise<void> {
+  return invoke('book_cache_clear')
+}
+
 export function ttsConfigLoad(): Promise<TtsConfigDto> {
   return invoke('tts_config_load')
 }
