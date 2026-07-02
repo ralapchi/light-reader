@@ -10,11 +10,7 @@ pub struct LibraryServiceImpl;
 impl LibraryServiceImpl {
     /// Parse a single book file and produce a LibraryItem for the index.
     pub fn parse_book_item(path: &str, imported_at: &str) -> AppResult<LibraryItem> {
-        let format = if path.ends_with(".epub") {
-            BookFormat::Epub
-        } else {
-            BookFormat::Txt
-        };
+        let format = BookFormat::from_path(path).unwrap_or(BookFormat::Txt);
 
         let parser = ParserFactory::get_parser(path).ok_or_else(|| {
             let mut err = AppError::new(error_codes::UNSUPPORTED_FORMAT, "不支持的文件格式");

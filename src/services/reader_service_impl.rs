@@ -30,11 +30,7 @@ impl ReaderServiceImpl {
 
         let result = parser.parse(path)?;
 
-        let format = if path.ends_with(".epub") {
-            BookFormat::Epub
-        } else {
-            BookFormat::Txt
-        };
+        let format = BookFormat::from_path(path).unwrap_or(BookFormat::Txt);
 
         let chapters = result
             .content

@@ -146,7 +146,7 @@ impl EpubParser {
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 let attr_name = attr.key.as_ref();
-                                if attr_name.starts_with(&b"style"[..]) {
+                                if attr_name.eq_ignore_ascii_case(b"style") {
                                     if let Ok(value) = std::str::from_utf8(attr.value.as_ref()) {
                                         if value.contains("text-indent") {
                                             text_indent = true;
@@ -303,9 +303,9 @@ impl EpubParser {
                     let name = qname.as_ref();
 
                     // h1-h3 标签
-                    if name.starts_with(&b"h1"[..])
-                        || name.starts_with(&b"h2"[..])
-                        || name.starts_with(&b"h3"[..])
+                    if name.eq_ignore_ascii_case(b"h1")
+                        || name.eq_ignore_ascii_case(b"h2")
+                        || name.eq_ignore_ascii_case(b"h3")
                     {
                         if depth == 0 {
                             h_title.clear();
@@ -314,7 +314,7 @@ impl EpubParser {
                     }
 
                     // <title> 标签
-                    if name.starts_with(&b"title"[..]) {
+                    if name.eq_ignore_ascii_case(b"title") {
                         in_title_tag = true;
                         html_title.clear();
                     }
@@ -342,9 +342,9 @@ impl EpubParser {
                     let qname = e.name();
                     let name = qname.as_ref();
 
-                    if name.starts_with(&b"h1"[..])
-                        || name.starts_with(&b"h2"[..])
-                        || name.starts_with(&b"h3"[..])
+                    if name.eq_ignore_ascii_case(b"h1")
+                        || name.eq_ignore_ascii_case(b"h2")
+                        || name.eq_ignore_ascii_case(b"h3")
                     {
                         if depth > 0 {
                             depth -= 1;
@@ -354,7 +354,7 @@ impl EpubParser {
                         }
                     }
 
-                    if name.starts_with(&b"title"[..]) {
+                    if name.eq_ignore_ascii_case(b"title") {
                         in_title_tag = false;
                     }
 
