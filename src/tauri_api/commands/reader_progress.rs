@@ -114,20 +114,20 @@ pub fn reader_get_progress(
     book_id: String,
     progress_state: tauri::State<'_, super::ProgressState>,
     db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
-) -> Option<SaveProgressDto> {
+) -> Result<Option<SaveProgressDto>, String> {
     let progress = {
-        let mut progress_map = progress_state.lock().ok()?;
+        let mut progress_map = progress_state.lock().map_err(|e| e.to_string())?;
         if let Some(progress) = progress_map.get(&book_id) {
             Some(progress.clone())
         } else {
-            let saved = db.progress().load(&book_id).ok().flatten();
+            let saved = db.progress().load(&book_id)?;
             if let Some(progress) = saved.as_ref() {
                 progress_map.insert(book_id, progress.clone());
             }
             saved
         }
     };
-    progress.map(progress_to_dto)
+    Ok(progress.map(progress_to_dto))
 }
 
 #[tauri::command]

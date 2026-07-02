@@ -516,7 +516,7 @@
 }
 
 /* ── Bottom-right settings buttons ── */
-.demo-controls {
+.settings-floating-panel {
   position: fixed;
   bottom: 40px;
   right: 20px;
@@ -527,7 +527,7 @@
   gap: 8px;
 }
 
-.demo-btn-row {
+.settings-floating-btn-row {
   display: flex;
   gap: 6px;
 }
@@ -617,6 +617,22 @@
   gap: 4px;
 }
 
+.option-select {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #E8E4DF);
+  background: var(--surface, #FFFFFF);
+  color: var(--text-primary, #1A1A1A);
+  cursor: pointer;
+  outline: none;
+}
+
+.option-select:focus {
+  border-color: var(--accent, #C8553D);
+}
+
 .option-chip {
   font-family: inherit;
   font-size: 11px;
@@ -704,7 +720,7 @@
   z-index: 499;
 }
 
-.demo-btn {
+.settings-floating-btn {
   font-family: inherit;
   font-size: 11px;
   padding: 5px 12px;
@@ -717,12 +733,12 @@
   transition: all 0.15s;
 }
 
-.demo-btn:hover {
+.settings-floating-btn:hover {
   border-color: var(--text-tertiary, #B5AFA8);
   color: var(--text-primary, #1A1A1A);
 }
 
-.demo-btn.active {
+.settings-floating-btn.active {
   background: var(--accent, #C8553D);
   color: white;
   border-color: var(--accent, #C8553D);

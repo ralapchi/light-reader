@@ -3,16 +3,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum TtsProviderKind {
     Xiaomi,
-    #[cfg(feature = "tts-aliyun")]
-    Aliyun,
 }
 
 impl TtsProviderKind {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Xiaomi => "xiaomi",
-            #[cfg(feature = "tts-aliyun")]
-            Self::Aliyun => "aliyun",
         }
     }
 }

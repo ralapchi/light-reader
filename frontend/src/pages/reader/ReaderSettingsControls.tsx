@@ -24,7 +24,7 @@ export default function ReaderSettingsControls({
 }: ReaderSettingsControlsProps) {
   return (
     <>
-      <div className="demo-controls">
+      <div className="settings-floating-panel">
         {activePanel && (
           <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
             {activePanel === 'theme' && (
@@ -133,21 +133,21 @@ export default function ReaderSettingsControls({
             )}
           </div>
         )}
-        <div className="demo-btn-row">
+        <div className="settings-floating-btn-row">
           <button
-            className={`demo-btn ${activePanel === 'theme' ? 'active' : ''}`}
+            className={`settings-floating-btn ${activePanel === 'theme' ? 'active' : ''}`}
             onClick={() => onPanelChange(nextPanel(activePanel, 'theme'))}
           >
             主题
           </button>
           <button
-            className={`demo-btn ${activePanel === 'font' ? 'active' : ''}`}
+            className={`settings-floating-btn ${activePanel === 'font' ? 'active' : ''}`}
             onClick={() => onPanelChange(nextPanel(activePanel, 'font'))}
           >
             字体
           </button>
           <button
-            className={`demo-btn ${activePanel === 'format' ? 'active' : ''}`}
+            className={`settings-floating-btn ${activePanel === 'format' ? 'active' : ''}`}
             onClick={() => onPanelChange(nextPanel(activePanel, 'format'))}
           >
             格式

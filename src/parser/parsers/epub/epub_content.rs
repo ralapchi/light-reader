@@ -181,7 +181,7 @@ impl EpubParser {
                                     s.contains("height:1em") || s.contains("display:inline") || s.contains("display: inline")
                                 });
                             if is_inline {
-                                current_para.push_str(&format!("\u{E000}{}\u{E001}", inline_img_counter));
+                                current_para.push_str(&format!("{}{}{}", crate::parser::INLINE_IMG_PREFIX, inline_img_counter, crate::parser::INLINE_IMG_SUFFIX));
                                 inline_images.push((inline_img_counter, src, alt));
                                 inline_img_counter += 1;
                             } else {

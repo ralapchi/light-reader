@@ -18,25 +18,5 @@ pub fn create_backend(
             let backend = crate::storage::sqlite::SqliteBackend::open(&db_path)?;
             Ok(Box::new(backend))
         }
-        #[cfg(feature = "db-postgres")]
-        DatabaseBackendType::Postgres => {
-            let conn_str = config
-                .connection_string
-                .as_ref()
-                .ok_or("PostgreSQL requires connection_string")?;
-            // TODO: implement PostgresBackend
-            Err(format!("PostgreSQL backend not yet implemented: {}", conn_str))
-        }
-        #[cfg(feature = "db-mysql")]
-        DatabaseBackendType::Mysql => {
-            let conn_str = config
-                .connection_string
-                .as_ref()
-                .ok_or("MySQL requires connection_string")?;
-            // TODO: implement MysqlBackend
-            Err(format!("MySQL backend not yet implemented: {}", conn_str))
-        }
-        #[allow(unreachable_patterns)]
-        _ => Err(format!("Unsupported or disabled backend: {:?}", config.backend)),
     }
 }

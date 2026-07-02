@@ -6,7 +6,7 @@ import useAppStore from '../../store/useAppStore'
 export function useReaderSearch() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchHitDto[]>([])
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchIdRef = useRef(0)
   const toggleSearch = useAppStore(s => s.toggleSearch)
   const closeSearch = useAppStore(s => s.closeSearch)

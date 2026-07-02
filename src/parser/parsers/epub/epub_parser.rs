@@ -366,8 +366,8 @@ impl EpubParser {
                                     &mut image_asset_ids_by_path,
                                     &mut image_assets,
                                 );
-                                let placeholder = format!("\u{E000}{}\u{E001}", idx);
-                                let replacement = format!("\u{E000}{}\u{E001}", asset_id);
+                                let placeholder = format!("{}{}{}", crate::parser::INLINE_IMG_PREFIX, idx, crate::parser::INLINE_IMG_SUFFIX);
+                                let replacement = format!("{}{}{}", crate::parser::INLINE_IMG_PREFIX, asset_id, crate::parser::INLINE_IMG_SUFFIX);
                                 let placeholder_chars = placeholder.chars().count();
                                 let len_diff = replacement.chars().count() as isize - placeholder_chars as isize;
                                 for (para_text, para_links) in filtered_paragraphs.iter_mut().zip(filtered_links.iter_mut()) {

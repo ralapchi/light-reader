@@ -116,11 +116,7 @@ pub fn tts_config_to_dto(config: &TtsConfig) -> TtsConfigDto {
 }
 
 pub fn dto_to_tts_config(dto: &TtsConfigDto, api_key: Option<String>) -> TtsConfig {
-    let provider = match dto.provider.as_str() {
-        #[cfg(feature = "tts-aliyun")]
-        "aliyun" => TtsProviderKind::Aliyun,
-        _ => TtsProviderKind::Xiaomi,
-    };
+    let provider = TtsProviderKind::Xiaomi;
     TtsConfig {
         enabled: dto.enabled,
         provider,

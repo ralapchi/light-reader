@@ -74,7 +74,16 @@ pub fn load() -> SettingsFile {
                 file
             }
             Err(e) => {
-                warn!("设置文件解析失败: {}，回退到默认设置", e);
+                let bak_path = path.with_extension("json.bak");
+                if let Err(bak_err) = std::fs::rename(&path, &bak_path) {
+                    warn!("损坏设置文件备份失败: {}", bak_err);
+                } else {
+                    warn!(
+                        "设置文件解析失败: {}，已备份到 {}，回退到默认设置",
+                        e,
+                        bak_path.display()
+                    );
+                }
                 SettingsFile::default()
             }
         },

@@ -6,6 +6,11 @@
 解析器模块采用策略模式设计，支持多种书籍格式的解析，包括 EPUB和TXT。
 */
 
+/// Inline image placeholder prefix (Unicode Private Use Area).
+pub const INLINE_IMG_PREFIX: char = '\u{E000}';
+/// Inline image placeholder suffix (Unicode Private Use Area).
+pub const INLINE_IMG_SUFFIX: char = '\u{E001}';
+
 // 解析器模块导出
 pub mod epub_assets;
 pub mod opf_utils;
