@@ -15,7 +15,8 @@ import useAppStore from '../../store/useAppStore'
 import { scrollToParagraph } from './readerUtils'
 
 export function useTtsReader(contentRef: React.RefObject<HTMLDivElement | null>) {
-  const { setTtsState, resetTts } = useAppStore()
+  const setTtsState = useAppStore(s => s.setTtsState)
+  const resetTts = useAppStore(s => s.resetTts)
   const tts = useAppStore(s => s.reader.tts)
   const currentChapterIndex = useAppStore(s => s.reader.currentChapterIndex)
 

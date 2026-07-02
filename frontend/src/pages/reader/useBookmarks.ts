@@ -8,7 +8,7 @@ export function useBookmarks(
   currentChapterIndex: number,
   contentRef: React.RefObject<HTMLDivElement | null>,
 ) {
-  const { setBookmarks } = useAppStore()
+  const setBookmarks = useAppStore(s => s.setBookmarks)
   const bookmarks = useAppStore(s => s.reader.bookmarks)
 
   const loadBookmarks = useCallback(async () => {

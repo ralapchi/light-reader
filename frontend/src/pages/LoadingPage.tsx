@@ -7,12 +7,12 @@ function LoadingPage() {
 
   return (
     <div className="loading-layout">
-      <div className="back-hint" onClick={handleBack}>
+      <button type="button" className="back-hint" onClick={handleBack}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <polyline points="15 18 9 12 15 6" />
         </svg>
         返回书架
-      </div>
+      </button>
 
       {opening.status !== 'error' ? (
         <div className="loading-screen">
@@ -26,8 +26,8 @@ function LoadingPage() {
             </div>
           )}
           <div className="book-meta">
-            <div className="book-title">{title}</div>
-            <div className="book-author">{author || '未知作者'}</div>
+            <div className="loading-book-title">{title}</div>
+            <div className="loading-book-author">{author || '未知作者'}</div>
           </div>
           <div className="spinner-area">
             <div className="spinner" />
@@ -46,7 +46,7 @@ function LoadingPage() {
           <div className="error-title">打开失败</div>
           <div className="error-detail">{opening.errorMessage}</div>
           <div className="error-actions">
-            <button className="btn-secondary" onClick={handleBack}>返回书架</button>
+            <button className="loading-btn-secondary" onClick={handleBack}>返回书架</button>
             <button className="btn-accent" onClick={openBook}>重新打开</button>
           </div>
         </div>

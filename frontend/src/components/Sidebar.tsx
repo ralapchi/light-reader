@@ -58,7 +58,8 @@ export default function Sidebar({ footerText }: SidebarProps) {
         <div className="sidebar-section" key={section.section}>
           <div className="sidebar-section-title">{section.section}</div>
           {section.items.map(item => (
-            <div
+            <button
+              type="button"
               key={item.id}
               className={`sidebar-item ${activeId === item.id ? 'active' : ''}`}
               onClick={() => item.path && navigate(item.path)}
@@ -68,7 +69,7 @@ export default function Sidebar({ footerText }: SidebarProps) {
                 {item.icon}
               </svg>
               <span className="sidebar-item-label">{item.label}</span>
-            </div>
+            </button>
           ))}
         </div>
       ))}

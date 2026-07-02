@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap');
-
 .loading-layout {
   display: flex;
   align-items: center;
@@ -20,7 +18,11 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  font: inherit;
   font-size: 13px;
+  text-align: left;
+  border: none;
+  background: none;
   color: var(--text-tertiary, #B5AFA8);
   cursor: pointer;
   transition: color 0.15s;
@@ -39,10 +41,10 @@
   flex-direction: column;
   align-items: center;
   gap: 24px;
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeInLoading 0.4s ease-out;
 }
 
-@keyframes fadeIn {
+@keyframes fadeInLoading {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
@@ -90,7 +92,7 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-.book-title {
+.loading-book-title {
   font-family: 'Noto Serif SC', serif;
   font-size: 22px;
   font-weight: 700;
@@ -98,7 +100,7 @@
   margin-bottom: 6px;
 }
 
-.book-author {
+.loading-book-author {
   font-size: 14px;
   color: var(--text-secondary, #8A8680);
   margin-bottom: 28px;
@@ -138,7 +140,7 @@
   align-items: center;
   gap: 16px;
   text-align: center;
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeInLoading 0.4s ease-out;
 }
 
 .error-icon {
@@ -171,7 +173,7 @@
   margin-top: 4px;
 }
 
-.btn-secondary {
+.loading-btn-secondary {
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -184,7 +186,7 @@
   transition: all 0.15s;
 }
 
-.btn-secondary:hover {
+.loading-btn-secondary:hover {
   border-color: var(--text-tertiary, #B5AFA8);
   color: var(--text-primary, #1A1A1A);
 }
@@ -205,11 +207,3 @@
 .btn-accent:hover {
   filter: brightness(1.08);
 }
-
-/* ── Cover colors ── */
-.cover-1 { background: linear-gradient(135deg, #8B7355, #A69076); }
-.cover-2 { background: linear-gradient(135deg, #5B7B6F, #7A9E8F); }
-.cover-3 { background: linear-gradient(135deg, #7B6B8A, #9A8AAA); }
-.cover-4 { background: linear-gradient(135deg, #8A6B5B, #AA8B7B); }
-.cover-5 { background: linear-gradient(135deg, #5B6B7B, #7B8B9B); }
-.cover-6 { background: linear-gradient(135deg, #7B7B5B, #9B9B7B); }

@@ -30,7 +30,15 @@ function BookmarkPage() {
                     <div
                       key={bm.id}
                       className="bookmark-entry"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleBookmarkClick(bm)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleBookmarkClick(bm)
+                        }
+                      }}
                     >
                       <div className="bookmark-entry-icon">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">

@@ -22,11 +22,9 @@ export function useChapterNavigation(
   twoPageNavRef?: React.RefObject<TwoPageNav | null>,
 ) {
   const navigate = useNavigate()
-  const {
-    setCurrentChapter,
-    setProgressPercent,
-    closeToc,
-  } = useAppStore()
+  const setCurrentChapter = useAppStore(s => s.setCurrentChapter)
+  const setProgressPercent = useAppStore(s => s.setProgressPercent)
+  const closeToc = useAppStore(s => s.closeToc)
   const currentChapterIndex = useAppStore(s => s.reader.currentChapterIndex)
   const rafCancelsRef = useRef<(() => void)[]>([])
   useEffect(() => () => { rafCancelsRef.current.forEach(fn => fn()); rafCancelsRef.current = [] }, [])

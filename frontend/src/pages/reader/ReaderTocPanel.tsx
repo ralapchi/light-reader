@@ -36,7 +36,8 @@ export default function ReaderTocPanel({
         </div>
         <div className="toc-list">
           {items.map((item, i) => (
-            <div
+            <button
+              type="button"
               key={item.id || i}
               className={`toc-item ${item.chapter_index === currentChapterIndex ? 'active' : ''}`}
               style={{ paddingLeft: `${12 + item.depth * 12}px` }}
@@ -50,7 +51,7 @@ export default function ReaderTocPanel({
             >
               <span className="chapter-num">{(item.chapter_index ?? i) + 1}</span>
               {item.title}
-            </div>
+            </button>
           ))}
         </div>
         <div className="toc-progress">

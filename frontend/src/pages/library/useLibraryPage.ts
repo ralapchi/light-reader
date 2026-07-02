@@ -20,7 +20,10 @@ function continueReadingBooks(books: LibraryBookCardDto[]): LibraryBookCardDto[]
 
 export function useLibraryPage() {
   const navigate = useNavigate()
-  const { books, setBooks, startOpening, setSidebarFooter } = useAppStore()
+  const books = useAppStore(s => s.books)
+  const setBooks = useAppStore(s => s.setBooks)
+  const startOpening = useAppStore(s => s.startOpening)
+  const setSidebarFooter = useAppStore(s => s.setSidebarFooter)
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
 

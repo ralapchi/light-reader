@@ -18,7 +18,7 @@ export function useReadingProgress(
   readingMode?: ReadingMode,
   twoPageNavRef?: React.RefObject<TwoPageNav | null>,
 ) {
-  const { setProgressPercent } = useAppStore()
+  const setProgressPercent = useAppStore(s => s.setProgressPercent)
   const scrollSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const readingModeRef = useRef(readingMode)
   useEffect(() => { readingModeRef.current = readingMode }, [readingMode])

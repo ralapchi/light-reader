@@ -14,8 +14,13 @@ function errorMessage(error: unknown): string {
 export function useLoadingPage() {
   const { bookId } = useParams<{ bookId: string }>()
   const navigate = useNavigate()
-  const { books, opening, startOpening, setOpeningError, setReaderBook, setCurrentChapter, setProgressPercent } =
-    useAppStore()
+  const books = useAppStore(s => s.books)
+  const opening = useAppStore(s => s.opening)
+  const startOpening = useAppStore(s => s.startOpening)
+  const setOpeningError = useAppStore(s => s.setOpeningError)
+  const setReaderBook = useAppStore(s => s.setReaderBook)
+  const setCurrentChapter = useAppStore(s => s.setCurrentChapter)
+  const setProgressPercent = useAppStore(s => s.setProgressPercent)
   const [stageText, setStageText] = useState('准备中...')
   const [fallbackCover, setFallbackCover] = useState<string | null>(null)
   const openingRef = useRef(false)

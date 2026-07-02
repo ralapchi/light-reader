@@ -8,7 +8,8 @@ export function useReaderSearch() {
   const [searchResults, setSearchResults] = useState<SearchHitDto[]>([])
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null)
   const searchIdRef = useRef(0)
-  const { toggleSearch, closeSearch } = useAppStore()
+  const toggleSearch = useAppStore(s => s.toggleSearch)
+  const closeSearch = useAppStore(s => s.closeSearch)
   const showSearch = useAppStore(s => s.reader.showSearch)
 
   useEffect(() => {

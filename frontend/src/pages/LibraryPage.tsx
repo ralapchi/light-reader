@@ -81,7 +81,15 @@ function LibraryPage() {
                 <div
                   key={item.book_id}
                   className="continue-card"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleOpenBook(item.book_id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      handleOpenBook(item.book_id)
+                    }
+                  }}
                 >
                   <div className={`continue-cover ${coverColor(item.book_id)}`}>
                     {coverImages[item.book_id] ? (
@@ -129,7 +137,15 @@ function LibraryPage() {
               <div
                 key={item.book_id}
                 className={`book-card ${selectMode && selectedIds.has(item.book_id) ? 'selected' : ''}`}
+                role="button"
+                tabIndex={0}
                 onClick={() => handleOpenBook(item.book_id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleOpenBook(item.book_id)
+                  }
+                }}
               >
                 <div className={`book-cover ${coverColor(item.book_id)}`}>
                   {coverImages[item.book_id] ? (
