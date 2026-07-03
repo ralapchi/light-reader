@@ -42,7 +42,7 @@ impl AppError {
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn with_source(mut self, err: impl Error + Send + Sync + 'static) -> Self {
         self.source = Some(Box::new(err));
         self
