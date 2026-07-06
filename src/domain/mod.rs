@@ -19,6 +19,7 @@ pub mod reading_mode;
 pub mod reading_progress;
 pub mod reading_session;
 pub mod recent_book_item;
+pub mod tag_group;
 pub mod theme_kind;
 pub mod toc_item;
 pub mod tts_state;

@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>标签管理 Demo - 轻看</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500;600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #FAF8F5; --surface: #FFFFFF; --surface-hover: #F5F2EE;
+    --text-primary: #1A1A1A; --text-secondary: #8A8680; --text-tertiary: #B5AFA8;
+    --accent: #C8553D; --accent-soft: #F2E0D9; --border: #E8E4DF;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.08);
+    --radius: 8px; --radius-lg: 12px;
+    font-family: "PingFang SC", "Noto Serif SC", -apple-system, sans-serif;
+    color: var(--text-primary); background: var(--bg);
+  }
+  html[data-theme="dark"] {
+    --bg: #181715; --surface: #222120; --surface-hover: #2E2D2A;
+    --text-primary: #FAFAF5; --text-secondary: #A8A49E; --text-tertiary: #787470;
+    --accent: #CC785C; --accent-soft: #3A2A22; --border: #3A3835;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.24), 0 1px 2px rgba(0,0,0,0.32);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.28), 0 1px 4px rgba(0,0,0,0.2);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.36);
+  }
+  body { min-height: 100vh; display: flex; }
+
+  /* ── Sidebar ── */
+  .sidebar { width: 160px; min-height: 100vh; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; display: flex; flex-direction: column; flex-shrink: 0; }
+  .sidebar-brand { font-family: "Noto Serif SC", serif; font-size: 20px; font-weight: 700; padding: 0 8px 20px; }
+  .sidebar-section-title { font-size: 10px; font-weight: 600; color: var(--text-tertiary); padding: 16px 8px 6px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; font-size: 13px; color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
+  .sidebar-item:hover { background: var(--surface-hover); color: var(--text-primary); }
+  .sidebar-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .sidebar-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+  .main { flex: 1; overflow-y: auto; padding: 28px 32px 60px; display: flex; flex-direction: column; }
+
+  /* ── Page Header ── */
+  .page-header { margin-bottom: 28px; }
+  .page-header h1 { font-family: "Noto Serif SC", serif; font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .page-header p { font-size: 13px; color: var(--text-secondary); }
+
+  /* ── Section ── */
+  .demo-section { margin-bottom: 36px; }
+  .demo-label { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .demo-label-title { font-size: 11px; color: var(--text-tertiary); letter-spacing: 0.1em; white-space: nowrap; text-transform: uppercase; }
+  .demo-label-line { flex: 1; height: 1px; background: var(--border); }
+  .demo-desc { font-size: 12px; color: var(--text-tertiary); margin-bottom: 16px; line-height: 1.6; }
+
+  /* ── Cards ── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-sm); }
+  .card + .card { margin-top: 16px; }
+
+  /* ── Book Info ── */
+  .book-info { display: flex; gap: 16px; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .book-cover-ph { width: 48px; height: 64px; border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-family: "Noto Serif SC", serif; font-size: 20px; font-weight: 700; color: #fff; }
+  .book-cover-ph.c1 { background: linear-gradient(135deg, #8B7355, #A69076); }
+  .book-cover-ph.c2 { background: linear-gradient(135deg, #5B7B6F, #7A9E8F); }
+  .book-cover-ph.c3 { background: linear-gradient(135deg, #7B6B8A, #9A8AAA); }
+  .book-detail-title { font-family: "Noto Serif SC", serif; font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+  .book-detail-meta { font-size: 12px; color: var(--text-secondary); }
+
+  /* ── Tag Group ── */
+  .tag-group { margin-bottom: 16px; }
+  .tag-group:last-child { margin-bottom: 0; }
+  .tag-group-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .tag-group-name { display: flex; align-items: center; gap: 8px; }
+  .tag-group-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .tag-group-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.03em; }
+
+  /* ── Tag Pills ── */
+  .tag-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .tag-pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 500; cursor: default; transition: all 0.2s; animation: tagIn 0.25s ease both; }
+  .tag-pill:hover { background: var(--accent); color: #fff; }
+  .tag-pill:hover .tag-remove { opacity: 1; }
+  .tag-remove { margin-left: 2px; cursor: pointer; opacity: 0.5; transition: opacity 0.15s; font-size: 14px; line-height: 1; }
+  .tag-remove:hover { opacity: 1; }
+  .tag-pill.removing { animation: tagOut 0.2s ease forwards; }
+
+  @keyframes tagIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+  @keyframes tagOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.8); } }
+
+  /* ── Add Tag Button ── */
+  .btn-add-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 20px; border: 1px dashed var(--border); background: transparent; color: var(--text-tertiary); font-size: 12px; font-family: inherit; cursor: pointer; transition: all 0.2s; }
+  .btn-add-tag:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  /* ── Popover ── */
+  .popover-backdrop { position: fixed; inset: 0; z-index: 100; }
+  .popover { position: absolute; z-index: 101; width: 280px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: 16px; animation: popIn 0.2s ease both; }
+  @keyframes popIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  .popover-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; }
+  .popover-search { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin-bottom: 12px; }
+  .popover-search svg { flex-shrink: 0; color: var(--text-tertiary); }
+  .popover-search input { border: none; background: none; outline: none; font-size: 13px; font-family: inherit; color: var(--text-primary); flex: 1; }
+  .popover-search input::placeholder { color: var(--text-tertiary); }
+  .popover-hint { font-size: 11px; color: var(--text-tertiary); margin-bottom: 8px; }
+  .popover-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; min-height: 28px; }
+  .popover-tag { padding: 4px 12px; border-radius: 20px; background: var(--surface-hover); color: var(--text-secondary); font-size: 12px; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+  .popover-tag:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .popover-tag.selected { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .popover-create { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 12px; cursor: pointer; transition: all 0.15s; margin-bottom: 12px; border: none; width: 100%; font-family: inherit; }
+  .popover-create:hover { background: var(--accent); color: #fff; }
+  .popover-create svg { flex-shrink: 0; }
+  .popover-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* ── Buttons ── */
+  .btn-primary { display: inline-flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); padding: 7px 16px; font-size: 13px; font-weight: 500; font-family: inherit; cursor: pointer; transition: all 0.15s; }
+  .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+  .btn-secondary { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); font-size: 13px; font-weight: 500; font-family: inherit; cursor: pointer; transition: all 0.15s; }
+  .btn-secondary:hover { border-color: var(--text-tertiary); color: var(--text-primary); }
+
+  /* ── Settings Layout ── */
+  .settings-demo { display: grid; grid-template-columns: 200px 1fr; gap: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface); }
+  .settings-side { border-right: 1px solid var(--border); padding: 8px; }
+  .settings-side-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: all 0.15s; font-size: 13px; color: var(--text-secondary); }
+  .settings-side-item:hover { background: var(--surface-hover); color: var(--text-primary); }
+  .settings-side-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+  .settings-side-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .settings-side-count { margin-left: auto; font-size: 11px; color: var(--text-tertiary); }
+  .settings-side-item.active .settings-side-count { color: color-mix(in srgb, var(--accent) 72%, var(--text-secondary)); }
+  .settings-side-add { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text-tertiary); transition: all 0.15s; border: none; background: none; width: calc(100% - 16px); margin: 4px 8px; font-family: inherit; }
+  .settings-side-add:hover { background: var(--surface-hover); color: var(--accent); }
+
+  .settings-body { padding: 20px 24px; }
+  .settings-body-title { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
+  .settings-field { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .settings-field:last-child { border-bottom: none; }
+  .settings-field-label { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+  .settings-field-hint { font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px; }
+  .settings-field-input { width: 100%; padding: 7px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); font-size: 13px; font-family: inherit; color: var(--text-primary); outline: none; transition: border-color 0.2s; }
+  .settings-field-input:focus { border-color: var(--accent); }
+
+  /* ── Color Picker ── */
+  .color-picker { display: flex; gap: 8px; }
+  .color-swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: all 0.15s; }
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.selected { border-color: var(--text-primary); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text-primary); }
+
+  /* ── Settings Tag List ── */
+  .settings-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .settings-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 16px; background: var(--surface-hover); color: var(--text-secondary); font-size: 12px; transition: all 0.15s; }
+  .settings-tag .st-remove { cursor: pointer; opacity: 0.4; font-size: 13px; transition: opacity 0.15s; }
+  .settings-tag:hover .st-remove { opacity: 1; }
+  .settings-tag:hover { background: var(--accent-soft); color: var(--accent); }
+  .settings-add-input { display: flex; gap: 6px; margin-top: 10px; }
+  .settings-add-input input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); font-size: 12px; font-family: inherit; color: var(--text-primary); outline: none; }
+  .settings-add-input input:focus { border-color: var(--accent); }
+  .settings-add-input button { padding: 6px 14px; }
+
+  /* ── Book Grid with Tag Indicators ── */
+  .book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 16px; }
+  .book-card { cursor: pointer; transition: all 0.2s; position: relative; }
+  .book-card:hover { transform: translateY(-4px); }
+  .book-card:hover .book-cover-demo { box-shadow: var(--shadow-lg); }
+  .book-cover-demo { aspect-ratio: 3/4; border-radius: 4px; overflow: hidden; margin-bottom: 6px; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s; display: flex; align-items: center; justify-content: center; font-family: "Noto Serif SC", serif; font-size: 22px; font-weight: 700; color: rgba(255,255,255,0.85); }
+  .book-cover-demo.c1 { background: linear-gradient(135deg, #8B7355, #A69076); }
+  .book-cover-demo.c2 { background: linear-gradient(135deg, #5B7B6F, #7A9E8F); }
+  .book-cover-demo.c3 { background: linear-gradient(135deg, #7B6B8A, #9A8AAA); }
+  .book-card-title { font-size: 12px; font-weight: 500; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 1px; }
+  .book-card-author { font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px; }
+  .book-tag-dots { display: flex; gap: 3px; }
+  .book-tag-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .book-card:hover .book-tag-dots { display: flex; }
+
+  /* ── Theme Toggle ── */
+  .theme-toggle { position: fixed; top: 16px; right: 16px; z-index: 200; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; box-shadow: var(--shadow-sm); }
+  .theme-toggle:hover { color: var(--text-primary); box-shadow: var(--shadow-md); }
+
+  /* ── Animations ── */
+  @keyframes up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .demo-section:nth-child(1) { animation: up 0.4s ease both; }
+  .demo-section:nth-child(2) { animation: up 0.4s ease 0.05s both; }
+  .demo-section:nth-child(3) { animation: up 0.4s ease 0.1s both; }
+</style>
+</head>
+<body>
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">轻看</div>
+    <div class="sidebar-section-title">书库</div>
+    <div class="sidebar-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <span>全部</span>
+    </div>
+    <div class="sidebar-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      <span>书签</span>
+    </div>
+    <div class="sidebar-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      <span>统计</span>
+    </div>
+    <div class="sidebar-section-title">设置</div>
+    <div class="sidebar-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>设置</span>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="page-header">
+      <h1>标签管理</h1>
+      <p>为书籍添加标签分类，支持分组管理。标签云将在阅读统计页面中按本周阅读时长加权展示。</p>
+    </div>
+
+    <!-- ── Demo 1: 书库页标签编辑面板 ── -->
+    <div class="demo-section">
+      <div class="demo-label">
+        <span class="demo-label-title">书库页 · 标签编辑</span>
+        <span class="demo-label-line"></span>
+      </div>
+      <p class="demo-desc">点击书籍卡片后，在书籍信息下方展开标签编辑面板。按分组展示标签，可添加/删除。</p>
+
+      <div class="card">
+        <div class="book-info">
+          <div class="book-cover-ph c1">三</div>
+          <div>
+            <div class="book-detail-title">三体</div>
+            <div class="book-detail-meta">刘慈欣 · EPUB · 读至第 42 章 · 68%</div>
+          </div>
+        </div>
+
+        <div id="tag-editor">
+          <!-- Tag groups rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Popover (hidden by default) -->
+      <div id="popover-anchor"></div>
+    </div>
+
+    <!-- ── Demo 2: 设置页标签组管理 ── -->
+    <div class="demo-section">
+      <div class="demo-label">
+        <span class="demo-label-title">设置页 · 标签组管理</span>
+        <span class="demo-label-line"></span>
+      </div>
+      <p class="demo-desc">在设置页面统一管理标签分组：新建/删除分组、编辑分组名称和颜色、管理组内标签。</p>
+
+      <div class="settings-demo">
+        <div class="settings-side" id="settings-side">
+          <!-- Rendered by JS -->
+        </div>
+        <div class="settings-body" id="settings-body">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Demo 3: 书库卡片标签预览 ── -->
+    <div class="demo-section">
+      <div class="demo-label">
+        <span class="demo-label-title">书库页 · 卡片标签指示器</span>
+        <span class="demo-label-line"></span>
+      </div>
+      <p class="demo-desc">书籍卡片 hover 时，在封面底部显示标签颜色圆点，快速预览标签归属。</p>
+
+      <div class="book-grid" id="book-grid">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Theme Toggle -->
+  <button class="theme-toggle" id="theme-toggle" title="切换主题">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+  </button>
+
+<script>
+// ── Data ──
+const GROUP_COLORS = ['#C8553D', '#6B8E6B', '#5B7B9B', '#9B7B5B', '#7B6B8A', '#B8915A'];
+
+let groups = [
+  { id: 'g1', name: '类型', color: '#C8553D', tags: ['科幻', '奇幻', '现实主义', '历史', '悬疑', '推理'] },
+  { id: 'g2', name: '风格', color: '#6B8E6B', tags: ['治愈', '热血', '沉重', '轻松', '黑色幽默'] },
+  { id: 'g3', name: '难度', color: '#5B7B9B', tags: ['入门', '进阶', '专业'] },
+  { id: 'g0', name: '未分组', color: '#B5AFA8', tags: [] },
+];
+
+let books = [
+  { id: 'b1', title: '三体', author: '刘慈欣', tags: ['科幻', '沉重', '专业'], coverClass: 'c1' },
+  { id: 'b2', title: '百年孤独', author: '马尔克斯', tags: ['现实主义', '奇幻'], coverClass: 'c2' },
+  { id: 'b3', title: '小王子', author: '圣埃克苏佩里', tags: ['治愈', '入门'], coverClass: 'c3' },
+];
+
+// Current book being edited
+let currentBook = books[0];
+let selectedGroupId = null;
+let settingsActiveGroupId = 'g1';
+let popoverOpen = false;
+let popoverGroupId = null;
+
+// ── Helpers ──
+function getTagGroup(tagName) {
+  return groups.find(g => g.tags.includes(tagName));
+}
+
+function getTagColor(tagName) {
+  const g = getTagGroup(tagName);
+  return g ? g.color : '#B5AFA8';
+}
+
+function getAllTags() {
+  return groups.flatMap(g => g.tags);
+}
+
+// ── Render: Tag Editor (Demo 1) ──
+function renderTagEditor() {
+  const container = document.getElementById('tag-editor');
+  container.innerHTML = '';
+
+  groups.forEach(group => {
+    const bookTags = currentBook.tags.filter(t => group.tags.includes(t));
+
+    const div = document.createElement('div');
+    div.className = 'tag-group';
+    div.innerHTML = `
+      <div class="tag-group-header">
+        <div class="tag-group-name">
+          <span class="tag-group-dot" style="background:${group.color}"></span>
+          <span class="tag-group-label">${group.name}</span>
+        </div>
+        <button class="btn-add-tag" data-group="${group.id}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          添加标签
+        </button>
+      </div>
+      <div class="tag-list" data-group="${group.id}">
+        ${bookTags.map(tag => `
+          <span class="tag-pill" data-tag="${tag}" style="--pill-bg: ${group.color}15; --pill-color: ${group.color}; background: var(--pill-bg); color: var(--pill-color);">
+            ${tag}<span class="tag-remove" data-tag="${tag}">&times;</span>
+          </span>
+        `).join('')}
+        ${bookTags.length === 0 ? '<span style="font-size:12px;color:var(--text-tertiary)">无标签</span>' : ''}
+      </div>
+    `;
+    container.appendChild(div);
+  });
+
+  // Bind add buttons
+  container.querySelectorAll('.btn-add-tag').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const groupId = btn.dataset.group;
+      openPopover(groupId, btn);
+    });
+  });
+
+  // Bind remove buttons
+  container.querySelectorAll('.tag-remove').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tagName = btn.dataset.tag;
+      const pill = btn.closest('.tag-pill');
+      pill.classList.add('removing');
+      setTimeout(() => {
+        currentBook.tags = currentBook.tags.filter(t => t !== tagName);
+        renderTagEditor();
+        renderBookGrid();
+      }, 200);
+    });
+  });
+}
+
+// ── Popover (Demo 1 sub) ──
+function openPopover(groupId, anchorEl) {
+  closePopover();
+  popoverOpen = true;
+  popoverGroupId = groupId;
+
+  const group = groups.find(g => g.id === groupId);
+  const rect = anchorEl.getBoundingClientRect();
+  const mainRect = document.querySelector('.main').getBoundingClientRect();
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'popover-backdrop';
+  backdrop.addEventListener('click', closePopover);
+
+  const popover = document.createElement('div');
+  popover.className = 'popover';
+  popover.id = 'active-popover';
+  popover.style.top = (rect.bottom - mainRect.top + 8) + 'px';
+  popover.style.left = (rect.left - mainRect.left) + 'px';
+
+  const availableTags = group.tags.filter(t => !currentBook.tags.includes(t));
+
+  popover.innerHTML = `
+    <div class="popover-title">添加标签到「${group.name}」</div>
+    <div class="popover-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" placeholder="搜索或新建标签..." id="popover-input" />
+    </div>
+    <div class="popover-hint">可选标签</div>
+    <div class="popover-tags" id="popover-tags">
+      ${availableTags.map(t => `<span class="popover-tag" data-tag="${t}">${t}</span>`).join('')}
+      ${availableTags.length === 0 ? '<span style="font-size:12px;color:var(--text-tertiary)">该组暂无可选标签</span>' : ''}
+    </div>
+    <div id="popover-create-area"></div>
+    <div class="popover-actions">
+      <button class="btn-secondary" id="popover-cancel">取消</button>
+      <button class="btn-primary" id="popover-confirm" disabled>确认</button>
+    </div>
+  `;
+
+  const main = document.querySelector('.main');
+  main.appendChild(backdrop);
+  main.appendChild(popover);
+
+  // Search filter
+  const input = popover.querySelector('#popover-input');
+  const tagsContainer = popover.querySelector('#popover-tags');
+  const createArea = popover.querySelector('#popover-create-area');
+  let pickedTag = null;
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    const filtered = availableTags.filter(t => t.toLowerCase().includes(q));
+
+    tagsContainer.innerHTML = filtered.map(t =>
+      `<span class="popover-tag" data-tag="${t}">${t}</span>`
+    ).join('');
+
+    if (q && !getAllTags().some(t => t.toLowerCase() === q)) {
+      createArea.innerHTML = `
+        <button class="popover-create" data-create="${q}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          创建新标签：${q}
+        </button>
+      `;
+      createArea.querySelector('.popover-create').addEventListener('click', () => {
+        pickedTag = q;
+        popover.querySelectorAll('.popover-tag').forEach(t => t.classList.remove('selected'));
+        popover.querySelector('#popover-confirm').disabled = false;
+      });
+    } else {
+      createArea.innerHTML = '';
+    }
+
+    bindTagClicks();
+  });
+
+  function bindTagClicks() {
+    tagsContainer.querySelectorAll('.popover-tag').forEach(el => {
+      el.addEventListener('click', () => {
+        tagsContainer.querySelectorAll('.popover-tag').forEach(t => t.classList.remove('selected'));
+        el.classList.add('selected');
+        pickedTag = el.dataset.tag;
+        popover.querySelector('#popover-confirm').disabled = false;
+      });
+    });
+  }
+  bindTagClicks();
+
+  popover.querySelector('#popover-cancel').addEventListener('click', closePopover);
+  popover.querySelector('#popover-confirm').addEventListener('click', () => {
+    if (pickedTag) {
+      // Add tag to group if it's new
+      if (!group.tags.includes(pickedTag)) {
+        group.tags.push(pickedTag);
+      }
+      // Add to book
+      if (!currentBook.tags.includes(pickedTag)) {
+        currentBook.tags.push(pickedTag);
+      }
+      closePopover();
+      renderTagEditor();
+      renderBookGrid();
+      renderSettingsSide();
+      renderSettingsBody();
+    }
+  });
+}
+
+function closePopover() {
+  popoverOpen = false;
+  popoverGroupId = null;
+  document.querySelectorAll('.popover-backdrop, #active-popover').forEach(el => el.remove());
+}
+
+// ── Render: Settings Sidebar (Demo 2) ──
+function renderSettingsSide() {
+  const container = document.getElementById('settings-side');
+  container.innerHTML = groups.map(g => `
+    <div class="settings-side-item ${g.id === settingsActiveGroupId ? 'active' : ''}" data-group="${g.id}">
+      <span class="settings-side-dot" style="background:${g.color}"></span>
+      <span>${g.name}</span>
+      <span class="settings-side-count">${g.tags.length}</span>
+    </div>
+  `).join('') + `
+    <button class="settings-side-add" id="add-group-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      新建分组
+    </button>
+  `;
+
+  container.querySelectorAll('.settings-side-item').forEach(el => {
+    el.addEventListener('click', () => {
+      settingsActiveGroupId = el.dataset.group;
+      renderSettingsSide();
+      renderSettingsBody();
+    });
+  });
+
+  container.querySelector('#add-group-btn').addEventListener('click', () => {
+    const name = prompt('请输入分组名称：');
+    if (name && name.trim()) {
+      const newGroup = {
+        id: 'g' + Date.now(),
+        name: name.trim(),
+        color: GROUP_COLORS[groups.length % GROUP_COLORS.length],
+        tags: [],
+      };
+      groups.push(newGroup);
+      settingsActiveGroupId = newGroup.id;
+      renderSettingsSide();
+      renderSettingsBody();
+      renderTagEditor();
+    }
+  });
+}
+
+// ── Render: Settings Body (Demo 2) ──
+function renderSettingsBody() {
+  const container = document.getElementById('settings-body');
+  const group = groups.find(g => g.id === settingsActiveGroupId);
+  if (!group) {
+    container.innerHTML = '<p style="color:var(--text-tertiary);font-size:13px;padding:20px 0;">选择一个分组查看详情</p>';
+    return;
+  }
+
+  const isDefault = group.id === 'g0';
+
+  container.innerHTML = `
+    <div class="settings-body-title">分组详情</div>
+    <div class="settings-field">
+      <div class="settings-field-label">分组名称</div>
+      <div class="settings-field-hint">标签分组的显示名称</div>
+      <input class="settings-field-input" type="text" value="${group.name}" id="group-name-input" ${isDefault ? 'disabled' : ''} />
+    </div>
+    <div class="settings-field">
+      <div class="settings-field-label">分组颜色</div>
+      <div class="settings-field-hint">标签 pill 的主题颜色</div>
+      <div class="color-picker" id="color-picker">
+        ${GROUP_COLORS.map(c => `
+          <div class="color-swatch ${c === group.color ? 'selected' : ''}" style="background:${c}" data-color="${c}"></div>
+        `).join('')}
+      </div>
+    </div>
+    <div class="settings-field">
+      <div class="settings-field-label">组内标签 <span style="font-weight:400;color:var(--text-tertiary)">(${group.tags.length})</span></div>
+      <div class="settings-field-hint">属于该分组的标签列表</div>
+      <div class="settings-tags" id="settings-tag-list">
+        ${group.tags.map(t => `
+          <span class="settings-tag" data-tag="${t}" style="background:${group.color}15;color:${group.color}">
+            ${t}<span class="st-remove" data-tag="${t}">&times;</span>
+          </span>
+        `).join('')}
+        ${group.tags.length === 0 ? '<span style="font-size:12px;color:var(--text-tertiary)">暂无标签</span>' : ''}
+      </div>
+      ${!isDefault ? `
+      <div class="settings-add-input">
+        <input type="text" placeholder="输入新标签名称..." id="new-tag-input" />
+        <button class="btn-primary" id="add-tag-btn" style="padding:6px 14px;font-size:12px;">添加</button>
+      </div>
+      ` : ''}
+    </div>
+    ${!isDefault ? `
+    <div class="settings-field" style="border-bottom:none;padding-top:16px;">
+      <button class="btn-secondary" style="color:#DC3545;border-color:#DC354533;" id="delete-group-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        删除此分组
+      </button>
+    </div>
+    ` : ''}
+  `;
+
+  // Name change
+  if (!isDefault) {
+    const nameInput = container.querySelector('#group-name-input');
+    nameInput.addEventListener('change', () => {
+      group.name = nameInput.value.trim() || group.name;
+      renderSettingsSide();
+      renderTagEditor();
+    });
+  }
+
+  // Color picker
+  container.querySelectorAll('.color-swatch').forEach(el => {
+    el.addEventListener('click', () => {
+      group.color = el.dataset.color;
+      renderSettingsBody();
+      renderSettingsSide();
+      renderTagEditor();
+      renderBookGrid();
+    });
+  });
+
+  // Remove tag from group
+  container.querySelectorAll('.st-remove').forEach(el => {
+    el.addEventListener('click', () => {
+      const tagName = el.dataset.tag;
+      group.tags = group.tags.filter(t => t !== tagName);
+      // Also remove from books
+      books.forEach(b => { b.tags = b.tags.filter(t => t !== tagName); });
+      renderSettingsBody();
+      renderTagEditor();
+      renderBookGrid();
+    });
+  });
+
+  // Add tag to group
+  if (!isDefault) {
+    const addBtn = container.querySelector('#add-tag-btn');
+    const newInput = container.querySelector('#new-tag-input');
+    const doAdd = () => {
+      const name = newInput.value.trim();
+      if (name && !group.tags.includes(name)) {
+        group.tags.push(name);
+        newInput.value = '';
+        renderSettingsBody();
+        renderTagEditor();
+      }
+    };
+    addBtn.addEventListener('click', doAdd);
+    newInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAdd(); });
+  }
+
+  // Delete group
+  if (!isDefault) {
+    container.querySelector('#delete-group-btn').addEventListener('click', () => {
+      if (confirm(`确定删除「${group.name}」分组？组内标签将移至"未分组"。`)) {
+        const ungrouped = groups.find(g => g.id === 'g0');
+        group.tags.forEach(t => {
+          if (!ungrouped.tags.includes(t)) ungrouped.tags.push(t);
+        });
+        groups = groups.filter(g => g.id !== group.id);
+        settingsActiveGroupId = 'g0';
+        renderSettingsSide();
+        renderSettingsBody();
+        renderTagEditor();
+      }
+    });
+  }
+}
+
+// ── Render: Book Grid (Demo 3) ──
+function renderBookGrid() {
+  const container = document.getElementById('book-grid');
+  container.innerHTML = books.map(book => `
+    <div class="book-card" data-id="${book.id}">
+      <div class="book-cover-demo ${book.coverClass}">
+        ${book.title[0]}
+      </div>
+      <div class="book-card-title">${book.title}</div>
+      <div class="book-card-author">${book.author}</div>
+      <div class="book-tag-dots">
+        ${book.tags.map(t => `<span class="book-tag-dot" style="background:${getTagColor(t)}" title="${t}"></span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.book-card').forEach(el => {
+    el.addEventListener('click', () => {
+      const bookId = el.dataset.id;
+      const book = books.find(b => b.id === bookId);
+      if (book) {
+        currentBook = book;
+        renderTagEditor();
+        // Scroll to tag editor
+        document.getElementById('tag-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+}
+
+// ── Theme Toggle ──
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? '' : 'dark');
+});
+
+// ── Init ──
+renderTagEditor();
+renderSettingsSide();
+renderSettingsBody();
+renderBookGrid();
+</script>
+
+</body>
+</html>

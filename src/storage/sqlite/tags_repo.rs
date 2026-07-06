@@ -34,6 +34,12 @@ impl TagsRepo for SqliteTagsRepo {
         tx.execute("DELETE FROM book_tags WHERE book_id = ?1", params![book_id])
             .map_err(|e| e.to_string())?;
         for tag in tags {
+            // Ensure tag exists in tags table (default group)
+            tx.execute(
+                "INSERT OR IGNORE INTO tags (tag, group_id) VALUES (?1, 'default')",
+                params![tag],
+            )
+            .map_err(|e| e.to_string())?;
             tx.execute(
                 "INSERT INTO book_tags (book_id, tag) VALUES (?1, ?2)",
                 params![book_id, tag],
@@ -52,6 +58,27 @@ impl TagsRepo for SqliteTagsRepo {
         let tags = stmt
             .query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, u32>(1)?))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        Ok(tags)
+    }
+
+    fn get_tags_with_groups(&self, book_id: &str) -> Result<Vec<(String, Option<String>)>, String> {
+        let conn = self.pool.get().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT bt.tag, COALESCE(t.group_id, 'default')
+                 FROM book_tags bt
+                 LEFT JOIN tags t ON bt.tag = t.tag
+                 WHERE bt.book_id = ?1
+                 ORDER BY bt.tag",
+            )
+            .map_err(|e| e.to_string())?;
+        let tags = stmt
+            .query_map(params![book_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
             })
             .map_err(|e| e.to_string())?
             .collect::<Result<Vec<_>, _>>()

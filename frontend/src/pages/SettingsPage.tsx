@@ -1,11 +1,13 @@
 import { FONT_SIZE_RANGE, LINE_HEIGHT_RANGE, PARAGRAPH_SPACING_RANGE, READER_FONTS, READER_THEMES } from '../utils/readerOptions'
 import { useSettingsPage, type SettingsSection } from './settings/useSettingsPage'
+import TagGroupManager from './settings/TagGroupManager'
 import './SettingsPage.css'
 
 const SECTIONS: { id: SettingsSection; label: string; desc: string }[] = [
   { id: 'general', label: '常规', desc: '应用偏好' },
   { id: 'tts', label: '听书', desc: '朗读服务' },
   { id: 'reading', label: '阅读', desc: '主题与排版' },
+  { id: 'tags', label: '标签', desc: '分组管理' },
   { id: 'about', label: '关于', desc: '应用信息' },
 ]
 
@@ -349,6 +351,11 @@ function SettingsPage() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* ── 标签分组管理 ── */}
+          {activeSection === 'tags' && (
+            <TagGroupManager />
           )}
 
           {/* ── 关于 ── */}

@@ -1,6 +1,7 @@
 import type { LibraryBookCardDto } from '../services/api'
 import { coverColor } from '../utils/cover'
 import { useLibraryPage } from './library/useLibraryPage'
+import TagEditor from '../components/TagEditor'
 import './LibraryPage.css'
 
 function formatProgress(item: LibraryBookCardDto): string {
@@ -22,9 +23,12 @@ function LibraryPage() {
     continueReading,
     coverImages,
     deleteConfirm,
+    editingBookId,
     handleDeleteBatch,
     handleDeleteConfirm,
     handleDeleteSingle,
+    handleCloseTagEditor,
+    handleEditTags,
     handleImport,
     handleOpenBook,
     handleSearch,
@@ -140,6 +144,11 @@ function LibraryPage() {
                 role="button"
                 tabIndex={0}
                 onClick={() => handleOpenBook(item.book_id)}
+                onDoubleClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleEditTags(item.book_id)
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
@@ -182,6 +191,43 @@ function LibraryPage() {
             ))}
           </div>
         )}
+
+        {/* Tag Editor Panel (shown when a book is double-clicked) */}
+        {editingBookId && (() => {
+          const book = books.find(b => b.book_id === editingBookId)
+          if (!book) return null
+          return (
+            <>
+              <div className="modal-backdrop" onClick={handleCloseTagEditor} />
+              <div className="tag-editor-modal">
+                <div className="tag-editor-modal-header">
+                  <div className="tag-editor-modal-book">
+                    <div className={`tag-editor-modal-cover ${coverColor(book.book_id)}`}>
+                      {coverImages[book.book_id] ? (
+                        <img src={coverImages[book.book_id]} alt={book.title} />
+                      ) : (
+                        <div className="placeholder">{book.title[0]}</div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="tag-editor-modal-title">{book.title}</div>
+                      <div className="tag-editor-modal-author">{book.author ?? '未知作者'} · {book.format.toUpperCase()}</div>
+                    </div>
+                  </div>
+                  <button className="tag-editor-modal-close" onClick={handleCloseTagEditor}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="tag-editor-modal-body">
+                  <TagEditor bookId={editingBookId} />
+                </div>
+              </div>
+            </>
+          )
+        })()}
 
         {/* Batch delete action bar */}
         {selectMode && selectedIds.size > 0 && (

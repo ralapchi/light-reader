@@ -5,6 +5,7 @@ pub mod connection;
 pub mod progress_repo;
 pub mod schema;
 pub mod sessions_repo;
+pub mod tag_groups_repo;
 pub mod tags_repo;
 
 use std::path::Path;
@@ -14,7 +15,7 @@ use schema::SCHEMA_SQL;
 
 use crate::storage::traits::{
     AggregatesRepo, BookmarksRepo, BooksRepo, DatabaseBackend, ProgressRepo, SessionsRepo,
-    TagsRepo,
+    TagGroupsRepo, TagsRepo,
 };
 
 use aggregates_repo::SqliteAggregatesRepo;
@@ -22,6 +23,7 @@ use bookmarks_repo::SqliteBookmarksRepo;
 use books_repo::SqliteBooksRepo;
 use progress_repo::SqliteProgressRepo;
 use sessions_repo::SqliteSessionsRepo;
+use tag_groups_repo::SqliteTagGroupsRepo;
 use tags_repo::SqliteTagsRepo;
 
 pub struct SqliteBackend {
@@ -30,6 +32,7 @@ pub struct SqliteBackend {
     progress: SqliteProgressRepo,
     bookmarks: SqliteBookmarksRepo,
     tags: SqliteTagsRepo,
+    tag_groups: SqliteTagGroupsRepo,
     sessions: SqliteSessionsRepo,
     aggregates: SqliteAggregatesRepo,
 }
@@ -42,6 +45,7 @@ impl SqliteBackend {
             progress: SqliteProgressRepo::new(pool.clone()),
             bookmarks: SqliteBookmarksRepo::new(pool.clone()),
             tags: SqliteTagsRepo::new(pool.clone()),
+            tag_groups: SqliteTagGroupsRepo::new(pool.clone()),
             sessions: SqliteSessionsRepo::new(pool.clone()),
             aggregates: SqliteAggregatesRepo::new(pool.clone()),
             pool,
@@ -66,6 +70,10 @@ impl DatabaseBackend for SqliteBackend {
 
     fn tags(&self) -> &dyn TagsRepo {
         &self.tags
+    }
+
+    fn tag_groups(&self) -> &dyn TagGroupsRepo {
+        &self.tag_groups
     }
 
     fn sessions(&self) -> &dyn SessionsRepo {

@@ -126,6 +126,16 @@ fn main() {
             tts_resume,
             tts_stop,
             tts_clear_cache,
+            // Tags
+            tag_group_list,
+            tag_group_create,
+            tag_group_update,
+            tag_group_delete,
+            tag_group_add_tag,
+            tag_group_remove_tag,
+            library_get_tags,
+            library_set_tags,
+            library_all_tags,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {

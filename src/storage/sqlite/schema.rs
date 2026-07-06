@@ -60,11 +60,27 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 
 CREATE INDEX IF NOT EXISTS idx_bookmarks_book ON bookmarks(book_id);
 
+CREATE TABLE IF NOT EXISTS tag_groups (
+    id        TEXT PRIMARY KEY,
+    name      TEXT NOT NULL UNIQUE,
+    color     TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS tags (
+    tag      TEXT PRIMARY KEY,
+    group_id TEXT,
+    FOREIGN KEY (group_id) REFERENCES tag_groups(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tags_group ON tags(group_id);
+
 CREATE TABLE IF NOT EXISTS book_tags (
     book_id TEXT NOT NULL,
     tag     TEXT NOT NULL,
     PRIMARY KEY (book_id, tag),
-    FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE
+    FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE,
+    FOREIGN KEY (tag) REFERENCES tags(tag) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_book_tags_tag ON book_tags(tag);
@@ -99,4 +115,7 @@ CREATE TABLE IF NOT EXISTS stats_aggregates (
 
 INSERT OR IGNORE INTO app_meta (key, value) VALUES ('schema_version', '1');
 INSERT OR IGNORE INTO app_meta (key, value) VALUES ('last_selected_book_id', '');
+
+-- Default tag group
+INSERT OR IGNORE INTO tag_groups (id, name, color, sort_order) VALUES ('default', '未分组', '#B5AFA8', 999);
 ";

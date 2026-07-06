@@ -26,6 +26,7 @@ export function useLibraryPage() {
   const setSidebarFooter = useAppStore(s => s.setSidebarFooter)
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
+  const [editingBookId, setEditingBookId] = useState<string | null>(null)
 
   const { coverImages, loadCovers, pruneCovers } = useCoverLoader()
 
@@ -99,14 +100,25 @@ export function useLibraryPage() {
     navigate(`/loading/${bookId}`)
   }, [navigate, books, coverImages, startOpening, deletion.selectMode])
 
+  const handleEditTags = useCallback((bookId: string) => {
+    setEditingBookId(prev => prev === bookId ? null : bookId)
+  }, [])
+
+  const handleCloseTagEditor = useCallback(() => {
+    setEditingBookId(null)
+  }, [])
+
   return {
     books,
     continueReading: useMemo(() => continueReadingBooks(books), [books]),
     coverImages,
     deleteConfirm: deletion.deleteConfirm,
+    editingBookId,
     handleDeleteBatch: deletion.handleDeleteBatch,
     handleDeleteConfirm: deletion.handleDeleteConfirm,
     handleDeleteSingle: deletion.handleDeleteSingle,
+    handleCloseTagEditor,
+    handleEditTags,
     handleImport,
     handleOpenBook,
     handleSearch,

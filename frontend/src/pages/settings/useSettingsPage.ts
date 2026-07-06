@@ -5,7 +5,7 @@ import useAppStore from '../../store/useAppStore'
 import { findReaderFont, findReaderTheme, readerFontFamily } from '../../utils/readerOptions'
 import { useSettingsPersistence } from '../../hooks/useSettingsPersistence'
 
-export type SettingsSection = 'general' | 'tts' | 'reading' | 'about'
+export type SettingsSection = 'general' | 'tts' | 'reading' | 'tags' | 'about'
 export type TtsTestStatus = 'idle' | 'success' | 'error'
 export type CacheClearStatus = 'idle' | 'success' | 'error'
 

@@ -140,6 +140,19 @@ pub fn bookmark_to_dto(b: crate::domain::bookmark::Bookmark) -> BookmarkDto {
     }
 }
 
+pub fn tag_group_to_dto(
+    group: &crate::domain::tag_group::TagGroup,
+    tags: Vec<String>,
+) -> TagGroupDto {
+    TagGroupDto {
+        id: group.id.clone(),
+        name: group.name.clone(),
+        color: group.color.clone(),
+        sort_order: group.sort_order,
+        tags,
+    }
+}
+
 /// Round `idx` down to the nearest valid UTF-8 char boundary in `s`.
 pub fn snap_to_char_boundary(s: &str, mut idx: usize) -> usize {
     if idx >= s.len() {

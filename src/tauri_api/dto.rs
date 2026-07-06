@@ -183,3 +183,28 @@ pub struct BookmarkDto {
     pub created_at: String,
     pub note: Option<String>,
 }
+
+// ── Tag Group DTOs ─────────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TagGroupDto {
+    pub id: String,
+    pub name: String,
+    pub color: Option<String>,
+    pub sort_order: i32,
+    pub tags: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BookTagsDto {
+    pub book_id: String,
+    pub groups: Vec<BookTagGroupDto>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BookTagGroupDto {
+    pub group_id: String,
+    pub group_name: String,
+    pub color: Option<String>,
+    pub tags: Vec<String>,
+}

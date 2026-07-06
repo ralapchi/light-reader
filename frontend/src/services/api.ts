@@ -249,6 +249,64 @@ export function bookmarkRemove(bookId: string, bookmarkId: string): Promise<void
   return invoke('bookmark_remove', { bookId, bookmarkId })
 }
 
+// ── Tags ──────────────────────────────────────────────────
+
+export interface TagGroupDto {
+  id: string
+  name: string
+  color: string | null
+  sort_order: number
+  tags: string[]
+}
+
+export interface BookTagGroupDto {
+  group_id: string
+  group_name: string
+  color: string | null
+  tags: string[]
+}
+
+export interface BookTagsDto {
+  book_id: string
+  groups: BookTagGroupDto[]
+}
+
+export function tagGroupList(): Promise<TagGroupDto[]> {
+  return invoke('tag_group_list')
+}
+
+export function tagGroupCreate(name: string, color?: string): Promise<TagGroupDto> {
+  return invoke('tag_group_create', { name, color: color ?? null })
+}
+
+export function tagGroupUpdate(id: string, name: string, color?: string, sortOrder?: number): Promise<void> {
+  return invoke('tag_group_update', { id, name, color: color ?? null, sortOrder: sortOrder ?? null })
+}
+
+export function tagGroupDelete(id: string): Promise<void> {
+  return invoke('tag_group_delete', { id })
+}
+
+export function tagGroupAddTag(tag: string, groupId: string): Promise<void> {
+  return invoke('tag_group_add_tag', { tag, groupId })
+}
+
+export function tagGroupRemoveTag(tag: string): Promise<void> {
+  return invoke('tag_group_remove_tag', { tag })
+}
+
+export function libraryGetTags(bookId: string): Promise<BookTagsDto> {
+  return invoke('library_get_tags', { bookId })
+}
+
+export function librarySetTags(bookId: string, tags: string[]): Promise<void> {
+  return invoke('library_set_tags', { bookId, tags })
+}
+
+export function libraryAllTags(): Promise<[string, number][]> {
+  return invoke('library_all_tags')
+}
+
 export function settingsLoad(): Promise<ReaderSettings> {
   return invoke('settings_load')
 }

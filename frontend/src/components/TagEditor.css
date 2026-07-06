@@ -1,0 +1,299 @@
+/* ── Tag Editor ── */
+
+.tag-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tag-editor-loading {
+  font-size: 13px;
+  color: var(--text-tertiary, #B5AFA8);
+  padding: 8px 0;
+}
+
+/* ── Group ── */
+.tag-editor-group {
+  position: relative;
+}
+
+.tag-editor-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.tag-editor-group-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #8A8680);
+}
+
+.tag-editor-group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Add Button ── */
+.tag-editor-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px dashed var(--border, #E8E4DF);
+  background: transparent;
+  color: var(--text-tertiary, #B5AFA8);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tag-editor-add-btn:hover {
+  border-color: var(--accent, #C8553D);
+  color: var(--accent, #C8553D);
+  background: var(--accent-soft, #F2E0D9);
+}
+
+/* ── Tag List ── */
+.tag-editor-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.tag-editor-empty {
+  font-size: 12px;
+  color: var(--text-tertiary, #B5AFA8);
+}
+
+/* ── Tag Pill ── */
+.tag-editor-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--tag-color, #C8553D) 12%, transparent);
+  color: var(--tag-color, #C8553D);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: default;
+  transition: all 0.2s;
+  animation: tagPillIn 0.25s ease both;
+}
+
+.tag-editor-pill:hover {
+  background: var(--tag-color, #C8553D);
+  color: #fff;
+}
+
+.tag-editor-pill:hover .tag-editor-pill-remove {
+  opacity: 1;
+}
+
+.tag-editor-pill-remove {
+  margin-left: 2px;
+  cursor: pointer;
+  opacity: 0.5;
+  font-size: 14px;
+  line-height: 1;
+  transition: opacity 0.15s;
+}
+
+.tag-editor-pill-remove:hover {
+  opacity: 1;
+}
+
+@keyframes tagPillIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ── Popover ── */
+.tag-editor-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.tag-editor-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 101;
+  width: 280px;
+  margin-top: 4px;
+  background: var(--surface, #FFFFFF);
+  border: 1px solid var(--border, #E8E4DF);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+  padding: 16px;
+  animation: tagPopIn 0.2s ease both;
+}
+
+@keyframes tagPopIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tag-editor-popover-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #1A1A1A);
+  margin-bottom: 12px;
+}
+
+.tag-editor-popover-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg, #FAF8F5);
+  border: 1px solid var(--border, #E8E4DF);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 12px;
+}
+
+.tag-editor-popover-search svg {
+  flex-shrink: 0;
+  color: var(--text-tertiary, #B5AFA8);
+}
+
+.tag-editor-popover-search input {
+  border: none;
+  background: none;
+  outline: none;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary, #1A1A1A);
+  flex: 1;
+}
+
+.tag-editor-popover-search input::placeholder {
+  color: var(--text-tertiary, #B5AFA8);
+}
+
+.tag-editor-popover-hint {
+  font-size: 11px;
+  color: var(--text-tertiary, #B5AFA8);
+  margin-bottom: 6px;
+}
+
+.tag-editor-popover-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+  min-height: 28px;
+}
+
+.tag-editor-popover-tag {
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: var(--surface-hover, #F5F2EE);
+  color: var(--text-secondary, #8A8680);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+
+.tag-editor-popover-tag:hover {
+  background: var(--accent-soft, #F2E0D9);
+  color: var(--accent, #C8553D);
+  border-color: var(--accent, #C8553D);
+}
+
+.tag-editor-popover-tag.selected {
+  background: var(--accent-soft, #F2E0D9);
+  color: var(--accent, #C8553D);
+  border-color: var(--accent, #C8553D);
+}
+
+.tag-editor-popover-empty {
+  font-size: 12px;
+  color: var(--text-tertiary, #B5AFA8);
+}
+
+.tag-editor-popover-create {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--accent-soft, #F2E0D9);
+  color: var(--accent, #C8553D);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 12px;
+  border: none;
+  width: 100%;
+  font-family: inherit;
+}
+
+.tag-editor-popover-create:hover {
+  background: var(--accent, #C8553D);
+  color: #fff;
+}
+
+.tag-editor-popover-create svg {
+  flex-shrink: 0;
+}
+
+.tag-editor-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ── Reuse button styles ── */
+.tag-editor .btn-primary,
+.tag-editor .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.tag-editor .btn-primary {
+  background: var(--accent, #C8553D);
+  color: #fff;
+}
+
+.tag-editor .btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.tag-editor .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tag-editor .btn-secondary {
+  padding: 7px 14px;
+  border: 1px solid var(--border, #E8E4DF);
+  background: var(--surface, #FFFFFF);
+  color: var(--text-secondary, #8A8680);
+}
+
+.tag-editor .btn-secondary:hover {
+  border-color: var(--text-tertiary, #B5AFA8);
+  color: var(--text-primary, #1A1A1A);
+}

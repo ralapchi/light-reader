@@ -12,6 +12,7 @@ mod reader_chapter;
 mod reader_image;
 mod reader_progress;
 mod settings;
+mod tag;
 mod tts;
 
 use crate::tts::cache::TtsCache;
@@ -99,4 +100,5 @@ pub use reader_chapter::*;
 pub use reader_image::*;
 pub use reader_progress::*;
 pub use settings::*;
+pub use tag::*;
 pub use tts::*;

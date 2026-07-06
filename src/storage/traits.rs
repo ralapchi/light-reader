@@ -3,6 +3,7 @@ use crate::domain::library_item::LibraryItem;
 use crate::domain::reading_aggregates::ReadingAggregates;
 use crate::domain::reading_progress::ReadingProgress;
 use crate::domain::reading_session::ReadingSession;
+use crate::domain::tag_group::TagGroup;
 
 // -- Books --
 
@@ -31,13 +32,31 @@ pub trait BookmarksRepo: Send + Sync {
     fn remove(&self, book_id: &str, bookmark_id: &str) -> Result<(), String>;
 }
 
-// -- Tags (stats feature, not yet wired to commands) --
+// -- Tags --
 
-#[allow(dead_code)]
 pub trait TagsRepo: Send + Sync {
     fn get_tags(&self, book_id: &str) -> Result<Vec<String>, String>;
     fn set_tags(&self, book_id: &str, tags: &[String]) -> Result<(), String>;
     fn all_tags(&self) -> Result<Vec<(String, u32)>, String>;
+    /// Get tags with their group info for a book
+    fn get_tags_with_groups(&self, book_id: &str) -> Result<Vec<(String, Option<String>)>, String>;
+}
+
+// -- Tag Groups --
+
+pub trait TagGroupsRepo: Send + Sync {
+    fn list_all(&self) -> Result<Vec<TagGroup>, String>;
+    fn create(&self, group: &TagGroup) -> Result<(), String>;
+    fn update(&self, group: &TagGroup) -> Result<(), String>;
+    fn delete(&self, group_id: &str) -> Result<(), String>;
+    /// List all tags in a group
+    fn list_tags(&self, group_id: &str) -> Result<Vec<String>, String>;
+    /// Add a tag to a group
+    fn add_tag(&self, tag: &str, group_id: &str) -> Result<(), String>;
+    /// Remove a tag from its group (moves to default group)
+    fn remove_tag(&self, tag: &str) -> Result<(), String>;
+    /// Get all tags with their group assignments
+    fn all_tags_with_groups(&self) -> Result<Vec<(String, Option<String>)>, String>;
 }
 
 // -- Reading Sessions (stats feature, not yet wired to commands) --
@@ -64,8 +83,8 @@ pub trait DatabaseBackend: Send + Sync {
     fn books(&self) -> &dyn BooksRepo;
     fn progress(&self) -> &dyn ProgressRepo;
     fn bookmarks(&self) -> &dyn BookmarksRepo;
-    #[allow(dead_code)]
     fn tags(&self) -> &dyn TagsRepo;
+    fn tag_groups(&self) -> &dyn TagGroupsRepo;
     #[allow(dead_code)]
     fn sessions(&self) -> &dyn SessionsRepo;
     #[allow(dead_code)]
