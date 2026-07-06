@@ -14,7 +14,6 @@ pub trait BooksRepo: Send + Sync {
     fn list_all(&self) -> Result<Vec<LibraryItem>, String>;
     fn get_last_selected(&self) -> Result<Option<String>, String>;
     fn set_last_selected(&self, book_id: &str) -> Result<(), String>;
-    fn update_last_opened_at(&self, book_id: &str) -> Result<(), String>;
 }
 
 // -- Reading Progress --
