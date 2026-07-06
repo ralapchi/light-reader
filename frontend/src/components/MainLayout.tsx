@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
+import DropOverlay from './DropOverlay'
 import useAppStore from '../store/useAppStore'
 import './MainLayout.css'
 
@@ -21,6 +22,7 @@ export default function MainLayout() {
     <div className="main-layout">
       <Sidebar footerText={sidebarFooter} />
       <Outlet />
+      <DropOverlay />
     </div>
   )
 }

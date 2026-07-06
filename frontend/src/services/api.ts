@@ -416,6 +416,28 @@ export function assetUrl(path: string): string {
   return convertFileSrc(path)
 }
 
+// ── Drag & Drop Events ──────────────────────────────────────
+
+export interface DragDropDropPayload {
+  type: 'drop'
+  paths: string[]
+}
+
+export type DragDropEventPayload = 'enter' | 'leave' | DragDropDropPayload
+
+export function onDragDropEvent(cb: (event: DragDropEventPayload) => void): Promise<UnlistenFn> {
+  return listen<DragDropEventPayload>('drag-drop-event', e => cb(e.payload))
+}
+
+export const SUPPORTED_BOOK_EXTENSIONS = ['.epub', '.txt']
+
+export function filterBookFiles(paths: string[]): string[] {
+  return paths.filter(p => {
+    const ext = p.toLowerCase().slice(p.lastIndexOf('.'))
+    return SUPPORTED_BOOK_EXTENSIONS.includes(ext)
+  })
+}
+
 // ── Block / Anchor Utilities ─────────────────────────────────
 
 /** Derive a stable block identifier from its type and index. */
