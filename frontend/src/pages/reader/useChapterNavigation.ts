@@ -105,6 +105,14 @@ export function useChapterNavigation(
   // ── Href navigation ────────────────────────────────────
   const { navigateToHref } = useHrefNavigation(contentRef, readingMode, goToChapter, setFootnoteReturn, twoPageNavRef)
 
+  // ── Periodic progress flush (every 60s) ────────────────
+  useEffect(() => {
+    const id = setInterval(() => {
+      readerFlushProgress().catch(() => { /* non-critical */ })
+    }, 60_000)
+    return () => clearInterval(id)
+  }, [])
+
   // ── Pending navigation target ──────────────────────────
   usePendingNavigationTarget(bookId, book, contentRef, readingMode, goToChapter, twoPageNavRef)
 
