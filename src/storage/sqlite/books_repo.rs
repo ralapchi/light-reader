@@ -157,4 +157,14 @@ impl BooksRepo for SqliteBooksRepo {
         .map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    fn update_last_opened_at(&self, book_id: &str) -> Result<(), String> {
+        let conn = self.pool.get().map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE books SET last_opened_at = ?1, updated_at = ?1 WHERE book_id = ?2",
+            params![chrono::Utc::now().to_rfc3339(), book_id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }

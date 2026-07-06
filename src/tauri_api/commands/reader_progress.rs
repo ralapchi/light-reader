@@ -105,6 +105,11 @@ pub fn reader_save_progress(
         item.last_opened_at = Some(chrono::Utc::now().to_rfc3339());
     }
 
+    // Persist last_opened_at to DB so sorting survives app restart.
+    if let Err(e) = db.books().update_last_opened_at(&progress.book_id) {
+        log::warn!("写入 last_opened_at 失败: {}", e);
+    }
+
     Ok(())
 }
 
