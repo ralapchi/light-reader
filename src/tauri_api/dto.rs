@@ -20,6 +20,14 @@ pub struct LibraryBookCardDto {
     pub file_ok: bool,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LibraryImportResultDto {
+    pub imported: Vec<LibraryBookCardDto>,
+    pub new_count: usize,
+    pub updated_count: usize,
+    pub failed_count: usize,
+}
+
 // ── Reader DTOs ─────────────────────────────────────────────
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

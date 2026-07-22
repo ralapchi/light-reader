@@ -1,32 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef } from 'react'
 import { libraryCover } from '../../services/api'
 import type { LibraryBookCardDto } from '../../services/api'
+import useAppStore from '../../store/useAppStore'
 
 const MAX_CONCURRENT = 4
 
-function keepCoversForBooks(
-  prev: Record<string, string>,
-  items: LibraryBookCardDto[],
-): Record<string, string> {
-  const validIds = new Set(items.map(i => i.book_id))
-  const next: Record<string, string> = {}
-  for (const [id, uri] of Object.entries(prev)) {
-    if (validIds.has(id)) next[id] = uri
-  }
-  return next
-}
-
 export function useCoverLoader() {
-  const [coverImages, setCoverImages] = useState<Record<string, string>>({})
+  const coverImages = useAppStore(s => s.coverImages)
+  const setCoverImage = useAppStore(s => s.setCoverImage)
+  const pruneCoverImages = useAppStore(s => s.pruneCoverImages)
   const loadIdRef = useRef(0)
-
-  useEffect(() => {
-    return () => { loadIdRef.current++ }
-  }, [])
 
   const loadCovers = useCallback(async (items: LibraryBookCardDto[]) => {
     const loadId = ++loadIdRef.current
-    const covers: Record<string, string> = {}
     for (let i = 0; i < items.length; i += MAX_CONCURRENT) {
       if (loadIdRef.current !== loadId) return
       const batch = items.slice(i, i + MAX_CONCURRENT)
@@ -38,18 +24,15 @@ export function useCoverLoader() {
       )
       for (const r of results) {
         if (r.status === 'fulfilled' && r.value.uri) {
-          covers[r.value.bookId] = r.value.uri
+          setCoverImage(r.value.bookId, r.value.uri)
         }
       }
     }
-    if (loadIdRef.current === loadId) {
-      setCoverImages(prev => ({ ...prev, ...covers }))
-    }
-  }, [])
+  }, [setCoverImage])
 
   const pruneCovers = useCallback((items: LibraryBookCardDto[]) => {
-    setCoverImages(prev => keepCoversForBooks(prev, items))
-  }, [])
+    pruneCoverImages(new Set(items.map(i => i.book_id)))
+  }, [pruneCoverImages])
 
   return { coverImages, loadCovers, pruneCovers }
 }

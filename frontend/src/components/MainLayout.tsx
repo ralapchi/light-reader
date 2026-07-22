@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import DropOverlay from './DropOverlay'
+import ToastContainer from './Toast'
 import useAppStore from '../store/useAppStore'
 import './MainLayout.css'
 
@@ -23,6 +24,7 @@ export default function MainLayout() {
       <Sidebar footerText={sidebarFooter} />
       <Outlet />
       <DropOverlay />
+      <ToastContainer />
     </div>
   )
 }

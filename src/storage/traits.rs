@@ -34,6 +34,7 @@ pub trait BookmarksRepo: Send + Sync {
 
 // -- Tags --
 
+#[allow(dead_code)]
 pub trait TagsRepo: Send + Sync {
     fn get_tags(&self, book_id: &str) -> Result<Vec<String>, String>;
     fn set_tags(&self, book_id: &str, tags: &[String]) -> Result<(), String>;
@@ -44,6 +45,7 @@ pub trait TagsRepo: Send + Sync {
 
 // -- Tag Groups --
 
+#[allow(dead_code)]
 pub trait TagGroupsRepo: Send + Sync {
     fn list_all(&self) -> Result<Vec<TagGroup>, String>;
     fn create(&self, group: &TagGroup) -> Result<(), String>;

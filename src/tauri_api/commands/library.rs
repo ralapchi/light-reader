@@ -46,6 +46,19 @@ fn cleanup_book_data(
 
 /// Parse a single book file and extract its cover (heavy I/O, suitable for spawn_blocking).
 fn parse_single_book(path: &str, now: &str) -> Option<LibraryItem> {
+    // 校验路径：必须是常规文件且可读
+    match std::fs::metadata(path) {
+        Ok(m) if !m.is_file() => {
+            log::warn!("跳过非常规文件: {}", path);
+            return None;
+        }
+        Err(e) => {
+            log::warn!("无法读取文件元数据: {} - {}", path, e);
+            return None;
+        }
+        _ => {}
+    }
+
     let mut item = match LibraryServiceImpl::parse_book_item(path, now) {
         Ok(item) => item,
         Err(e) => {
@@ -91,8 +104,9 @@ pub async fn library_import(
     paths: Vec<String>,
     index_state: tauri::State<'_, super::LibraryIndexState>,
     db: tauri::State<'_, Box<dyn crate::storage::traits::DatabaseBackend>>,
-) -> Result<Vec<LibraryBookCardDto>, String> {
+) -> Result<super::super::dto::LibraryImportResultDto, String> {
     let now = chrono::Utc::now().to_rfc3339();
+    let total_input = paths.len();
 
     // Heavy I/O: parse books and extract covers in spawn_blocking
     let parsed: Vec<LibraryItem> = {
@@ -106,38 +120,51 @@ pub async fn library_import(
         .await
         .map_err(|e| e.to_string())?
     };
+    let failed_count = total_input.saturating_sub(parsed.len());
 
-    // Update index and write to DB (relatively fast)
-    let imported = {
+    // Update in-memory index (short lock)
+    let mut new_count = 0usize;
+    let mut updated_count = 0usize;
+    let imported_items: Vec<(LibraryItem, String)> = {
         let mut index = index_state.lock().map_err(|e| e.to_string())?;
-        let mut imported = Vec::new();
+        let mut results = Vec::new();
         for item in parsed {
             let book_id = item.book_id.clone();
-            if let Some(existing) = index.items.iter_mut().find(|i| i.book_id == book_id) {
-                let imported_at = existing.imported_at.clone();
-                *existing = item.clone();
-                existing.imported_at = imported_at;
+            let is_update = index.items.iter().any(|i| i.book_id == book_id);
+            if is_update {
+                if let Some(existing) = index.items.iter_mut().find(|i| i.book_id == book_id) {
+                    let imported_at = existing.imported_at.clone();
+                    *existing = item.clone();
+                    existing.imported_at = imported_at;
+                    updated_count += 1;
+                }
             } else {
                 index.items.push(item.clone());
+                new_count += 1;
             }
             index.last_selected_book_id = Some(book_id.clone());
-
-            if let Some(stored) = index.items.iter().find(|i| i.book_id == book_id) {
-                if let Err(e) = db.books().upsert(stored) {
-                    log::warn!("导入书籍到数据库失败: {}", e);
-                }
-            }
-            let _ = db.books().set_last_selected(&book_id);
-
-            imported.push(item);
+            results.push((item, book_id));
         }
-        imported
+        results
     };
 
-    if imported.is_empty() && !paths.is_empty() {
+    // DB writes outside index lock
+    for (item, book_id) in &imported_items {
+        if let Err(e) = db.books().upsert(item) {
+            log::warn!("导入书籍到数据库失败: {}", e);
+        }
+        let _ = db.books().set_last_selected(book_id);
+    }
+
+    if imported_items.is_empty() && !paths.is_empty() {
         Err("所有书籍导入失败".to_string())
     } else {
-        Ok(imported.iter().map(|i| item_to_dto(i)).collect())
+        Ok(super::super::dto::LibraryImportResultDto {
+            imported: imported_items.iter().map(|(i, _)| item_to_dto(i)).collect(),
+            new_count,
+            updated_count,
+            failed_count,
+        })
     }
 }
 

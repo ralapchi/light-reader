@@ -49,9 +49,25 @@ interface ReaderState {
   tts: TtsState
 }
 
+// ── Toast ────────────────────────────────────────────────
+
+type ToastType = 'success' | 'error' | 'info'
+
+export interface Toast {
+  id: string
+  type: ToastType
+  message: string
+  detail?: string
+  duration?: number
+}
+
 interface AppState {
+  // Toast
+  toasts: Toast[]
+
   // Library
   books: LibraryBookCardDto[]
+  coverImages: Record<string, string>
 
   // Sidebar
   sidebarFooter: string
@@ -65,8 +81,15 @@ interface AppState {
   // Reader
   reader: ReaderState
 
+  // Toast actions
+  showToast: (toast: Omit<Toast, 'id'>) => void
+  removeToast: (id: string) => void
+
   // Library actions
   setBooks: (books: LibraryBookCardDto[]) => void
+  setCoverImages: (covers: Record<string, string>) => void
+  setCoverImage: (bookId: string, uri: string) => void
+  pruneCoverImages: (validIds: Set<string>) => void
 
   // Opening actions
   startOpening: (bookId: string, title: string, author: string | null, coverUrl: string | null) => void
@@ -142,7 +165,9 @@ const defaultReader: ReaderState = {
  * Global Zustand store for the reader frontend.
  */
 const useAppStore = create<AppState>((set) => ({
+  toasts: [],
   books: [],
+  coverImages: {},
   sidebarFooter: '',
   sidebarCollapsed: false,
   setSidebarFooter: (text) => set({ sidebarFooter: text }),
@@ -150,7 +175,28 @@ const useAppStore = create<AppState>((set) => ({
   opening: { ...defaultOpening },
   reader: { ...defaultReader },
 
+  showToast: (toast) => {
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+    const duration = toast.duration ?? 3000
+    set(s => ({ toasts: [...s.toasts, { ...toast, id, duration }] }))
+    if (duration > 0) {
+      setTimeout(() => {
+        set(s => ({ toasts: s.toasts.filter(t => t.id !== id) }))
+      }, duration)
+    }
+  },
+  removeToast: (id) => set(s => ({ toasts: s.toasts.filter(t => t.id !== id) })),
+
   setBooks: (books) => set({ books }),
+  setCoverImages: (covers) => set({ coverImages: covers }),
+  setCoverImage: (bookId, uri) => set(s => ({ coverImages: { ...s.coverImages, [bookId]: uri } })),
+  pruneCoverImages: (validIds) => set(s => {
+    const next: Record<string, string> = {}
+    for (const [id, uri] of Object.entries(s.coverImages)) {
+      if (validIds.has(id)) next[id] = uri
+    }
+    return { coverImages: next }
+  }),
 
   startOpening: (bookId, title, author, coverUrl) =>
     set({ opening: { bookId, title, author, coverUrl, status: 'loading', errorMessage: null } }),

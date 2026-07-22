@@ -115,7 +115,14 @@ export function libraryList(): Promise<LibraryBookCardDto[]> {
   return invoke('library_list')
 }
 
-export function libraryImport(paths: string[]): Promise<LibraryBookCardDto[]> {
+export interface LibraryImportResultDto {
+  imported: LibraryBookCardDto[]
+  new_count: number
+  updated_count: number
+  failed_count: number
+}
+
+export function libraryImport(paths: string[]): Promise<LibraryImportResultDto> {
   return invoke('library_import', { paths })
 }
 
@@ -418,23 +425,33 @@ export function assetUrl(path: string): string {
 
 // ── Drag & Drop Events ──────────────────────────────────────
 
-export interface DragDropDropPayload {
-  type: 'drop'
-  paths: string[]
-}
-
-export type DragDropEventPayload = 'enter' | 'leave' | DragDropDropPayload
-
-export function onDragDropEvent(cb: (event: DragDropEventPayload) => void): Promise<UnlistenFn> {
-  return listen<DragDropEventPayload>('drag-drop-event', e => cb(e.payload))
-}
+import { getCurrentWebview } from '@tauri-apps/api/webview'
 
 export const SUPPORTED_BOOK_EXTENSIONS = ['.epub', '.txt']
 
 export function filterBookFiles(paths: string[]): string[] {
   return paths.filter(p => {
-    const ext = p.toLowerCase().slice(p.lastIndexOf('.'))
-    return SUPPORTED_BOOK_EXTENSIONS.includes(ext)
+    const dot = p.lastIndexOf('.')
+    const ext = dot >= 0 ? p.slice(dot).toLowerCase() : ''
+    return ext !== '' && SUPPORTED_BOOK_EXTENSIONS.includes(ext)
+  })
+}
+
+export type DragDropEventType = 'enter' | 'over' | 'drop' | 'leave'
+
+export interface DragDropEvent {
+  type: DragDropEventType
+  paths?: string[]
+  position?: { x: number; y: number }
+}
+
+export function onDragDropEvent(cb: (event: DragDropEvent) => void): Promise<UnlistenFn> {
+  // 浏览器环境不支持 Tauri API
+  if (typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window)) {
+    return Promise.resolve(() => {})
+  }
+  return getCurrentWebview().onDragDropEvent((event) => {
+    cb(event.payload as DragDropEvent)
   })
 }
 

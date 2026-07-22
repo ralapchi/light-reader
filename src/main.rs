@@ -142,30 +142,6 @@ fn main() {
                 tauri::WindowEvent::CloseRequested { .. } => {
                     bootstrap::on_window_close(window);
                 }
-                tauri::WindowEvent::DragDrop(drag_drop) => {
-                    use tauri::DragDropEvent;
-                    use tauri::Emitter;
-                    match drag_drop {
-                        DragDropEvent::Enter { .. } => {
-                            let _ = window.emit("drag-drop-event", "enter");
-                        }
-                        DragDropEvent::Over { .. } => {
-                            // Move events are frequent; skip emitting to avoid flooding
-                        }
-                        DragDropEvent::Drop { paths, .. } => {
-                            let path_strings: Vec<String> =
-                                paths.iter().filter_map(|p| p.to_str().map(|s| s.to_string())).collect();
-                            let _ = window.emit("drag-drop-event", serde_json::json!({
-                                "type": "drop",
-                                "paths": path_strings,
-                            }));
-                        }
-                        DragDropEvent::Leave { .. } => {
-                            let _ = window.emit("drag-drop-event", "leave");
-                        }
-                        _ => {}
-                    }
-                }
                 _ => {}
             }
         })

@@ -4,6 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { assetUrl, libraryImport, libraryList, librarySearch } from '../../services/api'
 import type { LibraryBookCardDto } from '../../services/api'
 import useAppStore from '../../store/useAppStore'
+import { getImportToastMessage } from '../../utils/importUtils'
 import { useCoverLoader } from './useCoverLoader'
 import { useBookDeletion } from './useBookDeletion'
 
@@ -22,6 +23,7 @@ export function useLibraryPage() {
   const navigate = useNavigate()
   const books = useAppStore(s => s.books)
   const setBooks = useAppStore(s => s.setBooks)
+  const showToast = useAppStore(s => s.showToast)
   const startOpening = useAppStore(s => s.startOpening)
   const setSidebarFooter = useAppStore(s => s.setSidebarFooter)
   const [searchQuery, setSearchQuery] = useState('')
@@ -77,13 +79,16 @@ export function useLibraryPage() {
       if (!selected) return
       const paths = Array.isArray(selected) ? selected : [selected]
       if (paths.length > 0) {
-        await libraryImport(paths)
+        const result = await libraryImport(paths)
         loadBooks()
+        showToast(getImportToastMessage(result))
       }
     } catch (e) {
       console.error('导入失败:', e)
+      const msg = e instanceof Error ? e.message : String(e)
+      showToast({ type: 'error', message: '导入失败', detail: msg || '请检查文件格式是否受支持' })
     }
-  }, [loadBooks])
+  }, [loadBooks, showToast])
 
   const handleOpenBook = useCallback((bookId: string) => {
     if (deletion.selectMode) return
